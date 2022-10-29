@@ -1,24 +1,21 @@
 import numpy as np
 
-from qrnet.problem_template import TemplateOCP, MakeConfig
-from qrnet.utilities import saturate_np, saturate_tf
+from ..example_config import Config
+from ocp.problems import OptimalControlProblem, LinearProblem
+from ocp.utilities import saturate
 
-config = MakeConfig(
+config = Config(
     ode_solver='RK23',
     atol=1e-08,
     rtol=1e-04,
     t1_sim=20.,
     t1_max=120.,
     n_trajectories_train=50,
-    n_trajectories_test=50,
-    value_loss_weight=0.1,
-    gradient_loss_weight=0.1,
+    n_trajectories_test=50
 )
 
-class MakeOCP(TemplateOCP):
+class VanDerPol(OptimalControlProblem):
     def __init__(self):
-        n_states = 2
-        n_controls = 1
 
         # Dynamics parameters
         self.mu = 2.
@@ -30,63 +27,35 @@ class MakeOCP(TemplateOCP):
         self.Wu = 4.
 
         # Control constraints
-        U_max = 1.
-        if U_max is None:
-            U_lb, U_ub = None, None
+        u_max = 1.
+        if u_max is None:
+            self.u_lb, self.u_ub = None, None
         else:
-            U_lb = np.full((n_controls, 1), -U_max)
-            U_ub = np.full((n_controls, 1), U_max)
+            self.u_lb = np.full((1, 1), -u_max)
+            self.u_ub = np.full((1, 1), u_max)
 
         # Initial condition bounds
         X0_ub = np.array([[3.],[4.]])
         X0_lb = - X0_ub
 
         # Linearization point
-        x_bar = 0.
-        X_bar = np.array(([[x_bar], [0.]]))
-        U_bar = x_bar / self.b
+        xf = [0., 0.]
+        uf = xf[0] / self.b
 
-        # Dynamics linearized around X_bar (dxdt ~= Ax + Bu)
-        A = [[0., 1.], [-1., self.mu*(1. - x_bar**2)]]
-        B = [[0.], [self.b]]
+        # Dynamics linearized around xf (dxdt ~= Ax + Bu)
+        A = [[0., 1.], [-1., self.mu*(1. - xf[0]**2)]]
+        self.B = np.array([[0.], [self.b]])
 
         # Cost matrices
         Q = np.diag([self.Wx / 2., self.Wy / 2.])
         R = [[self.Wu / 2.]]
 
-        super().__init__(
-            X_bar, U_bar, A, B, Q, R,
-            U_lb=U_lb, U_ub=U_ub, X0_lb=X0_lb, X0_ub=X0_ub
-        )
+        super().__init__(n_states=2, n_controls=1, u_lb=u_max, u_ub=u_max)
 
-        self.B = self._B
+        self.linearizations.append(LinearProblem(xf, uf, A, self.B, Q, R))
 
-    def get_params(self, **params):
-        '''
-        Function to return a dict of parameters which might be needed by matlab
-        scripts.
-
-        Parameters
-        ----------
-        params : keyword arguments
-            Additional parameters to return.
-
-        Returns
-        -------
-        params_dict : dict
-            Dict of name-value pairs including
-            'n_states' : int
-            'n_controls' : int
-            'X_bar' : (n_states, 1) array
-            'U_bar' : (n_controls, 1) array
-            'U_lb' : (n_controls, 1) array or None
-            'U_ub' : (n_controls, 1) array or None
-            'P' : (n_states, n_states) array
-            'K' : (n_controls, n_states) array
-            'mu' : float
-            **params
-        '''
-        return super().get_params(mu=self.mu, **params)
+        self.xf = self.linearizations[0].xf
+        self.uf = self.linearizations[0].uf
 
     def running_cost(self, X, U):
         '''
@@ -105,14 +74,14 @@ class MakeOCP(TemplateOCP):
             Running cost(s) L(X,U) evaluated at pair(s) (X,U).
         '''
         if X.ndim == 1:
-            X_err = X - self.X_bar.flatten()
+            X_err = X - self.xf.flatten()
         else:
-            X_err = X - self.X_bar
+            X_err = X - self.xf
 
         if U.ndim == 1:
-            U = U - self.U_bar.flatten()
+            U = U - self.uf.flatten()
         else:
-            U = U - self.U_bar
+            U = U - self.uf
 
         x1 = X_err[:1]
         x2 = X_err[1:]
@@ -144,14 +113,14 @@ class MakeOCP(TemplateOCP):
             Gradient dL/dU (X,U) evaluated at pair(s) (X,U).
         '''
         if X.ndim == 1:
-            X_err = X - self.X_bar.flatten()
+            X_err = X - self.xf.flatten()
         else:
-            X_err = X - self.X_bar
+            X_err = X - self.xf
 
         if U.ndim == 1:
-            U = U - self.U_bar.flatten()
+            U = U - self.uf.flatten()
         else:
-            U = U - self.U_bar
+            U = U - self.uf
 
         x1 = X_err[:1]
         x2 = X_err[1:]
@@ -245,15 +214,9 @@ class MakeOCP(TemplateOCP):
         U : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
         '''
-        U = self.U_bar - self.b / self.Wu * dVdX[1:]
+        u = self.uf - self.b / self.Wu * dVdX[1:]
 
-        return saturate_np(U, self.U_lb, self.U_ub)
-
-    def make_U_NN(self, X, dVdX):
-        '''Makes TensorFlow graph of optimal control with NN value gradient.'''
-        U = self.U_bar - self.b / self.Wu * dVdX[1:]
-
-        return saturate_tf(U, self.U_lb, self.U_ub)
+        return saturate(u, self.u_lb, self.u_ub)
 
     def jac_U_star(self, X, dVdX, U0=None):
         '''
@@ -299,7 +262,7 @@ class MakeOCP(TemplateOCP):
         x1 = X_aug[:1]
         x2 = X_aug[1:2]
 
-        x1_err = x1 - self.X_bar[:1]
+        x1_err = x1 - self.xf[:1]
 
         # Costate
         A1 = X_aug[2:3]
