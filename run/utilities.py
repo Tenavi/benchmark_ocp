@@ -14,8 +14,7 @@ def yn_input(message):
             print(user_input, "is not a valid input. Must enter 'y' or 'n'...")
 
 def make_parser(
-        rs=False, dt=False, mt=False, a=False, xd=False, o=False, w=False,
-        v=False, io=False
+        rs=False, dt=False, xd=False, o=False, w=False, v=False, io=False
     ):
     parser = argparse.ArgumentParser()
 
@@ -28,16 +27,6 @@ def make_parser(
         parser.add_argument(
             '-dt', '--data_type', dest='data_type', type=str,
             default='train', help='data type to generate. Options are "train" or "test"'
-        )
-    if mt:
-        parser.add_argument(
-            '-mt', '--timestamp', dest='timestamp', type=int,
-            default=None, help='10 digit model timestamp'
-        )
-    if a:
-        parser.add_argument('-a', '--architecture', dest='architecture',
-            type=str, default=argparse.SUPPRESS,
-            help='NN architecture to use'
         )
     if xd:
         parser.add_argument(

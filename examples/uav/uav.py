@@ -484,26 +484,6 @@ class MakeOCP(TemplateOCP):
 
         return np.vstack((dXdt, -dHdX, -L))
 
-    def apply_state_constraints(self, X):
-        '''
-        Manually update states to enforce the quaternion norm constraint.
-
-        Parameters
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states.
-
-        Returns
-        -------
-        X : (n_states, n_data) or (n_states,) array
-            Current states with constrained values.
-        '''
-        states = VehicleState(X)
-        states.attitude[-1] = np.sqrt(
-            1. - np.sum(states.attitude[:-1]**2, axis=0, keepdims=True)
-        )
-        return states.as_array().reshape(X.shape)
-
     def constraint_fun(self, X):
         '''
         A function which is zero when the quaternion norm state constraint is

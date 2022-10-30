@@ -141,7 +141,7 @@ class LQR(BaseController):
             dudx[zero_idx] = 0.
             return dudx
 
-        dudx = np.tile(- self.K[:,np.newaxis], (1,x.shape[1],1))
+        dudx = np.tile(- self.K[:,None], (1,x.shape[1],1))
         zero_idx = np.any([self.u_ub <= u, u <= self.lb], axis=0)
         dudx[zero_idx] = 0.
 

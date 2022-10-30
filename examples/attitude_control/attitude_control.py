@@ -111,23 +111,6 @@ class MakeOCP(TemplateOCP):
 
         return q0, q, w
 
-    def apply_state_constraints(self, X):
-        '''
-        Manually update states to enforce the quaternion norm constraint.
-
-        Parameters
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states.
-
-        Returns
-        -------
-        X : (n_states, n_data) or (n_states,) array
-            Current states with constrained values.
-        '''
-        X[0] = np.sqrt(1. - np.sum(X[1:4]**2, axis=0, keepdims=True))
-        return X
-
     def constraint_fun(self, X):
         '''
         A (vector-valued) function which is zero when the quaternion norm state

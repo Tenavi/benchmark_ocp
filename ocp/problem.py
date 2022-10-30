@@ -28,7 +28,7 @@ class OptimalControlProblem:
 
     def running_cost(self, x, u):
         '''
-        Evaluate the running cost l(x,u) at one or multiple state-control pairs.
+        Evaluate the running cost L(x,u) at one or multiple state-control pairs.
 
         Parameters
         ----------
@@ -40,17 +40,11 @@ class OptimalControlProblem:
         Returns
         -------
         L : (1,) or (n_points,) array
-            Running cost(s) l(x,u) evaluated at pair(s) (x,u).
+            Running cost(s) L(x,u) evaluated at pair(s) (x,u).
         '''
         raise NotImplementedError
 
-    def total_cost(self, t, x, u):
-        '''Computes the accumulated running cost J(t) of a state-control trajectory.'''
-        L = self.running_cost(x, u)
-        J = cumtrapz(L.flatten(), t)
-        return np.concatenate((J, J[-1:]))
-
-    def running_cost_gradient(self, x, u, dLdx=True, dLdu=True):
+    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
         '''
         Evaluate the gradients of the running cost, dL/dx (x,u) and dL/du (x,u),
         at one or multiple state-control pairs. Default implementation
@@ -62,9 +56,9 @@ class OptimalControlProblem:
             State(s) arranged by (dimension, time).
         u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
-        dLdx : bool, default=True
+        return_dLdx : bool, default=True
             If True, compute the gradient with respect to states, dL/dx.
-        dLdu : bool, default=True
+        return_dLdu : bool, default=True
             If True,compute the gradient with respect to controls, dL/du.
 
         Returns
@@ -76,63 +70,43 @@ class OptimalControlProblem:
         '''
         L = self.running_cost(x, u)
 
-        if dLdx:
+        if return_dLdx:
             dLdx = approx_derivative(lambda x: self.running_cost(x, u), x, f0=L)
-            if not dLdu:
+            if not return_dLdu:
                 return dLdx
 
-        if dLdu:
+        if return_dLdu:
             dLdu = approx_derivative(lambda u: self.running_cost(x, u), u, f0=L)
-            if not dLdx:
+            if not return_dLdx:
                 return dLdu
 
         return dLdx, dLdu
 
-    def Hamiltonian(self, X, U, dVdX):
-        '''
-        Evaluate the Pontryagin Hamiltonian,
-        H(X,U,dVdX) = L(X,U) + <dVdX, F(X,U)>
-        where L(X,U) is the running cost, dVdX is the costate or value gradient,
-        and F(X,U) is the dynamics. A necessary condition for optimality is that
-        H(X,U,dVdX) ~ 0 for the whole trajectory.
+    def total_cost(self, t, x, u):
+        '''Computes the accumulated running cost J(t) of a state-control trajectory.'''
+        L = self.running_cost(x, u)
+        J = cumtrapz(L.flatten(), t)
+        return np.concatenate((J, J[-1:]))
 
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        U : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
-            Value gradient dV/dX (X,U) evaluated at pair(s) (X,U).
-
-        Returns
-        -------
-        H : (1,) or (n_points,) array
-            Pontryagin Hamiltonian each each point in time.
-        '''
-        L = self.running_cost(X, U)
-        F = self.dynamics(X, U)
-        return L + np.sum(dVdX * F, axis=0)
-
-    def dynamics(self, X, U):
+    def dynamics(self, x, u):
         '''
         Evaluate the closed-loop dynamics at single or multiple time instances.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current state.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Feedback control U=U(X).
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
 
         Returns
         -------
-        dXdt : (n_states,) or (n_states, n_points) array
-            Dynamics dXdt = F(X,U).
+        dxdt : (n_states,) or (n_states, n_points) array
+            System dynamics dx/dt = f(x,u).
         '''
         raise NotImplementedError
 
-    def jacobians(self, X, U, F0=None):
+    def jacobians(self, x, u, f0=None):
         '''
         Evaluate the Jacobians of the dynamics with respect to states and
         controls at single or multiple time instances. Default implementation
@@ -140,109 +114,110 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current states.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Control inputs.
-        F0 : (n_states,) or (n_states, n_points) array, optional
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        f0 : (n_states,) or (n_states, n_points) array, optional
             Dynamics evaluated at current state and control pair.
 
         Returns
         -------
-        dFdX : (n_states, n_states, n_points) array
-            Jacobian with respect to states, dF/dX.
-        dFdU : (n_states, n_controls, n_points) array
-            Jacobian with respect to controls, dF/dX.
+        dfdx : (n_states, n_states, n_points) array
+            Jacobian with respect to states.
+        dfdu : (n_states, n_controls, n_points) array
+            Jacobian with respect to controls.
         '''
-        X = X.reshape(self.n_states, -1)
-        U = U.reshape(self.n_controls, -1)
+        x = x.reshape(self.n_states, -1)
+        u = u.reshape(self.n_controls, -1)
 
-        if F0 is None:
-            F0 = self.dynamics(X, U)
+        if f0 is None:
+            f0 = self.dynamics(x, u)
+        f0 = f0.flatten()
 
         # Jacobian with respect to states
-        def F_wrapper(X_flat):
-            X = X_flat.reshape(self.n_states, -1)
-            return self.dynamics(X, U).flatten()
+        def f_wrapper(x_flat):
+            x = x_flat.reshape(self.n_states, -1)
+            return self.dynamics(x, u).flatten()
 
         # Make sparsity pattern
-        sparsity = sparse.hstack([sparse.identity(X.shape[-1])]*self.n_states)
+        sparsity = sparse.hstack([sparse.identity(x.shape[-1])]*self.n_states)
         sparsity = sparse.vstack([sparsity]*self.n_states)
 
-        dFdX = approx_derivative(
-            F_wrapper, X.flatten(), f0=F0.flatten(), sparsity=sparsity
+        dfdx = approx_derivative(
+            f_wrapper, x.flatten(), f0=f0, sparsity=sparsity
         )
-        dFdX = np.asarray(dFdX[sparsity.nonzero()])
-        dFdX = dFdX.reshape(self.n_states, self.n_states, -1)
+        dfdx = np.asarray(dfdx[sparsity.nonzero()])
+        dfdx = dfdx.reshape(self.n_states, self.n_states, -1)
 
         # Jacobian with respect to controls
-        def F_wrapper(U_flat):
-            U = U_flat.reshape(self.n_controls, -1)
-            return self.dynamics(X, U).flatten()
+        def f_wrapper(u_flat):
+            u = u_flat.reshape(self.n_controls, -1)
+            return self.dynamics(x, u).flatten()
 
         # Make sparsity pattern
-        sparsity = sparse.hstack([sparse.identity(X.shape[-1])]*self.n_controls)
+        sparsity = sparse.hstack([sparse.identity(x.shape[-1])]*self.n_controls)
         sparsity = sparse.vstack([sparsity]*self.n_states)
 
-        dFdU = approx_derivative(
-            F_wrapper, U.flatten(), f0=F0.flatten(), sparsity=sparsity
+        dfdu = approx_derivative(
+            f_wrapper, u.flatten(), f0=f0, sparsity=sparsity
         )
-        dFdU = np.asarray(dFdU[sparsity.nonzero()])
-        dFdU = dFdU.reshape(self.n_states, self.n_controls, -1)
+        dfdu = np.asarray(dfdu[sparsity.nonzero()])
+        dfdu = dfdu.reshape(self.n_states, self.n_controls, -1)
 
-        return dFdX, dFdU
+        return dfdx, dfdu
 
-    def closed_loop_jacobian(self, X, controller):
+    def closed_loop_jacobian(self, x, controller):
         '''
         Evaluate the Jacobian of the closed-loop dynamics at single or multiple
         time instances.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current states.
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
         controller : object
-            Controller instance implementing eval_U and eval_dUdX methods.
+            BaseController instance implementing `__call__` and `jacobian`.
 
         Returns
         -------
-        dFdX : (n_states, n_states) or (n_states, n_states, n_points) array
-            Closed-loop Jacobian dF/dX + dF/dU * dU/dX.
+        dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
+            Closed-loop Jacobian df/dx + df/du * du/dx.
         '''
-        dFdX, dFdU = self.jacobians(X, controller.eval_U(X))
-        dUdX = controller.eval_dUdX(X)
+        dfdx, dfdu = self.jacobians(x, controller(x))
+        dudx = controller.jacobian(x)
 
-        while dFdU.ndim < 3:
-            dFdU = dFdU[...,None]
-        while dUdX.ndim < 3:
-            dUdX = dUdX[...,None]
+        while dfdu.ndim < 3:
+            dfdu = dfdu[...,None]
+        while dudx.ndim < 3:
+            dudx = dudx[...,None]
 
-        dFdX += np.einsum('ijk,jhk->ihk', dFdU, dUdX)
+        dfdx += np.einsum('ijk,jhk->ihk', dfdu, dudx)
 
-        if X.ndim < 2:
-            dFdX = np.squeeze(dFdX)
+        if x.ndim < 2:
+            return dfdx[:,:,0]
 
-        return dFdX
+        return dfdx
 
-    def U_star(self, X, dVdX):
+    def optimal_control(self, x, dVdx):
         '''
         Evaluate the optimal control as a function of state and costate.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
+        dVdx : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
 
         Returns
         -------
-        U : (n_controls,) or (n_controls, n_points) array
+        u : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
         '''
         raise NotImplementedError
 
-    def jac_U_star(self, X, dVdX, U0=None):
+    def optimal_control_jac(self, x, dVdx, u0=None):
         '''
         Evaluate the Jacobian of the optimal control with respect to the state,
         leaving the costate fixed. Default implementation uses finite
@@ -250,41 +225,46 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
+        dVdx : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
-        U0 : (n_controls,) or (n_controls, n_points) array, optional
-            U_star(X, dVdX), pre-evaluated at the inputs.
+        u0 : (n_controls,) or (n_controls, n_points) array, optional
+            self.optimal_control(x, dVdx), pre-evaluated at the inputs.
 
         Returns
         -------
-        dUdX : (n_controls, n_states, n_points) or (n_controls, n_states) array
+        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of the optimal control with respect to states leaving
-            costates fixed, dU/dX (X; dVdX).
+            costates fixed, du/dx (x; dVdx).
         '''
-        if U0 is None:
-            U0 = self.U_star(X, dVdX)
+        if u0 is None:
+            u0 = self.optimal_control(x, dVdx)
 
-        dVdX = dVdX.reshape(self.n_states, -1)
+        dVdx = dVdx.reshape(self.n_states, -1)
 
         # Numerical derivative of optimal feedback policy
-        def U_wrapper(X_flat):
-            X = X_flat.reshape(self.n_states, -1)
-            return self.U_star(X, dVdX).flatten()
+        def u_wrapper(x_flat):
+            x = x_flat.reshape(self.n_states, -1)
+            return self.optimal_control(x, dVdx).flatten()
 
         # Make sparsity pattern
-        sparsity = sparse.identity(dVdX.shape[-1])
+        sparsity = sparse.identity(dVdx.shape[-1])
         sparsity = sparse.hstack([sparsity]*self.n_states)
         sparsity = sparse.vstack([sparsity]*self.n_controls)
 
-        dUdX = approx_derivative(
-            U_wrapper, X.flatten(), f0=U0.flatten(), sparsity=sparsity
+        dudx = approx_derivative(
+            u_wrapper, x.flatten(), f0=u0.flatten(), sparsity=sparsity
         )
-        dUdX = np.asarray(dUdX[sparsity.nonzero()])
-        return dUdX.reshape(self.n_controls, self.n_states, -1)
+        dudx = np.asarray(dudx[sparsity.nonzero()])
+        dudx = dudx.reshape(self.n_controls, self.n_states, -1)
 
-    def bvp_dynamics(self, t, X_aug):
+        if x.ndim < 2:
+            return dudx[:,:,0]
+
+        return dudx
+
+    def bvp_dynamics(self, t, xp):
         '''
         Evaluate the augmented dynamics for Pontryagin's Minimum Principle.
         Default implementation uses finite differences for the costate dynamics.
@@ -293,69 +273,92 @@ class OptimalControlProblem:
         ----------
         t : (n_points,) array
             Time collocation points for each state.
-        X_aug : (2*n_states+1, n_points) array
+        xp : (2*n_states, n_points) array
             Current state, costate, and running cost.
 
         Returns
         -------
-        dX_aug_dt : (2*n_states+1, n_points) array
-            Concatenation of dynamics dXdt = F(X,U^*), costate dynamics,
-            dAdt = -dH/dX(X,U^*,dVdX), and change in cost dVdt = -L(X,U*),
-            where U^* is the optimal control.
+        dxpdt : (2*n_states, n_points) array
+            Concatenation of dynamics dx/dt = f(x,u^*) and costate dynamics,
+            dp/dt = -dH/dx(x,u^*,p), where u^* is the optimal control.
         '''
-        X = X_aug[:self.n_states]
-        dVdX = X_aug[self.n_states:2*self.n_states]
-        U = self.U_star(X, dVdX)
+        x = xp[:self.n_states]
+        p = xp[self.n_states:]
+        u = self.optimal_control(x, p)
 
         # State dynamics
-        dXdt = self.dynamics(X, U)
+        dxdt = self.dynamics(x, u)
 
         # Evaluate closed loop Jacobian using chain rule
-        dFdX, dFdU = self.jacobians(X, U, F0=dXdt)
-        dUdX = self.jac_U_star(X, dVdX, U0=U)
+        dfdx, dfdu = self.jacobians(x, u, f0=dxdt)
+        dudx = self.optimal_control_jac(x, p, u0=u)
 
-        dFdX += np.einsum('ijk,jhk->ihk', dFdU, dUdX)
+        dfdx += np.einsum('ijk,jhk->ihk', dfdu, dudx)
 
-        # Lagrangian and Lagrangian gradient
-        L = np.atleast_2d(self.running_cost(X, U))
-        dLdx, dLdu = self.running_cost_gradient(X, U)
+        dLdx, dLdu = self.running_cost_gradients(x, u)
 
         if dLdx.ndim < 2:
             dLdx = dLdx[:,None]
         if dLdu.ndim < 2:
             dLdu = dLdu[:,None]
 
-        dLdx += np.einsum('ik,ijk->jk', dLdu, dUdX)
+        dLdx += np.einsum('ik,ijk->jk', dLdu, dudx)
 
         # Costate dynamics (gradient of optimized Hamiltonian)
-        dHdX = dLdx + np.einsum('ijk,ik->jk', dFdX, dVdX)
+        dHdx = dLdx + np.einsum('ijk,ik->jk', dfdx, p)
 
-        return np.vstack((dXdt, -dHdX, -L))
+        return np.vstack((dxdt, -dHdx))
 
-    def make_bc(self, X0):
+    def make_pontryagin_boundary(self, x0):
         '''
         Generates a function to evaluate the boundary conditions for a given
-        initial condition. Terminal cost is zero so final condition on lambda is
-        zero.
+        initial condition. Terminal cost is zero so final condition on costate
+        is zero.
 
         Parameters
         ----------
-        X0 : (n_states, 1) array
+        x0 : (n_states, 1) array
             Initial condition.
 
         Returns
         -------
         bc : callable
-            Function of X_aug_0 (augmented states at initial time) and X_aug_T
+            Function of xp_0 (augmented states at initial time) and xp_1
             (augmented states at final time), returning a function which
             evaluates to zero if the boundary conditions are satisfied.
         '''
-        X0 = X0.flatten()
-        def bc(X_aug_0, X_aug_T):
+        x0 = x0.flatten()
+        def bc(xp_0, xp_1):
             return np.concatenate((
-                X_aug_0[:self.n_states] - X0, X_aug_T[self.n_states:]
+                xp_0[:self.n_states] - x0, xp_1[self.n_states:]
             ))
         return bc
+
+    def hamiltonian(self, x, u, dVdx):
+        '''
+        Evaluate the Pontryagin Hamiltonian,
+        H(x,u,dVdx) = L(x,u) + <dVdx, f(x,u)>
+        where L(x,u) is the running cost, dVdx is the costate or value gradient,
+        and f(x,u) is the dynamics. A necessary condition for optimality is that
+        H(x,u,dVdx) = 0 for the whole trajectory.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        dVdx : (n_states,) or (n_states, n_points) array
+            Value gradient dV/dx (x,u) evaluated at pair(s) (x,u).
+
+        Returns
+        -------
+        H : (1,) or (n_points,) array
+            Pontryagin Hamiltonian each each point in time.
+        '''
+        L = self.running_cost(x, u)
+        f = self.dynamics(x, u)
+        return L + np.sum(dVdx * f, axis=0)
 
     def norm(self, x, xf=None):
         '''
@@ -370,7 +373,7 @@ class OptimalControlProblem:
             If provided, calculate ||x - xf||
 
         Returns
-        ----------
+        -------
         x_norm : (n_data,) array
             Norm for each point in x
         '''
@@ -383,78 +386,56 @@ class OptimalControlProblem:
         '''Uniform sampling from the initial condition domain.'''
         raise NotImplementedError
 
-        X0 = np.random.rand(self.n_states, Ns)
-        X0 = (self.X0_ub - self.X0_lb) * X0 + self.X0_lb
+        x0 = np.random.rand(self.n_states, Ns)
+        x0 = (self.x0_ub - self.x0_lb) * x0 + self.x0_lb
 
         if dist is not None:
-            X0 = X0 - self.xf
-            X0_norm = dist / np.linalg.norm(X0, 1, axis=0)
-            X0 = X0_norm * X0 + self.xf
+            x0 = x0 - self.xf
+            x0_norm = dist / np.linalg.norm(x0, 1, axis=0)
+            x0 = x0_norm * x0 + self.xf
 
         if Ns == 1:
-            X0 = X0.flatten()
-        return X0
+            x0 = x0.flatten()
+        return x0
 
-    def apply_state_constraints(self, X):
-        '''
-        Manually update states to satisfy some state constraints. At present
-        time, the OCP format only supports constraints which are intrinsic to
-        the dynamics (such as quaternions or periodicity), not dynamic
-        constraints which need to be satisfied by admissible controls.
-
-        Arguments
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states.
-
-        Returns
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states with constrained values.
-        '''
-        return X
-
-    def constraint_fun(self, X):
+    def constraint_fun(self, x):
         '''
         A (vector-valued) function which is zero when the state constraints are
-        satisfied. At present time, the OCP format only supports constraints
-        which are intrinsic to the dynamics (such as quaternions or
-        periodicity), not dynamic constraints which need to be satisfied by
-        admissible controls.
+        satisfied.
 
-        Arguments
+        Parameters
         ----------
-        X : (n_states, n_data) or (n_states,) array
+        x : (n_states, n_data) or (n_states,) array
             Current states.
 
         Returns
-        ----------
-        C : (n_constraints,) or (n_constraints, n_data) array or None
-            Algebraic equation such that C(X)=0 means that X satisfies the state
+        -------
+        c : (n_constraints,) or (n_constraints, n_data) array or None
+            Algebraic equation such that c(x)=0 means that x satisfies the state
             constraints.
         '''
         return
 
-    def constraint_jacobian(self, X):
+    def constraint_jacobian(self, x):
         '''
-        Constraint function Jacobian dC/dX of self.constraint_fun. Default
+        Constraint function Jacobian dc/dx of self.constraint_fun. Default
         implementation approximates this with central differences.
 
         Parameters
         ----------
-        X : (n_states,) array
+        x : (n_states,) array
             Current state.
 
         Returns
         -------
-        dCdX : (n_constraints, n_states) array or None
-            dC/dX evaluated at the point X, where C(X)=self.constraint_fun(X).
+        dcdx : (n_constraints, n_states) array or None
+            dc/dx evaluated at the point x, where c(x)=self.constraint_fun(x).
         '''
-        C0 = self.constraint_fun(X)
-        if C0 is None:
+        c0 = self.constraint_fun(x)
+        if c0 is None:
             return
 
-        return approx_derivative(self.constraint_fun, X, f0=C0)
+        return approx_derivative(self.constraint_fun, x, f0=c0)
 
     def make_integration_events(self):
         '''
@@ -465,7 +446,7 @@ class OptimalControlProblem:
         Returns
         -------
         events : None, callable, or list of callables
-            Each callable has a function signature e = event(t, X). If the ODE
+            Each callable has a function signature e = event(t, x). If the ODE
             integrator finds a sign change in e then it searches for the time t
             at which this occurs. If event.terminal = True then integration
             stops.
@@ -503,7 +484,7 @@ class LinearProblem:
 
         # Approximate state matrices numerically if not given
         if A is None or B is None:
-            _A, _B = jacobians(self.xf, self.uf, F0=np.zeros_like(self.xf))
+            _A, _B = jacobians(self.xf, self.uf, f0=np.zeros_like(self.xf))
 
         if A is None:
             A = _A

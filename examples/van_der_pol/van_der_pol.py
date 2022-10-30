@@ -16,7 +16,6 @@ config = Config(
 
 class VanDerPol(OptimalControlProblem):
     def __init__(self):
-
         # Dynamics parameters
         self.mu = 2.
         self.b = 1.5
@@ -57,225 +56,224 @@ class VanDerPol(OptimalControlProblem):
         self.xf = self.linearizations[0].xf
         self.uf = self.linearizations[0].uf
 
-    def running_cost(self, X, U):
+    def running_cost(self, x, u):
         '''
-        Evaluate the running cost L(X,U) at one or multiple state-control pairs.
+        Evaluate the running cost L(x,u) at one or multiple state-control pairs.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        U : (n_controls,) or (n_controls, n_points) array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
 
         Returns
         -------
         L : (1,) or (n_points,) array
-            Running cost(s) L(X,U) evaluated at pair(s) (X,U).
+            Running cost(s) L(x,u) evaluated at pair(s) (x,u).
         '''
-        if X.ndim == 1:
-            X_err = X - self.xf.flatten()
+        if x.ndim < 1:
+            x_err = x - self.xf.flatten()
         else:
-            X_err = X - self.xf
+            x_err = x - self.xf
 
-        if U.ndim == 1:
-            U = U - self.uf.flatten()
+        if u.ndim < 1:
+            u_err = u - self.uf.flatten()
         else:
-            U = U - self.uf
+            u_err = u - self.uf
 
-        x1 = X_err[:1]
-        x2 = X_err[1:]
+        x1 = x_err[:1]
+        x2 = x_err[1:]
 
-        L = (self.Wx/2.) * x1**2 + (self.Wy/2.) * x2**2 + (self.Wu/2.) * U**2
+        L = (self.Wx/2.)*x1**2 + (self.Wy/2.)*x2**2 + (self.Wu/2.)*u_err**2
         return np.squeeze(L)
 
-    def running_cost_gradient(self, X, U, return_dLdX=True, return_dLdU=True):
+    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
         '''
-        Evaluate the gradients of the running cost, dL/dX (X,U) and dL/dU (X,U),
-        at one or multiple state-control pairs.
+        Evaluate the gradients of the running cost, dL/dx (x,u) and dL/du (x,u),
+        at one or multiple state-control pairs. Default implementation
+        approximates this with central differences.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        U : (n_controls,) or (n_controls, n_points) array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
-        return_dLdX : bool, default=True
-            Set to True to compute the gradient with respect to states, dL/dX.
-        return_dLdU : bool, default=True
-            Set to True to compute the gradient with respect to controls, dL/dU.
+        return_dLdx : bool, default=True
+            If True, compute the gradient with respect to states, dL/dx.
+        return_dLdu : bool, default=True
+            If True,compute the gradient with respect to controls, dL/du.
 
         Returns
         -------
-        dLdX : (n_states,) or (n_states, n_points) array
-            Gradient dL/dX (X,U) evaluated at pair(s) (X,U).
-        dLdU : (n_states,) or (n_states, n_points) array
-            Gradient dL/dU (X,U) evaluated at pair(s) (X,U).
+        dLdx : (n_states,) or (n_states, n_points) array
+            State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
+        dLdu : (n_states,) or (n_states, n_points) array
+            Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         '''
-        if X.ndim == 1:
-            X_err = X - self.xf.flatten()
+        if x.ndim < 1:
+            x_err = x - self.xf.flatten()
         else:
-            X_err = X - self.xf
+            x_err = x - self.xf
 
-        if U.ndim == 1:
-            U = U - self.uf.flatten()
+        if u.ndim < 1:
+            u_err = u - self.uf.flatten()
         else:
-            U = U - self.uf
+            u_err = u - self.uf
 
-        x1 = X_err[:1]
-        x2 = X_err[1:]
+        x1 = x_err[:1]
+        x2 = x_err[1:]
 
         if return_dLdX:
-            dLdX = np.concatenate((self.Wx * x1, self.Wy * x2))
-            if not return_dLdU:
-                return dLdX
+            dLdx = np.concatenate((self.Wx * x1, self.Wy * x2))
+            if not return_dLdu:
+                return dLdx
 
-        if return_dLdU:
-            dLdU = self.Wu * U
-            if not return_dLdX:
-                return dLdU
+        if return_dLdu:
+            dLdu = self.Wu * u_err
+            if not return_dLdx:
+                return dLdu
 
-        return dLdX, dLdU
+        return dLdu, dLdu
 
-    def dynamics(self, X, U):
+    def dynamics(self, x, u):
         '''
         Evaluate the closed-loop dynamics at single or multiple time instances.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current state.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Feedback control U=U(X).
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
 
         Returns
         -------
-        dXdt : (n_states,) or (n_states, n_points) array
-            Dynamics dXdt = F(X,U).
+        dxdt : (n_states,) or (n_states, n_points) array
+            System dynamics dx/dt = f(x,u).
         '''
-        if X.ndim == 1:
-            U = U.flatten()
+        if x.ndim < 2:
+            u = u.flatten()
 
-        x1 = X[:1]
-        x2 = X[1:]
+        x1 = x[:1]
+        x2 = x[1:]
 
         dx1dt = x2
-        dx2dt = self.mu * (1. - x1**2) * x2 - x1 + self.b * U
+        dx2dt = self.mu * (1. - x1**2) * x2 - x1 + self.b * u
 
         return np.concatenate((dx1dt, dx2dt))
 
-    def jacobians(self, X, U, F0=None):
+    def jacobians(self, x, u, f0=None):
         '''
         Evaluate the Jacobians of the dynamics with respect to states and
-        controls at single or multiple time instances. Default implementation
-        approximates the Jacobians with central differences.
+        controls at single or multiple time instances.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current states.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Control inputs.
-        F0 : ignored
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        f0 : ignored
             For API consistency only.
 
         Returns
         -------
-        dFdX : (n_states, n_states, n_points) array
-            Jacobian with respect to states, dF/dX.
-        dFdU : (n_states, n_controls, n_points) array
-            Jacobian with respect to controls, dF/dX.
+        dfdx : (n_states, n_states, n_points) array
+            Jacobian with respect to states.
+        dfdu : (n_states, n_controls, n_points) array
+            Jacobian with respect to controls.
         '''
-        x1 = np.atleast_1d(X[0])
-        x2 = np.atleast_1d(X[1])
+        x1 = np.atleast_1d(x[0])
+        x2 = np.atleast_1d(x[1])
 
-        dFdX = np.array([
+        dfdx = np.array([
             [np.zeros_like(x1), np.ones_like(x1)],
             [-1. - 2.*self.mu*x1*x2, self.mu*(1. - x1**2)]
         ])
-        dFdU = np.expand_dims(self.B, -1)
-        dFdU = np.tile(dFdU, (1,1,x1.shape[-1]))
+        dfdu = np.expand_dims(self.B, -1)
+        dfdu = np.tile(dfdu, (1,1,x1.shape[-1]))
 
-        return dFdX, dFdU
+        return dfdu, dfdu
 
-    def U_star(self, X, dVdX):
+    def optimal_control(self, x, dVdx):
         '''
         Evaluate the optimal control as a function of state and costate.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
+        dVdx : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
 
         Returns
         -------
-        U : (n_controls,) or (n_controls, n_points) array
+        u : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
         '''
-        u = self.uf - self.b / self.Wu * dVdX[1:]
-
+        u = self.uf - self.b / self.Wu * dVdx[1:]
         return saturate(u, self.u_lb, self.u_ub)
 
-    def jac_U_star(self, X, dVdX, U0=None):
+    def optimal_control_jac(self, x, dVdx, u0=None):
         '''
         Evaluate the Jacobian of the optimal control with respect to the state,
         leaving the costate fixed.
 
         Parameters
         ----------
-        X : (n_states,) or (n_states, n_points) array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
+        dVdx : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
-        U0 : ignored
+        u0 : ignored
             For API consistency only.
 
         Returns
         -------
-        U : (n_controls,) or (n_controls, n_points) array
-            Optimal control(s) arranged by (dimension, time).
+        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
+            Jacobian of the optimal control with respect to states leaving
+            costates fixed, du/dx (x; dVdx).
         '''
-        dVdX = dVdX.reshape(self.n_states, -1)
-        return np.zeros((self.n_controls, self.n_states, dVdX.shape[-1]))
+        if dVdx.ndim < 2:
+            return np.zeros((self.n_controls, self.n_states))
+        return np.zeros((self.n_controls, self.n_states, dVdx.shape[-1]))
 
-    def bvp_dynamics(self, t, X_aug):
+    def bvp_dynamics(self, t, xp):
         '''
         Evaluate the augmented dynamics for Pontryagin's Minimum Principle.
 
         Parameters
         ----------
-        X_aug : (2*n_states+1, n_points) array
+        t : (n_points,) array
+            Time collocation points for each state.
+        xp : (2*n_states, n_points) array
             Current state, costate, and running cost.
 
         Returns
         -------
-        dX_aug_dt : (2*n_states+1, n_points) array
-            Concatenation of dynamics dXdt = F(X,U^*), costate dynamics,
-            dAdt = -dH/dX(X,U^*,dVdX), and change in cost dVdt = -L(X,U*),
-            where U^* is the optimal control.
+        dxpdt : (2*n_states, n_points) array
+            Concatenation of dynamics dx/dt = f(x,u^*) and costate dynamics,
+            dp/dt = -dH/dx(x,u^*,p), where u^* is the optimal control.
         '''
-        # Optimal control as a function of the costate
-        U = self.U_star(X_aug[:2], X_aug[2:4])
+        u = self.optimal_control(xp[:2], xp[2:])
 
-        x1 = X_aug[:1]
-        x2 = X_aug[1:2]
+        x1 = xp[:1]
+        x2 = xp[1:2]
 
         x1_err = x1 - self.xf[:1]
 
         # Costate
-        A1 = X_aug[2:3]
-        A2 = X_aug[3:4]
+        p1 = xp[2:3]
+        p2 = xp[3:4]
 
         # State dynamics
         dx1dt = x2
-        dx2dt = self.mu * (1. - x1**2) * x2 - x1 + self.b * U
+        dx2dt = self.mu * (1. - x1**2) * x2 - x1 + self.b * u
 
         # Costate dynamics
-        dA1dt = -self.Wx * x1_err + A2 * (2.*self.mu*x1*x2 + 1.)
-        dA2dt = -self.Wy * x2 - A1 - A2 * self.mu * (1. - x1**2)
+        dp1dt = -self.Wx * x1_err + p2 * (2.*self.mu*x1*x2 + 1.)
+        dp2dt = -self.Wy * x2 - p1 - p2 * self.mu * (1. - x1**2)
 
-        L = np.atleast_2d(self.running_cost(X_aug[:2], U))
-
-        return np.vstack((dx1dt, dx2dt, dA1dt, dA2dt, -L))
+        return np.vstack((dx1dt, dx2dt, dp1dt, dp2dt))

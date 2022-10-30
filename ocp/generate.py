@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from scipy.interpolate import interp1d
 
-from qrnet import simulate
+from . import simulate
 
 _headers = (
     '\n attempted |  solved   |  desired  ',
