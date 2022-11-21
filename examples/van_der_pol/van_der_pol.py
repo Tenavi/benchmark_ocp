@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..example_config import Config
-from optimalcontrol.problem import OptimalControlProblem, LinearProblem
+from optimalcontrol.problem import OptimalControlProblem, UniformSampler
 from optimalcontrol.utilities import saturate
 
 config = Config(
@@ -13,6 +13,8 @@ config = Config(
     n_trajectories_train=50,
     n_trajectories_test=50
 )
+
+x0_sampler = UniformSampler()
 
 class VanDerPol(OptimalControlProblem):
     _params = {

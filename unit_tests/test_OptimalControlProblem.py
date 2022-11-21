@@ -19,3 +19,9 @@ def test_initialize(ocp_name):
     assert not problem.parameters.dummy_variable
     problem.update_parameters(dummy_variable=True)
     assert problem.parameters.dummy_variable
+
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+def test_cost_functions(ocp_name):
+    problem = ocp_dict[ocp_name]["ocp"]()
+
+    

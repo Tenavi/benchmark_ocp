@@ -423,22 +423,6 @@ class OptimalControlProblem:
             x = x - xf.reshape(self.n_states, 1)
         return np.linalg.norm(x, axis=0)
 
-    def sample_initial_condition(self, Ns, dist=None):
-        '''Uniform sampling from the initial condition domain.'''
-        raise NotImplementedError
-
-        x0 = np.random.rand(self.n_states, Ns)
-        x0 = (self.x0_ub - self.x0_lb) * x0 + self.x0_lb
-
-        if dist is not None:
-            x0 = x0 - self.xf
-            x0_norm = dist / np.linalg.norm(x0, 1, axis=0)
-            x0 = x0_norm * x0 + self.xf
-
-        if Ns == 1:
-            x0 = x0.flatten()
-        return x0
-
     def constraint_fun(self, x):
         '''
         A (vector-valued) function which is zero when the state constraints are
@@ -543,3 +527,40 @@ class LinearProblem:
         self.B = np.reshape(B, (self.n_states, self.n_controls))
         self.Q = np.reshape(Q, (self.n_states, self.n_states))
         self.R = np.reshape(R, (self.n_controls, self.n_controls))
+
+class StateSampler:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def sample(self, n_samples, **kwargs):
+        '''Uniform sampling from the initial condition domain.'''
+        raise NotImplementedError
+
+class UniformSampler(StateSampler):
+    def __init__(self, lb, ub, xf, seed=None):
+        self.lb = np.reshape(lb, (-1,1))
+        self.ub = np.reshape(ub, (-1,1))
+        self.xf = np.reshape(xf, (-1,1))
+
+        self.n_states = self.xf.shape[0]
+
+        if self.n_states != self.ub.shape[0] or self.n_states != self.lb.shape[0]:
+            raise ValueError("lb, ub, and xf must have compatible shapes.")
+
+        self._rng = np.random.default_rng(seed)
+
+    def sample(self, n_samples, distance=None):
+        '''Uniform sampling from the initial condition domain.'''
+
+        x0 = self.rng.uniform(
+            low=self.lb, high=self.ub, size=(self.n_states, n_samples)
+        )
+
+        if distance is not None:
+            x0 -= self.xf
+            x0_norm = dist / np.linalg.norm(x0, 1, axis=0)
+            x0 = x0_norm * x0 + self.xf
+
+        if n_samples == 1:
+            return x0.flatten()
+        return x0
