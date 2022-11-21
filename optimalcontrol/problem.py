@@ -1,8 +1,16 @@
 import numpy as np
-
 from scipy.optimize._numdiff import approx_derivative
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy import sparse
+
+class ProblemParameters:
+    '''Utility class to store cost function and system dynamics parameters.'''
+    def __init__(self, **params):
+        self.__dict__.update(params)
+
+    def update(self, **params):
+        '''Modify individual or multiple parameters using keyword arguments.'''
+        self.__dict__.update(params)
 
 class OptimalControlProblem:
     '''Defines an optimal control problem (OCP).
@@ -10,21 +18,54 @@ class OptimalControlProblem:
     Template super class defining an optimal control problem (OCP) including
     dynamics, running cost, and optimal control as a function of costate.
     '''
-    def __init__(
-            self, n_states, n_controls, u_lb=None, u_ub=None, final_time=np.inf
-        ):
-        self.n_states, self.n_controls = n_states, n_controls
+    # Default cost and system parameters. Should be overwritten by subclass.
+    _params = ProblemParameters()
 
-        self.u_lb, self.u_ub = u_lb, u_ub
+    def __init__(self, **problem_parameters):
+        '''Initialize the OCP with some cost and system parameters.
 
-        if self.u_lb is not None:
-            self.u_lb = np.reshape(self.u_lb, (self.n_controls,1))
-        if self.u_ub is not None:
-            self.u_ub = np.reshape(self.u_ub, (self.n_controls,1))
+        Parameters
+        ----------
+        problem_parameters : dict, default={}
+            Parameters specifying the cost function and system dynamics. If
+            empty, defaults defined by the subclass will be used.
+        '''
+        if not isinstance(self._params, ProblemParameters):
+            self._params = ProblemParameters(**self._params)
+        self.update_parameters(**problem_parameters)
 
-        self.final_time = final_time
+    @property
+    def n_states(self):
+        '''The number of system states (positive int).'''
+        raise NotImplementedError
 
-        self.linearizations = []
+    @property
+    def n_controls(self):
+        '''The number of control inputs to the system (positive int).'''
+        raise NotImplementedError
+
+    @property
+    def final_time(self):
+        '''Time horizon of the system; can be infinite
+        (positive float or np.inf).'''
+        raise NotImplementedError
+
+    @property
+    def parameters(self):
+        '''Returns the `ProblemParameters` instance specifying parameters for
+        the cost function and system dynamics.'''
+        return self._params
+
+    def update_parameters(self, **new_params):
+        '''Modify cost function and dynamics parameters using keyword arguments.
+        This is the preferred way to change problem parameters since the OCP may
+        have to make other calculations based on new parameters.'''
+        self._params.update(**new_params)
+        self._update_params(**new_params)
+
+    def _update_params(self, **new_params):
+        '''Things the subclass does when problem parameters are changed.'''
+        pass
 
     def running_cost(self, x, u):
         '''
@@ -86,7 +127,7 @@ class OptimalControlProblem:
         '''Computes the accumulated running cost J(t) of a state-control trajectory.'''
         L = self.running_cost(x, u)
         J = cumtrapz(L.flatten(), t)
-        return np.concatenate((J, J[-1:]))
+        return np.concatenate(([0.], J))
 
     def dynamics(self, x, u):
         '''

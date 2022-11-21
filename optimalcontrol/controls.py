@@ -3,7 +3,7 @@ from scipy.optimize._numdiff import approx_derivative
 
 from .utilities import saturate
 
-class BaseController:
+class Controller:
     '''
     Base class for implementing a state feedback controller.
     '''
@@ -43,7 +43,7 @@ class BaseController:
         '''
         raise NotImplementedError
 
-class LQR(BaseController):
+class LinearQuadraticRegulator(Controller):
     '''
     Implements a linear quadratic regulator (LQR) control with saturation
     constraints.

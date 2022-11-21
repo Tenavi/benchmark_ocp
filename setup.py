@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 if __name__ == "__main__":
     setuptools.setup(
-        name="ocp",
+        name="optimalcontrol",
         version="0.1.0",
         description="Benchmark problems for optimal feedback control",
         long_description=long_description,
         long_description_content_type="text/markdown",
         author="Tenavi Nakamura-Zimmerer",
         author_email="tenavi.nakamura-zimmerer@nasa.gov",
-        packages=["ocp"],
+        packages=["optimalcontrol"],
         install_requires=[
             "scipy>=1.5.2",
             "numpy>=1.19.1",
