@@ -1,7 +1,7 @@
 import numpy as np
 
 from qrnet.problem_template import TemplateOCP, MakeConfig
-from qrnet.utilities import cross_product_matrix, saturate_np, saturate_tf
+from qrnet.utilities import saturate_np, saturate_tf
 
 config = MakeConfig(
     t1_sim=60.,
@@ -11,6 +11,15 @@ config = MakeConfig(
     value_loss_weight=0.1,
     gradient_loss_weight=0.1,
 )
+
+def cross_product_matrix(w):
+    zeros = np.zeros_like(w[0])
+    wx = np.array([
+        [zeros, -w[2], w[1]],
+        [w[2], zeros, -w[0]],
+        [-w[1], w[0], zeros]]
+    )
+    return wx
 
 class MakeOCP(TemplateOCP):
     def __init__(self):

@@ -1,19 +1,37 @@
 import numpy as np
+from scipy import sparse
 from scipy.optimize._numdiff import approx_derivative
 from scipy.integrate import cumulative_trapezoid as cumtrapz
-from scipy import sparse
+from scipy.spatial.distance import cdist
 
 class ProblemParameters:
     '''Utility class to store cost function and system dynamics parameters.'''
     def __init__(self, **params):
         self.__dict__.update(params)
+        self._update_fun = None
 
     def update(self, **params):
         '''Modify individual or multiple parameters using keyword arguments.'''
         self.__dict__.update(params)
+        self.update_fun(**params)
+
+    @property
+    def update_fun(self):
+        '''Get or set a function to execute whenever problem parameters are
+        modified by `update`.'''
+        if not callable(self._update_fun):
+            raise ValueError("update_fun has not been set.")
+        return self._update_fun
+
+    @update_fun.setter
+    def update_fun(self, _update_fun):
+        if not callable(_update_fun):
+            raise TypeError("update_fun must be set with a callable.")
+        self._update_fun = _update_fun
 
 class OptimalControlProblem:
-    '''Defines an optimal control problem (OCP).
+    '''
+    Defines an optimal control problem (OCP).
 
     Template super class defining an optimal control problem (OCP) including
     dynamics, running cost, and optimal control as a function of costate.
@@ -22,7 +40,8 @@ class OptimalControlProblem:
     _params = ProblemParameters()
 
     def __init__(self, **problem_parameters):
-        '''Initialize the OCP with some cost and system parameters.
+        '''
+        Initialize the OCP with some cost and system parameters.
 
         Parameters
         ----------
@@ -32,7 +51,8 @@ class OptimalControlProblem:
         '''
         if not isinstance(self._params, ProblemParameters):
             self._params = ProblemParameters(**self._params)
-        self.update_parameters(**problem_parameters)
+        self.parameters.update_fun = self._update_params
+        self.parameters.update(**problem_parameters)
 
     @property
     def n_states(self):
@@ -56,16 +76,50 @@ class OptimalControlProblem:
         the cost function and system dynamics.'''
         return self._params
 
-    def update_parameters(self, **new_params):
-        '''Modify cost function and dynamics parameters using keyword arguments.
-        This is the preferred way to change problem parameters since the OCP may
-        have to make other calculations based on new parameters.'''
-        self._params.update(**new_params)
-        self._update_params(**new_params)
-
     def _update_params(self, **new_params):
-        '''Things the subclass does when problem parameters are changed.'''
+        '''Things the subclass does when problem parameters are changed. Also
+        called during initialization.'''
         pass
+
+    def distances(self, xa, xb):
+        '''
+        Calculate the problem-relevant distance metric of a batch of states from
+        another state or batch of states. The default metric is Euclidean.
+
+        Parameters
+        ----------
+        xa : (n_states, n_a) or (n_states,) array
+            First batch of points.
+        xb : (n_states, n_b) or (n_states,) array
+            Second batch of points.
+
+        Returns
+        -------
+        dist : (n_a, n_b) array
+            ||xa - xb|| for each point in xa and xb
+        '''
+        xa = xa.reshape(self.n_states, -1).T
+        xb = xb.reshape(self.n_states, -1).T
+        return cdist(xa, xb, metric='euclidean')
+
+    def sample_initial_conditions(self, n_samples=1, **kwargs):
+        '''
+        Generate initial conditions from the problem's domain of interest.
+
+        Parameters
+        ----------
+        n_samples : int, default=1
+            Number of sample points to generate.
+        kwargs
+            Other keyword arguments implemented by the subclass.
+
+        Returns
+        -------
+        x0 : (n_states, n_samples) or (n_states,) array
+            Samples of the system state, where each column is a different
+            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+        '''
+        raise NotImplementedError
 
     def running_cost(self, x, u):
         '''
@@ -401,28 +455,6 @@ class OptimalControlProblem:
         f = self.dynamics(x, u)
         return L + np.sum(dVdx * f, axis=0)
 
-    def norm(self, x, xf=None):
-        '''
-        Calculate the distance of a batch of spatial points from xf or zero.
-        By default uses L2 norm.
-
-        Parameters
-        ----------
-        x : (n_states, n_data) or (n_states,) array
-            Points to compute distances for
-        xf : (n_states,) array, optional
-            If provided, calculate ||x - xf||
-
-        Returns
-        -------
-        x_norm : (n_data,) array
-            Norm for each point in x
-        '''
-        x = x.reshape(self.n_states, -1)
-        if xf is not None:
-            x = x - xf.reshape(self.n_states, 1)
-        return np.linalg.norm(x, axis=0)
-
     def constraint_fun(self, x):
         '''
         A (vector-valued) function which is zero when the state constraints are
@@ -527,40 +559,3 @@ class LinearProblem:
         self.B = np.reshape(B, (self.n_states, self.n_controls))
         self.Q = np.reshape(Q, (self.n_states, self.n_states))
         self.R = np.reshape(R, (self.n_controls, self.n_controls))
-
-class StateSampler:
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def sample(self, n_samples, **kwargs):
-        '''Uniform sampling from the initial condition domain.'''
-        raise NotImplementedError
-
-class UniformSampler(StateSampler):
-    def __init__(self, lb, ub, xf, seed=None):
-        self.lb = np.reshape(lb, (-1,1))
-        self.ub = np.reshape(ub, (-1,1))
-        self.xf = np.reshape(xf, (-1,1))
-
-        self.n_states = self.xf.shape[0]
-
-        if self.n_states != self.ub.shape[0] or self.n_states != self.lb.shape[0]:
-            raise ValueError("lb, ub, and xf must have compatible shapes.")
-
-        self._rng = np.random.default_rng(seed)
-
-    def sample(self, n_samples, distance=None):
-        '''Uniform sampling from the initial condition domain.'''
-
-        x0 = self.rng.uniform(
-            low=self.lb, high=self.ub, size=(self.n_states, n_samples)
-        )
-
-        if distance is not None:
-            x0 -= self.xf
-            x0_norm = dist / np.linalg.norm(x0, 1, axis=0)
-            x0 = x0_norm * x0 + self.xf
-
-        if n_samples == 1:
-            return x0.flatten()
-        return x0

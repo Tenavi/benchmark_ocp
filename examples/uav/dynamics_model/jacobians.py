@@ -1,10 +1,9 @@
 import numpy as np
 from scipy import sparse
 
-from qrnet.utilities import cross_product_matrix
-
 from . import constants, dynamics
 from .containers import VehicleState, Controls, STATES_IDX, CONTROLS_IDX
+from .rotations import cross_product_matrix
 
 # Get indices of vector parts of states
 Vb_idx = [STATES_IDX[x].start for x in ['u','v','w']]

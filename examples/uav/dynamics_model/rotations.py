@@ -38,3 +38,12 @@ def euler_to_quat(yaw, pitch, roll, degrees=False):
         return q[:,0]
 
     return q
+
+def cross_product_matrix(w):
+    zeros = np.zeros_like(w[0])
+    wx = np.array([
+        [zeros, -w[2], w[1]],
+        [w[2], zeros, -w[0]],
+        [-w[1], w[0], zeros]]
+    )
+    return wx

@@ -1,8 +1,8 @@
 import numpy as np
 
 from ..example_config import Config
-from optimalcontrol.problem import OptimalControlProblem, UniformSampler
-from optimalcontrol.utilities import saturate
+from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.utilities import saturate, UniformSampler
 
 config = Config(
     ode_solver='RK23',
@@ -14,12 +14,15 @@ config = Config(
     n_trajectories_test=50
 )
 
-x0_sampler = UniformSampler()
-
 class VanDerPol(OptimalControlProblem):
     _params = {
-        'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0., 'mu': 2., 'b': 1.5, 'u_max': 1.
+        'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
+        'mu': 2., 'b': 1.5, 'u_max': 1.,
+        'x0_ub': np.array([[3.],[4.]]), 'x0_lb': -np.array([[3.],[4.]])
     }
+    def _saturate(self, u):
+        return saturate(u, -self._params.u_max, self._params.u_max)
+
     @property
     def n_states(self):
         '''The number of system states (positive int).'''
@@ -43,8 +46,38 @@ class VanDerPol(OptimalControlProblem):
         self.B[1] = self._params.b
         self._params.u_max = np.abs(self._params.u_max)
 
-    def _saturate(self, u):
-        return saturate(u, -self._params.u_max, self._params.u_max)
+        if hasattr(self, '_x0_sampler'):
+            self._x0_sampler.update(
+                lb=new_params.get('lb'), ub=new_params.get('ub'), xf=self.xf,
+                seed=new_params.get('x0_sample_seed')
+            )
+        else:
+            self._x0_sampler = UniformSampler(
+                lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
+                norm=getattr(self._params, 'x0_sample_norm', 1),
+                seed=getattr(self._params, 'x0_sample_seed', None)
+            )
+
+    def sample_initial_conditions(self, n_samples=1, distance=None):
+        '''
+        Generate initial conditions uniformly from a hypercube.
+
+        Parameters
+        ----------
+        n_samples : int, default=1
+            Number of sample points to generate.
+        distance : positive float, optional
+            Desired distance (in l1 or l2 norm) of samples from `self.xf`. The
+            type of norm is determined by `self.norm`. Note that depending on
+            how `distance` is specified, samples may be outside the hypercube.
+
+        Returns
+        -------
+        x0 : (n_states, n_samples) or (n_states,) array
+            Samples of the system state, where each column is a different
+            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+        '''
+        return self._x0_sampler(n_samples=n_samples, distance=distance)
 
     def running_cost(self, x, u):
         '''
