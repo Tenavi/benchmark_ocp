@@ -78,9 +78,9 @@ class UniformSampler(StateSampler):
         '''
         self.update(lb=lb, ub=ub, xf=xf)
 
-        self.norm = int(norm)
-        if self.norm not in [1,2]:
+        if norm not in [1,2]:
             raise ValueError('norm must be 1 or 2')
+        self.norm = int(norm)
 
         self.rng = np.random.default_rng(seed)
 
@@ -127,13 +127,16 @@ class UniformSampler(StateSampler):
             Samples of the system state, where each column is a different
             sample. If `n_samples=1` then `x` will be a one-dimensional array.
         '''
+        if not n_samples:
+            raise ValueError('n_samples must be a positive int.')
+
         x = self.rng.uniform(
             low=self.lb, high=self.ub, size=(self.n_states, n_samples)
         )
 
         if distance is not None:
             x -= self.xf
-            x_norm = dist / np.linalg.norm(x, self.norm, axis=0)
+            x_norm = distance / np.linalg.norm(x, self.norm, axis=0)
             x = x_norm * x + self.xf
 
         if n_samples == 1:
