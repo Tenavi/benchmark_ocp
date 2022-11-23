@@ -81,7 +81,7 @@ class VanDerPol(OptimalControlProblem):
 
     def running_cost(self, x, u):
         '''
-        Evaluate the running cost L(x,u) at one or multiple state-control pairs.
+        Evaluate the running cost L(x,u) at one or more state-control pairs.
 
         Parameters
         ----------
@@ -92,16 +92,16 @@ class VanDerPol(OptimalControlProblem):
 
         Returns
         -------
-        L : (1,) or (n_points,) array
+        L : float or (n_points,) array
             Running cost(s) L(x,u) evaluated at pair(s) (x,u).
         '''
-        if x.ndim < 1:
+        if x.ndim < 2:
             x_err = x - self.xf.flatten()
         else:
             x_err = x - self.xf
 
         u = self._saturate(u)
-        if u.ndim < 1:
+        if u.ndim < 2:
             u_err = u - self.uf.flatten()
         else:
             u_err = u - self.uf
@@ -112,7 +112,7 @@ class VanDerPol(OptimalControlProblem):
         L += (self._params.Wy/2.) * x_err[1:]
         L += (self._params.Wu/2.) * u_err**2
 
-        return np.squeeze(L)
+        return L[0]
 
     def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
         '''
@@ -138,13 +138,13 @@ class VanDerPol(OptimalControlProblem):
         dLdu : (n_states,) or (n_states, n_points) array
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         '''
-        if x.ndim < 1:
+        if x.ndim < 2:
             x_err = x - self.xf.flatten()
         else:
             x_err = x - self.xf
 
         u = self._saturate(u)
-        if u.ndim < 1:
+        if u.ndim < 2:
             u_err = u - self.uf.flatten()
         else:
             u_err = u - self.uf
@@ -152,7 +152,7 @@ class VanDerPol(OptimalControlProblem):
         x1 = x_err[:1]
         x2 = x_err[1:]
 
-        if return_dLdX:
+        if return_dLdx:
             dLdx = np.concatenate((self._params.Wx * x1, self._params.Wy * x2))
             if not return_dLdu:
                 return dLdx
@@ -162,7 +162,7 @@ class VanDerPol(OptimalControlProblem):
             if not return_dLdx:
                 return dLdu
 
-        return dLdu, dLdu
+        return dLdx, dLdu
 
     def dynamics(self, x, u):
         '''

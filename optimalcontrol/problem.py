@@ -123,7 +123,7 @@ class OptimalControlProblem:
 
     def running_cost(self, x, u):
         '''
-        Evaluate the running cost L(x,u) at one or multiple state-control pairs.
+        Evaluate the running cost L(x,u) at one or more state-control pairs.
 
         Parameters
         ----------
@@ -134,7 +134,7 @@ class OptimalControlProblem:
 
         Returns
         -------
-        L : (1,) or (n_points,) array
+        L : float or (n_points,) array
             Running cost(s) L(x,u) evaluated at pair(s) (x,u).
         '''
         raise NotImplementedError
@@ -176,6 +176,22 @@ class OptimalControlProblem:
                 return dLdu
 
         return dLdx, dLdu
+
+    def terminal_cost(self, x):
+        '''
+        Evaluate the terminal cost F(x) at one or more states.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, sample).
+
+        Returns
+        -------
+        F : float or (n_points,) array
+            Terminal cost(s) F(x) evaluated.
+        '''
+        raise NotImplementedError
 
     def total_cost(self, t, x, u):
         '''Computes the accumulated running cost J(t) of a state-control trajectory.'''
