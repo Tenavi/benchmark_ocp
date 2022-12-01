@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import _numdiff
 
 def saturate(u, u_lb, u_ub):
     '''
@@ -25,6 +26,136 @@ def saturate(u, u_lb, u_ub):
             u = np.clip(u, u_lb, u_ub)
 
     return u
+
+# ------------------------------------------------------------------------------
+
+def approx_derivative(
+        fun, x0, method='3-point', rel_step=None, abs_step=None, f0=None,
+        args=(), kwargs={}
+    ):
+    '''
+    Compute (batched) finite difference approximation of the derivatives of an
+    array-valued function. Modified from
+    `scipy.optimize._numdiff.approx_derivative` to allow for array-valued
+    functions evaluated at multiple inputs.
+
+    If a function maps from R^n to R^m, its derivatives form m-by-n matrix
+    called the Jacobian, where an element (i, j) is a partial derivative of
+    f[i] with respect to x[j].
+
+    Parameters
+    ----------
+    fun : callable
+        Function of which to estimate the derivatives. The argument x
+        passed to this function is an ndarray of shape (n,) or (n, n_points). It
+        must return an n-D array_like of shape (m_1, ..., m_l) or
+        (m_1, ..., m_l, n_points), depending on the shape of the input.
+    x0 : array_like of shape (n,) or (n, n_points)
+        Point(s) at which to estimate the derivatives.
+    method : {'3-point', '2-point', 'cs'}, optional
+        Finite difference method to use:
+            - '2-point' - use the first order accuracy forward or backward
+                          difference.
+            - '3-point' - use central difference
+            - 'cs' - use a complex-step finite difference scheme. This assumes
+                     that the user function is real-valued and can be
+                     analytically continued to the complex plane. Otherwise,
+                     produces bogus results.
+    rel_step : None or array_like, optional
+        Relative step size to use. If None (default) the absolute step size is
+        computed as ``h = rel_step * sign(x0) * max(1, abs(x0))``, with
+        `rel_step` being selected automatically, see Notes. Otherwise
+        ``h = rel_step * sign(x0) * abs(x0)``. For ``method='3-point'`` the
+        sign of `h` is ignored.
+    abs_step : array_like, optional
+        Absolute step size to use. For ``method='3-point'`` the sign of
+        `abs_step` is ignored. By default relative steps are used, only if
+        ``abs_step is not None`` are absolute steps used.
+    f0 : None or array_like, optional
+        If not None it is assumed to be equal to ``fun(x0)``, in this case
+        the ``fun(x0)`` is not called. Default is None.
+    args, kwargs : tuple and dict, optional
+        Additional arguments passed to `fun`. Both empty by default.
+        The calling signature is ``fun(x, *args, **kwargs)``.
+
+    Returns
+    -------
+    dfdx : (m_1, ..., m_l, n) or (m_1, ..., m_l, n, n_points) array
+        Finite difference approximation of the Jacobian matrix or matrices.
+
+    Notes
+    -----
+    If `rel_step` is not provided, it assigned as ``EPS**(1/s)``, where EPS is
+    determined from the smallest floating point dtype of `x0` or `fun(x0)`,
+    ``np.finfo(x0.dtype).eps``, s=2 for '2-point' method and s=3 for '3-point'
+    method. Such relative step approximately minimizes a sum of truncation and
+    round-off errors. Relative steps are used by default. However, absolute
+    steps are used when ``abs_step is not None``. If any of the absolute or
+    relative steps produces an indistinguishable difference from the original
+    `x0`, ``(x0 + dx) - x0 == 0``, then an automatic step size is substituted
+    for that particular entry.
+    '''
+    if method not in ['2-point', '3-point', 'cs']:
+        raise ValueError("Unknown method '%s'. " % method)
+
+    x0 = np.atleast_1d(x0)
+
+    def fun_wrapped(x):
+        return np.atleast_1d(fun(x, *args, **kwargs))
+
+    if f0 is None:
+        f0 = fun_wrapped(x0)
+    else:
+        f0 = np.atleast_1d(f0)
+
+    # By default we use rel_step
+    if abs_step is None:
+        h = _numdiff._compute_absolute_step(rel_step, x0, f0, method)
+    else:
+        # user specifies an absolute step
+        sign_x0 = (x0 >= 0).astype(float) * 2 - 1
+        h = abs_step
+
+        # cannot have a zero step. This might happen if x0 is very large
+        # or small. In which case fall back to relative step.
+        dx = ((x0 + h) - x0)
+        h_alt = (
+            _numdiff._eps_for_method(x0.dtype, f0.dtype, method)
+            * sign_x0 * np.maximum(1.0, np.abs(x0))
+        )
+        h = np.where(dx == 0, h_alt, h)
+
+    return _dense_difference(fun_wrapped, x0, f0, h, method)
+
+def _dense_difference(fun, x0, f0, h, method):
+    dfdx_T = np.empty(x0.shape[:1] + f0.shape)
+
+    for i in range(x0.shape[0]):
+        if method == '2-point':
+            x = np.copy(x0)
+            x[i] += h[i]
+            dx = x[i] - x0[i]  # Recompute dx as exactly representable number.
+            df = fun(x) - f0
+        elif method == '3-point':
+            x1, x2 = np.copy(x0), np.copy(x0)
+            x1[i] += h[i]
+            x2[i] -= h[i]
+            dx = x2[i] - x1[i]
+            df = fun(x2) - fun(x1)
+        elif method == 'cs':
+            x = x0.astype('complex128')
+            x[i] += h[i] * 1.j
+            df = fun(x).imag
+            dx = h[i]
+        else:
+            raise RuntimeError("Never be here.")
+
+        dfdx_T[i] = df / dx
+
+    if x0.ndim < 2:
+        return np.moveaxis(dfdx_T, 0, -1)
+
+    return np.moveaxis(dfdx_T, 0, -2)
 
 # ------------------------------------------------------------------------------
 

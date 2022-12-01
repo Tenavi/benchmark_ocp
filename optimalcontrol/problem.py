@@ -160,7 +160,7 @@ class OptimalControlProblem:
         -------
         dLdx : (n_states,) or (n_states, n_points) array
             State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
-        dLdu : (n_states,) or (n_states, n_points) array
+        dLdu : (n_controls,) or (n_controls, n_points) array
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         '''
         L = self.running_cost(x, u)
@@ -176,6 +176,32 @@ class OptimalControlProblem:
                 return dLdu
 
         return dLdx, dLdu
+
+    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
+        '''
+        Evaluate the Hessians of the running cost, d^2L/dx^2 (x,u) and
+        d^2L/du^2 (x,u), at one or multiple state-control pairs. Default
+        implementation approximates this with central differences.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        return_dLdx : bool, default=True
+            If True, compute the Hessian with respect to states, dL/dx.
+        return_dLdu : bool, default=True
+            If True,compute the Hessian with respect to controls, dL/du.
+
+        Returns
+        -------
+        dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
+            State Hessians dL^2/dx^2 (x,u) evaluated at pair(s) (x,u).
+        dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
+            Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
+        '''
+        raise NotImplementedError
 
     def terminal_cost(self, x):
         '''
@@ -234,9 +260,9 @@ class OptimalControlProblem:
 
         Returns
         -------
-        dfdx : (n_states, n_states, n_points) array
+        dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
             Jacobian with respect to states.
-        dfdu : (n_states, n_controls, n_points) array
+        dfdu : (n_states, n_controls) or (n_states, n_controls, n_points) array
             Jacobian with respect to controls.
         '''
         x = x.reshape(self.n_states, -1)
@@ -288,7 +314,7 @@ class OptimalControlProblem:
         x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
         controller : object
-            BaseController instance implementing `__call__` and `jacobian`.
+            `Controller` instance implementing `__call__` and `jacobian`.
 
         Returns
         -------
@@ -526,7 +552,7 @@ class OptimalControlProblem:
         '''
         return
 
-class LinearProblem:
+class LinearQuadraticProblem:
     def __init__(self, xf, uf, A=None, B=None, Q=None, R=None, jacobians=None):
         '''
         Parameters

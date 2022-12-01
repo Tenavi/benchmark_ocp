@@ -1,9 +1,9 @@
 import pytest
 
 import numpy as np
-from scipy.optimize._numdiff import approx_derivative
 
 from optimalcontrol.problem import ProblemParameters
+from optimalcontrol.utilities import approx_derivative
 
 ocp_dict = {}
 
@@ -13,6 +13,11 @@ ocp_dict['van_der_pol'] = {
 }
 
 rng = np.random.default_rng()
+
+def _check_finite_differences(x, jac, fun):
+    expected_jac = approx_derivative(fun, x)
+    assert expected_jac.shape == jac.shape
+    assert np.allclose(jac, expected_jac)
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
 def test_init(ocp_name):
@@ -30,69 +35,82 @@ def test_init(ocp_name):
     assert problem.parameters.dummy_variable
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-def test_sample_initial_conditions(ocp_name):
+@pytest.mark.parametrize('n_samples', range(1,3))
+def test_sample_initial_conditions(ocp_name, n_samples):
     problem = ocp_dict[ocp_name]['ocp']()
 
     with pytest.raises(Exception):
         problem.sample_initial_conditions(n_samples=0)
 
     # Check that sample_initial_conditions returns the correct size arrays
-    for n_samples in range(1,4):
-        x0 = problem.sample_initial_conditions(n_samples=n_samples)
+    x0 = problem.sample_initial_conditions(n_samples=n_samples)
 
-        if n_samples == 1:
-            assert x0.ndim == 1
-            x0 = x0.reshape(-1,1)
-        else:
-            assert x0.ndim == 2
-            assert x0.shape[1] == n_samples
-        assert x0.shape[0] == problem.n_states
+    if n_samples == 1:
+        assert x0.ndim == 1
+        x0 = x0.reshape(-1,1)
+    else:
+        assert x0.ndim == 2
+        assert x0.shape[1] == n_samples
+    assert x0.shape[0] == problem.n_states
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-def test_cost_functions(ocp_name):
+@pytest.mark.parametrize('n_samples', range(1,3))
+def test_cost_functions(ocp_name, n_samples):
     problem = ocp_dict[ocp_name]['ocp']()
-    eps = 1e-06
 
-    for n_samples in range(1,4):
-        # Get some random states and controls
-        x = problem.sample_initial_conditions(n_samples=n_samples)
-        x = x.reshape(problem.n_states, n_samples)
-        u = rng.uniform(low=-1., high=1., size=(problem.n_controls, n_samples))
+    # Get some random states and controls
+    x = problem.sample_initial_conditions(n_samples=n_samples)
+    x = x.reshape(problem.n_states, n_samples)
+    u = rng.uniform(low=-1., high=1., size=(problem.n_controls, n_samples))
 
-        # Evaluate the cost functions and check that the shapes are correct
-        L = problem.running_cost(x, u)
-        assert L.ndim == 1
-        assert L.shape[0] == n_samples
-        # Cost functions should also handle flat vector inputs
-        if n_samples == 1:
-            L = problem.running_cost(x.flatten(), u.flatten())
-            assert L.ndim == 0
+    # Evaluate the cost functions and check that the shapes are correct
+    L = problem.running_cost(x, u)
+    assert L.ndim == 1
+    assert L.shape[0] == n_samples
+    # Cost functions should also handle flat vector inputs
+    if n_samples == 1:
+        L = problem.running_cost(x.flatten(), u.flatten())
+        assert L.ndim == 0
 
-        try:
-            F = problem.terminal_cost(x)
-            assert np.all(F >= 0.)
-            assert F.ndim == 1
-            assert F.shape[0] == n_samples
-            # Check shapes for flat vector inputs
-            if n_samples == 1:
-                F = problem.terminal_cost(x.flatten())
-                assert F.ndim == 0
-        except NotImplementedError:
-            print('%s OCP has no terminal cost.' % ocp_name)
-
-        # Check that Jacobians give the correct size
-        dLdx, dLdu = problem.running_cost_gradients(x, u)
-        assert dLdx.ndim == dLdu.ndim == 2
-        assert dLdx.shape[1] == dLdu.shape[1] == n_samples
-        assert dLdx.shape[0] == problem.n_states
-        assert dLdu.shape[0] == problem.n_controls
-
-        # Check that Jacobians correspond to finite difference approximations
-
-
+    try:
+        F = problem.terminal_cost(x)
+        assert F.ndim == 1
+        assert F.shape[0] == n_samples
         # Check shapes for flat vector inputs
         if n_samples == 1:
-            dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
-            assert dLdx.ndim == dLdu.ndim == 1
-            assert dLdx.shape[0] == problem.n_states
-            assert dLdu.shape[0] == problem.n_controls
+            F = problem.terminal_cost(x.flatten())
+            assert F.ndim == 0
+    except NotImplementedError:
+        print('%s OCP has no terminal cost.' % ocp_name)
+
+    # Check that Jacobians give the correct size
+    dLdx, dLdu = problem.running_cost_gradients(x, u)
+    assert dLdx.shape == (problem.n_states, n_samples)
+    assert dLdu.shape == (problem.n_controls, n_samples)
+
+    _check_finite_differences(x, dLdx, lambda x: problem.running_cost(x, u))
+    _check_finite_differences(u, dLdu, lambda u: problem.running_cost(x, u))
+
+    # Check shapes for flat vector inputs
+    if n_samples == 1:
+        dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
+        assert dLdx.shape == (problem.n_states,)
+        assert dLdu.shape == (problem.n_controls,)
+
+    # Check that Hessians give the correct size
+    '''dLdx, dLdu = problem.running_cost_hessians(x, u)
+    assert dLdx.ndim == dLdu.ndim == 3
+    assert dLdx.shape[-1] == dLdu.shape[-1] == n_samples
+    assert dLdx.shape[0] == dLdx.shape[1] == problem.n_states
+    assert dLdu.shape[0] == dLdu.shape[1] == problem.n_controls
+
+    _check_finite_differences(
+        x, u, problem.running_cost_gradients, dLdx, dLdu
+    )
+
+    # Check shapes for flat vector inputs
+    if False:#n_samples == 1:
+        dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
+        assert dLdx.ndim == dLdu.ndim == 1
+        assert dLdx.shape[0] == problem.n_states
+        assert dLdu.shape[0] == problem.n_controls'''

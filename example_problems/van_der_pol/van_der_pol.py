@@ -135,9 +135,12 @@ class VanDerPol(OptimalControlProblem):
         -------
         dLdx : (n_states,) or (n_states, n_points) array
             State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
-        dLdu : (n_states,) or (n_states, n_points) array
+        dLdu : (controls,) or (n_controls, n_points) array
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         '''
+        print('using finite differences')
+        return super().running_cost_gradients(x, u, return_dLdx, return_dLdu)
+
         if x.ndim < 2:
             x_err = x - self.xf.flatten()
         else:
@@ -213,6 +216,9 @@ class VanDerPol(OptimalControlProblem):
         dfdu : (n_states, n_controls, n_points) array
             Jacobian with respect to controls.
         '''
+        print('using finite differences')
+        return super().jacobians(x, u, f0)
+
         x1 = np.atleast_1d(x[0])
         x2 = np.atleast_1d(x[1])
 
