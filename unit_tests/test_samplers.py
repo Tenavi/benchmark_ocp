@@ -18,7 +18,7 @@ def test_UniformSampler_init():
         assert sampler.__dict__[key].ndim == 2
         assert sampler.__dict__[key].shape[0] == n_states
         assert sampler.__dict__[key].shape[1] == 1
-        assert np.allclose(sampler.__dict__[key].flatten(), var)
+        np.testing.assert_allclose(sampler.__dict__[key].flatten(), var)
 
     sampler = UniformSampler(lb.reshape(-1,1), list(ub), xf, norm=np.array(1))
     sampler = UniformSampler(lb, ub.reshape(-1,1), list(xf), norm=np.array([2]))
@@ -79,11 +79,13 @@ def test_UniformSampler_sample(norm, distance):
         # Check that samples are consistent if the seed is reset
         sampler.update(seed=seed)
         x1 = sampler(n_samples=n_samples, distance=distance)
-        assert np.allclose(x0, x1.reshape(x0.shape))
+        np.testing.assert_allclose(x0, x1.reshape(x0.shape))
 
         # Check that either bounds are satisfied or desired distance reached
         if distance is None:
             assert np.all(x0 <= ub)
             assert np.all(lb <= x0)
         else:
-            np.allclose(distance, np.linalg.norm(x0 - xf, ord=norm, axis=0))
+            np.testing.assert_allclose(
+                distance, np.linalg.norm(x0 - xf, ord=norm, axis=0)
+            )

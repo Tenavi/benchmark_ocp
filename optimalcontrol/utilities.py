@@ -48,8 +48,9 @@ def approx_derivative(
     fun : callable
         Function of which to estimate the derivatives. The argument x
         passed to this function is an ndarray of shape (n,) or (n, n_points). It
-        must return an n-D array_like of shape (m_1, ..., m_l) or
-        (m_1, ..., m_l, n_points), depending on the shape of the input.
+        must return a float or an n-D array_like of shape (n_points,),
+        (m_1, ..., m_l), or (m_1, ..., m_l, n_points), depending on the shape of
+        the input.
     x0 : array_like of shape (n,) or (n, n_points)
         Point(s) at which to estimate the derivatives.
     method : {'3-point', '2-point', 'cs'}, optional
@@ -80,7 +81,8 @@ def approx_derivative(
 
     Returns
     -------
-    dfdx : (m_1, ..., m_l, n) or (m_1, ..., m_l, n, n_points) array
+    dfdx : (n,), (n_points,), (m_1, ..., m_l, n) or (m_1, ..., m_l, n, n_points)
+        array, depending on the sizes of x0 and fun(x0)
         Finite difference approximation of the Jacobian matrix or matrices.
 
     Notes
@@ -100,8 +102,13 @@ def approx_derivative(
 
     x0 = np.atleast_1d(x0)
 
+    flatten = [False]
+
     def fun_wrapped(x):
-        return np.atleast_1d(fun(x, *args, **kwargs))
+        f = fun(x, *args, **kwargs)
+        if f.ndim < 1:
+            flatten[0] = True
+        return np.atleast_1d(f)
 
     if f0 is None:
         f0 = fun_wrapped(x0)
@@ -125,7 +132,12 @@ def approx_derivative(
         )
         h = np.where(dx == 0, h_alt, h)
 
-    return _dense_difference(fun_wrapped, x0, f0, h, method)
+    dfdx = _dense_difference(fun_wrapped, x0, f0, h, method)
+
+    if flatten[0]:
+        return dfdx[0]
+    else:
+        return dfdx
 
 def _dense_difference(fun, x0, f0, h, method):
     dfdx_T = np.empty(x0.shape[:1] + f0.shape)
@@ -147,8 +159,6 @@ def _dense_difference(fun, x0, f0, h, method):
             x[i] += h[i] * 1.j
             df = fun(x).imag
             dx = h[i]
-        else:
-            raise RuntimeError("Never be here.")
 
         dfdx_T[i] = df / dx
 

@@ -16,8 +16,7 @@ rng = np.random.default_rng()
 
 def _check_finite_differences(x, jac, fun):
     expected_jac = approx_derivative(fun, x)
-    assert expected_jac.shape == jac.shape
-    assert np.allclose(jac, expected_jac)
+    np.testing.assert_allclose(jac, expected_jac)
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
 def test_init(ocp_name):

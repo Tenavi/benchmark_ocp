@@ -1,8 +1,9 @@
 import numpy as np
 from scipy import sparse
-from scipy.optimize._numdiff import approx_derivative
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
+
+from optimalcontrol.utilities import approx_derivative
 
 class ProblemParameters:
     '''Utility class to store cost function and system dynamics parameters.'''

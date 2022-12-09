@@ -138,9 +138,6 @@ class VanDerPol(OptimalControlProblem):
         dLdu : (controls,) or (n_controls, n_points) array
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         '''
-        print('using finite differences')
-        return super().running_cost_gradients(x, u, return_dLdx, return_dLdu)
-
         if x.ndim < 2:
             x_err = x - self.xf.flatten()
         else:
