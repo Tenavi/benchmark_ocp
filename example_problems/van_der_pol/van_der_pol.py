@@ -190,12 +190,13 @@ class VanDerPol(OptimalControlProblem):
         dx1dt = x2
         dx2dt = self._params.mu * (1. - x1**2) * x2 - x1 + self._params.b * u
 
-        return np.concatenate((dx1dt, dx2dt))
+        return np.concatenate((dx1dt, dx2dt), axis=0)
 
-    def jacobians(self, x, u, f0=None):
+    def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
         '''
         Evaluate the Jacobians of the dynamics with respect to states and
-        controls at single or multiple time instances.
+        controls at single or multiple time instances. Default implementation
+        approximates the Jacobians with central differences.
 
         Parameters
         ----------
@@ -203,30 +204,39 @@ class VanDerPol(OptimalControlProblem):
             State(s) arranged by (dimension, time).
         u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
+        return_dfdx : bool, default=True
+            If True, compute the Jacobian with respect to states, df/dx.
+        return_dfdu : bool, default=True
+            If True, compute the Jacobian with respect to controls, df/du.
         f0 : ignored
             For API consistency only.
 
         Returns
         -------
-        dfdx : (n_states, n_states, n_points) array
+        dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
             Jacobian with respect to states.
-        dfdu : (n_states, n_controls, n_points) array
+        dfdu : (n_states, n_controls) or (n_states, n_controls, n_points) array
             Jacobian with respect to controls.
         '''
-        print('using finite differences')
-        return super().jacobians(x, u, f0)
+        if return_dfdx:
+            dfdx = np.zeros((self.n_states,) + x.shape)
+            dfdx[0,1] = 1.
+            dfdx[1,0] = -1. - 2.*self._params.mu*x[0]*x[1]
+            dfdx[1,1] = self._params.mu*(1. - x[0]**2)
 
-        x1 = np.atleast_1d(x[0])
-        x2 = np.atleast_1d(x[1])
+            if not return_dfdu:
+                return dfdx
 
-        dfdx = np.array([
-            [np.zeros_like(x1), np.ones_like(x1)],
-            [-1. - 2.*self._params.mu*x1*x2, self._params.mu*(1. - x1**2)]
-        ])
-        dfdu = np.expand_dims(self.B, -1)
-        dfdu = np.tile(dfdu, (1,1,x1.shape[-1]))
+        if return_dfdu:
+            if x.ndim > 1:
+                dfdu = np.tile(self.B[...,None], (1,1,x.shape[-1]))
+            else:
+                dfdu = np.copy(self.B)
 
-        return dfdu, dfdu
+            if not return_dfdx:
+                return dfdu
+
+        return dfdx, dfdu
 
     def optimal_control(self, x, dVdx):
         '''

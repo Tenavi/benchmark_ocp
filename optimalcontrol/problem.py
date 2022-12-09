@@ -155,7 +155,7 @@ class OptimalControlProblem:
         return_dLdx : bool, default=True
             If True, compute the gradient with respect to states, dL/dx.
         return_dLdu : bool, default=True
-            If True,compute the gradient with respect to controls, dL/du.
+            If True, compute the gradient with respect to controls, dL/du.
 
         Returns
         -------
@@ -202,7 +202,25 @@ class OptimalControlProblem:
         dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
             Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
         '''
-        raise NotImplementedError
+        dLdx, dLdu = self.running_cost_gradients(x, u)
+
+        if return_dLdx:
+            dLdx = approx_derivative(
+                lambda x: self.running_cost_gradients(x, u, return_dLdu=False),
+                x, f0=dLdx
+            )
+            if not return_dLdu:
+                return dLdx
+
+        if return_dLdu:
+            dLdu = approx_derivative(
+                lambda u: self.running_cost_gradients(x, u, return_dLdx=False),
+                u, f0=dLdu
+            )
+            if not return_dLdx:
+                return dLdu
+
+        return dLdx, dLdu
 
     def terminal_cost(self, x):
         '''
@@ -244,7 +262,7 @@ class OptimalControlProblem:
         '''
         raise NotImplementedError
 
-    def jacobians(self, x, u, f0=None):
+    def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
         '''
         Evaluate the Jacobians of the dynamics with respect to states and
         controls at single or multiple time instances. Default implementation
@@ -256,6 +274,10 @@ class OptimalControlProblem:
             State(s) arranged by (dimension, time).
         u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
+        return_dfdx : bool, default=True
+            If True, compute the Jacobian with respect to states, df/dx.
+        return_dfdu : bool, default=True
+            If True, compute the Jacobian with respect to controls, df/du.
         f0 : (n_states,) or (n_states, n_points) array, optional
             Dynamics evaluated at current state and control pair.
 
@@ -266,42 +288,20 @@ class OptimalControlProblem:
         dfdu : (n_states, n_controls) or (n_states, n_controls, n_points) array
             Jacobian with respect to controls.
         '''
-        x = x.reshape(self.n_states, -1)
-        u = u.reshape(self.n_controls, -1)
-
         if f0 is None:
             f0 = self.dynamics(x, u)
-        f0 = f0.flatten()
 
         # Jacobian with respect to states
-        def f_wrapper(x_flat):
-            x = x_flat.reshape(self.n_states, -1)
-            return self.dynamics(x, u).flatten()
-
-        # Make sparsity pattern
-        sparsity = sparse.hstack([sparse.identity(x.shape[-1])]*self.n_states)
-        sparsity = sparse.vstack([sparsity]*self.n_states)
-
-        dfdx = approx_derivative(
-            f_wrapper, x.flatten(), f0=f0, sparsity=sparsity
-        )
-        dfdx = np.asarray(dfdx[sparsity.nonzero()])
-        dfdx = dfdx.reshape(self.n_states, self.n_states, -1)
+        if return_dfdx:
+            dfdx = approx_derivative(lambda x: self.dynamics(x, u), x, f0=f0)
+            if not return_dfdu:
+                return dfdx
 
         # Jacobian with respect to controls
-        def f_wrapper(u_flat):
-            u = u_flat.reshape(self.n_controls, -1)
-            return self.dynamics(x, u).flatten()
-
-        # Make sparsity pattern
-        sparsity = sparse.hstack([sparse.identity(x.shape[-1])]*self.n_controls)
-        sparsity = sparse.vstack([sparsity]*self.n_states)
-
-        dfdu = approx_derivative(
-            f_wrapper, u.flatten(), f0=f0, sparsity=sparsity
-        )
-        dfdu = np.asarray(dfdu[sparsity.nonzero()])
-        dfdu = dfdu.reshape(self.n_states, self.n_controls, -1)
+        if return_dfdu:
+            dfdu = approx_derivative(lambda u: self.dynamics(x, u), u, f0=f0)
+            if not return_dfdx:
+                return dfdu
 
         return dfdx, dfdu
 

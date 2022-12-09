@@ -14,7 +14,7 @@ ocp_dict['van_der_pol'] = {
 
 rng = np.random.default_rng()
 
-def _check_finite_differences(x, jac, fun):
+def compare_finite_difference(x, jac, fun):
     expected_jac = approx_derivative(fun, x)
     np.testing.assert_allclose(jac, expected_jac)
 
@@ -87,8 +87,8 @@ def test_cost_functions(ocp_name, n_samples):
     assert dLdx.shape == (problem.n_states, n_samples)
     assert dLdu.shape == (problem.n_controls, n_samples)
 
-    _check_finite_differences(x, dLdx, lambda x: problem.running_cost(x, u))
-    _check_finite_differences(u, dLdu, lambda u: problem.running_cost(x, u))
+    compare_finite_difference(x, dLdx, lambda x: problem.running_cost(x, u))
+    compare_finite_difference(u, dLdu, lambda u: problem.running_cost(x, u))
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
@@ -97,19 +97,53 @@ def test_cost_functions(ocp_name, n_samples):
         assert dLdu.shape == (problem.n_controls,)
 
     # Check that Hessians give the correct size
-    '''dLdx, dLdu = problem.running_cost_hessians(x, u)
-    assert dLdx.ndim == dLdu.ndim == 3
-    assert dLdx.shape[-1] == dLdu.shape[-1] == n_samples
-    assert dLdx.shape[0] == dLdx.shape[1] == problem.n_states
-    assert dLdu.shape[0] == dLdu.shape[1] == problem.n_controls
+    dLdx, dLdu = problem.running_cost_hessians(x, u)
+    assert dLdx.shape == (problem.n_states, problem.n_states, n_samples)
+    assert dLdu.shape == (problem.n_controls, problem.n_controls, n_samples)
 
-    _check_finite_differences(
-        x, u, problem.running_cost_gradients, dLdx, dLdu
+    compare_finite_difference(
+        x, dLdx,
+        lambda x: problem.running_cost_gradients(x, u, return_dLdu=False)
+    )
+    compare_finite_difference(
+        u, dLdu,
+        lambda u: problem.running_cost_gradients(x, u, return_dLdx=False)
     )
 
     # Check shapes for flat vector inputs
-    if False:#n_samples == 1:
-        dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
-        assert dLdx.ndim == dLdu.ndim == 1
-        assert dLdx.shape[0] == problem.n_states
-        assert dLdu.shape[0] == problem.n_controls'''
+    if n_samples == 1:
+        dLdx, dLdu = problem.running_cost_hessians(x.flatten(), u.flatten())
+        assert dLdx.shape == (problem.n_states, problem.n_states)
+        assert dLdu.shape == (problem.n_controls, problem.n_controls)
+
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1,3))
+def test_dynamics(ocp_name, n_samples):
+    problem = ocp_dict[ocp_name]['ocp']()
+
+    # Get some random states and controls
+    x = problem.sample_initial_conditions(n_samples=n_samples)
+    x = x.reshape(problem.n_states, n_samples)
+    u = rng.uniform(low=-1., high=1., size=(problem.n_controls, n_samples))
+
+    # Evaluate the vector and check that the shapes are correct
+    f = problem.dynamics(x, u)
+    assert f.shape == (problem.n_states, n_samples)
+    # Dynamics should also handle flat vector inputs
+    if n_samples == 1:
+        f = problem.dynamics(x.flatten(), u.flatten())
+        assert f.shape == (problem.n_states,)
+
+    # Check that Jacobians give the correct size
+    dfdx, dfdu = problem.jacobians(x, u)
+    assert dfdx.shape == (problem.n_states, problem.n_states, n_samples)
+    assert dfdu.shape == (problem.n_states, problem.n_controls, n_samples)
+
+    compare_finite_difference(x, dfdx, lambda x: problem.dynamics(x, u))
+    compare_finite_difference(u, dfdu, lambda u: problem.dynamics(x, u))
+
+    # Check shapes for flat vector inputs
+    if n_samples == 1:
+        dfdx, dfdu = problem.jacobians(x.flatten(), u.flatten())
+        assert dfdx.shape == (problem.n_states, problem.n_states)
+        assert dfdu.shape == (problem.n_states, problem.n_controls)
