@@ -3,6 +3,13 @@ import setuptools
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+with open("requirements.txt", "r") as fh:
+    requirements = fh.readlines()
+    for i, r in enumerate(requirements):
+        requirements[i] = r.replace("\n", "")
+
+#requirements.append("pylgr")
+
 if __name__ == "__main__":
     setuptools.setup(
         name="optimalcontrol",
@@ -13,13 +20,5 @@ if __name__ == "__main__":
         author="Tenavi Nakamura-Zimmerer",
         author_email="tenavi.nakamura-zimmerer@nasa.gov",
         packages=["optimalcontrol"],
-        install_requires=[
-            "scipy>=1.5.2",
-            "numpy>=1.19.1",
-            "pandas>=1.4.4",
-            "tqdm>=4.64.1",
-            "pytest>=6.1.1",
-            "matplotlib>=3.1.2",
-            "pylgr"
-        ]
+        install_requires=requirements
     )
