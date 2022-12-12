@@ -21,7 +21,7 @@ class VanDerPol(OptimalControlProblem):
         'x0_ub': np.array([[3.],[4.]]), 'x0_lb': -np.array([[3.],[4.]])
     }
     def _saturate(self, u):
-        return saturate(u, -self._params.u_max, self._params.u_max)
+        return saturate(u, -self.u_max, self.u_max)
 
     @property
     def n_states(self):
@@ -39,23 +39,37 @@ class VanDerPol(OptimalControlProblem):
         return np.inf
 
     def _update_params(self, **new_params):
-        self.xf = np.zeros((2,1))
-        self.xf[0] = self._params.xf
-        self.uf = self.xf[:1] / self._params.b
-        self.B = np.zeros((2,1))
-        self.B[1] = self._params.b
-        self._params.u_max = np.abs(self._params.u_max)
+        if 'xf' in new_params or not hasattr(self, 'xf'):
+            self.xf = np.zeros((2,1))
+            self.xf[0] = self._params.xf
 
-        if hasattr(self, '_x0_sampler'):
-            self._x0_sampler.update(
-                lb=new_params.get('lb'), ub=new_params.get('ub'), xf=self.xf,
-                seed=new_params.get('x0_sample_seed')
-            )
-        else:
+        if 'b' in new_params or not hasattr(self, 'B'):
+            self.B = np.zeros((2,1))
+            self.B[1] = self._params.b
+
+        if 'b' in new_params or 'xf' in new_params or not hasattr(self, 'uf'):
+            self.uf = self.xf[0] / self._params.b
+
+        if 'u_max' in new_params or not hasattr(self, 'u_max'):
+            self.u_max = np.abs(self._params.u_max)
+
+        if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
                 norm=getattr(self._params, 'x0_sample_norm', 1),
                 seed=getattr(self._params, 'x0_sample_seed', None)
+            )
+        elif any([
+                'lb' in new_params,
+                'ub' in new_params,
+                'x0_sample_seed' in new_params,
+                'xf' in new_params
+            ]):
+            self._x0_sampler.update(
+                lb=new_params.get('lb'),
+                ub=new_params.get('ub'),
+                xf=self.xf,
+                seed=new_params.get('x0_sample_seed')
             )
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
@@ -100,11 +114,7 @@ class VanDerPol(OptimalControlProblem):
         else:
             x_err = x - self.xf
 
-        u = self._saturate(u)
-        if u.ndim < 2:
-            u_err = u - self.uf.flatten()
-        else:
-            u_err = u - self.uf
+        u_err = self._saturate(u) - self.uf
 
         x_err = x_err**2
 
@@ -143,11 +153,7 @@ class VanDerPol(OptimalControlProblem):
         else:
             x_err = x - self.xf
 
-        u = self._saturate(u)
-        if u.ndim < 2:
-            u_err = u - self.uf.flatten()
-        else:
-            u_err = u - self.uf
+        u_err = self._saturate(u) - self.uf
 
         x1 = x_err[:1]
         x2 = x_err[1:]
@@ -163,6 +169,46 @@ class VanDerPol(OptimalControlProblem):
                 return dLdu
 
         return dLdx, dLdu
+
+    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
+        '''
+        Evaluate the Hessians of the running cost, d^2L/dx^2 (x,u) and
+        d^2L/du^2 (x,u), at one or multiple state-control pairs. Default
+        implementation approximates this with central differences.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        return_dLdx : bool, default=True
+            If True, compute the Hessian with respect to states, dL/dx.
+        return_dLdu : bool, default=True
+            If True,compute the Hessian with respect to controls, dL/du.
+
+        Returns
+        -------
+        dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
+            State Hessians dL^2/dx^2 (x,u) evaluated at pair(s) (x,u).
+        dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
+            Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
+        '''
+        if return_dLdx:
+            Q = np.diag([self._params.Wx, self._params.Wy])
+            if x.ndim >= 2:
+                Q = np.tile(Q[...,None], (1,1,x.shape[1]))
+            if not return_dLdu:
+                return Q
+
+        if return_dLdu:
+            R = np.reshape(self._params.Wu, (1,1))
+            if u.ndim >=2:
+                R = np.tile(R[...,None], (1,1,u.shape[1]))
+            if not return_dLdx:
+                return R
+
+        return Q, R
 
     def dynamics(self, x, u):
         '''
@@ -181,7 +227,7 @@ class VanDerPol(OptimalControlProblem):
             System dynamics dx/dt = f(x,u).
         '''
         u = self._saturate(u)
-        if x.ndim < 2:
+        if x.ndim < 2 and u.ndim > 1:
             u = u.flatten()
 
         x1 = x[:1]
@@ -238,7 +284,7 @@ class VanDerPol(OptimalControlProblem):
 
         return dfdx, dfdu
 
-    def optimal_control(self, x, dVdx):
+    def optimal_control(self, x, p):
         '''
         Evaluate the optimal control as a function of state and costate.
 
@@ -246,7 +292,7 @@ class VanDerPol(OptimalControlProblem):
         ----------
         x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        dVdx : (n_states,) or (n_states, n_points) array
+        p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
 
         Returns
@@ -254,10 +300,10 @@ class VanDerPol(OptimalControlProblem):
         u : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
         '''
-        u = self.uf - self._params.b / self._params.Wu * dVdx[1:]
+        u = self.uf - self._params.b / self._params.Wu * p[1:]
         return self._saturate(u)
 
-    def optimal_control_jac(self, x, dVdx, u0=None):
+    def optimal_control_jacobian(self, x, p, u0=None):
         '''
         Evaluate the Jacobian of the optimal control with respect to the state,
         leaving the costate fixed.
@@ -266,7 +312,7 @@ class VanDerPol(OptimalControlProblem):
         ----------
         x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        dVdx : (n_states,) or (n_states, n_points) array
+        p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
         u0 : ignored
             For API consistency only.
@@ -275,11 +321,11 @@ class VanDerPol(OptimalControlProblem):
         -------
         dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of the optimal control with respect to states leaving
-            costates fixed, du/dx (x; dVdx).
+            costates fixed, du/dx (x; p).
         '''
-        if dVdx.ndim < 2:
+        if p.ndim < 2:
             return np.zeros((self.n_controls, self.n_states))
-        return np.zeros((self.n_controls, self.n_states, dVdx.shape[-1]))
+        return np.zeros((self.n_controls, self.n_states, p.shape[-1]))
 
     def bvp_dynamics(self, t, xp):
         '''
@@ -290,7 +336,7 @@ class VanDerPol(OptimalControlProblem):
         t : (n_points,) array
             Time collocation points for each state.
         xp : (2*n_states, n_points) array
-            Current state, costate, and running cost.
+            Current state and costate.
 
         Returns
         -------

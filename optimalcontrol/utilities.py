@@ -1,31 +1,31 @@
 import numpy as np
 from scipy.optimize import _numdiff
 
-def saturate(u, u_lb, u_ub):
+def saturate(u, min=None, max=None):
     '''
-    Hard saturation of control for numpy arrays.
+    Hard saturation of controls between given bounds.
 
     Parameters
     ----------
     u : (n_controls, n_data) or (n_controls,) array
         Control(s) to saturate.
-    u_lb : (n_controls, 1) array
+    min : (n_controls, 1) or (n_controls,) array, optional
         Lower control bounds.
-    u_ub : (n_controls, 1) array
-        upper control bounds.
+    max : (n_controls, 1) or (n_controls,) array, optional
+        Upper control bounds.
 
     Returns
     -------
     u : array with same shape as input
-        Control(s) saturated between u_lb and u_ub
+        Control(s) saturated between `min` and `max`.
     '''
-    if u_lb is not None or u_ub is not None:
-        if u.ndim < 2:
-            u = np.clip(u, u_lb.flatten(), u_ub.flatten())
-        else:
-            u = np.clip(u, u_lb, u_ub)
+    if u.ndim < 2:
+        if hasattr(min, 'flatten'):
+            min = min.flatten()
+        if hasattr(max, 'flatten'):
+            max = max.flatten()
 
-    return u
+    return np.clip(u, min, max)
 
 # ------------------------------------------------------------------------------
 

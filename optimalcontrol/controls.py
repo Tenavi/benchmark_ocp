@@ -47,31 +47,37 @@ class LinearQuadraticRegulator(Controller):
     '''
     Implements a linear quadratic regulator (LQR) control with saturation
     constraints.
-
-    Parameters
-    ----------
-    xf : (n_states, 1) array
-        Goal state, nominal linearization point.
-    uf : (n_controls, 1) array
-        Control values at nominal linearization point.
-    A : (n_states, n_states) array
-        State Jacobian matrix at nominal equilibrium.
-    B : (n_states, n_controls) array
-        Control Jacobian matrix at nominal equilibrium.
-    Q : (n_states, n_states) array
-        Hessian of running cost with respect to states. Must be positive
-        semi-definite.
-    R : (n_controls, n_controls) array
-        Hessian of running cost with respect to controls. Must be positive
-        definite.
-    u_lb : (n_controls, 1) array, optional
-        Lower control saturation bounds.
-    u_ub : (n_controls, 1) array, optional
-        upper control saturation bounds.
-    P : (n_states, n_states) array, optional
-        Previously-computed Riccati equation solution for this problem.
     '''
-    def __init__(self, xf, uf, A, B, Q, R, u_lb=None, u_ub=None, P=None):
+    def __init__(
+            self, xf, uf, A=None, B=None, Q=None, R=None,
+            u_lb=None, u_ub=None, P=None
+        ):
+        '''
+        Parameters
+        ----------
+        xf : (n_states, 1) array
+            Goal state, nominal linearization point.
+        uf : (n_controls, 1) array
+            Control values at nominal linearization point.
+        A : (n_states, n_states) array, optional
+            State Jacobian matrix at nominal equilibrium. Required if
+            `P is None`.
+        B : (n_states, n_controls) array, optional
+            Control Jacobian matrix at nominal equilibrium. Required if
+            `P is None`.
+        Q : (n_states, n_states) array, optional
+            Hessian of running cost with respect to states. Must be positive
+            semi-definite. Required if `P is None`.
+        R : (n_controls, n_controls) array, optional
+            Hessian of running cost with respect to controls. Must be positive
+            definite. Required if `P is None`.
+        u_lb : (n_controls, 1) array, optional
+            Lower control saturation bounds.
+        u_ub : (n_controls, 1) array, optional
+            upper control saturation bounds.
+        P : (n_states, n_states) array, optional
+            Previously-computed Riccati equation solution for this problem.
+        '''
         self.xf = np.reshape(xf, (-1,1))
         self.uf = np.reshape(uf, (-1,1))
 

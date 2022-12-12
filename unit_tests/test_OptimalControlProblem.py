@@ -14,8 +14,8 @@ ocp_dict['van_der_pol'] = {
 
 rng = np.random.default_rng()
 
-def compare_finite_difference(x, jac, fun):
-    expected_jac = approx_derivative(fun, x)
+def compare_finite_difference(x, jac, fun, method='3-point'):
+    expected_jac = approx_derivative(fun, x, method=method)
     np.testing.assert_allclose(jac, expected_jac)
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
@@ -87,8 +87,14 @@ def test_cost_functions(ocp_name, n_samples):
     assert dLdx.shape == (problem.n_states, n_samples)
     assert dLdu.shape == (problem.n_controls, n_samples)
 
-    compare_finite_difference(x, dLdx, lambda x: problem.running_cost(x, u))
-    compare_finite_difference(u, dLdu, lambda u: problem.running_cost(x, u))
+    compare_finite_difference(
+        x, dLdx, lambda x: problem.running_cost(x, u),
+        method=problem._fin_diff_method
+    )
+    compare_finite_difference(
+        u, dLdu, lambda u: problem.running_cost(x, u),
+        method=problem._fin_diff_method
+    )
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
@@ -103,11 +109,13 @@ def test_cost_functions(ocp_name, n_samples):
 
     compare_finite_difference(
         x, dLdx,
-        lambda x: problem.running_cost_gradients(x, u, return_dLdu=False)
+        lambda x: problem.running_cost_gradients(x, u, return_dLdu=False),
+        method=problem._fin_diff_method
     )
     compare_finite_difference(
         u, dLdu,
-        lambda u: problem.running_cost_gradients(x, u, return_dLdx=False)
+        lambda u: problem.running_cost_gradients(x, u, return_dLdx=False),
+        method=problem._fin_diff_method
     )
 
     # Check shapes for flat vector inputs
@@ -126,7 +134,7 @@ def test_dynamics(ocp_name, n_samples):
     x = x.reshape(problem.n_states, n_samples)
     u = rng.uniform(low=-1., high=1., size=(problem.n_controls, n_samples))
 
-    # Evaluate the vector and check that the shapes are correct
+    # Evaluate the vector field and check that the shape is correct
     f = problem.dynamics(x, u)
     assert f.shape == (problem.n_states, n_samples)
     # Dynamics should also handle flat vector inputs
@@ -139,11 +147,49 @@ def test_dynamics(ocp_name, n_samples):
     assert dfdx.shape == (problem.n_states, problem.n_states, n_samples)
     assert dfdu.shape == (problem.n_states, problem.n_controls, n_samples)
 
-    compare_finite_difference(x, dfdx, lambda x: problem.dynamics(x, u))
-    compare_finite_difference(u, dfdu, lambda u: problem.dynamics(x, u))
+    compare_finite_difference(
+        x, dfdx, lambda x: problem.dynamics(x, u),
+        method=problem._fin_diff_method)
+    compare_finite_difference(
+        u, dfdu, lambda u: problem.dynamics(x, u),
+        method=problem._fin_diff_method
+    )
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
         dfdx, dfdu = problem.jacobians(x.flatten(), u.flatten())
         assert dfdx.shape == (problem.n_states, problem.n_states)
         assert dfdu.shape == (problem.n_states, problem.n_controls)
+
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1,3))
+def test_optimal_control(ocp_name, n_samples):
+    problem = ocp_dict[ocp_name]['ocp']()
+
+    # Get some random states and costates
+    x = problem.sample_initial_conditions(n_samples=n_samples)
+    x = x.reshape(problem.n_states, n_samples)
+    p = problem.sample_initial_conditions(n_samples=n_samples)
+    p = p.reshape(problem.n_states, n_samples)
+
+    # Evaluate the optimal control and check that the shape is correct
+    u = problem.optimal_control(x, p)
+    assert u.shape == (problem.n_controls, n_samples)
+    # Optimal control should also handle flat vector inputs
+    if n_samples == 1:
+        u = problem.optimal_control(x.flatten(), p.flatten())
+        assert u.shape == (problem.n_controls,)
+
+    # Check that Jacobian gives the correct size
+    dudx = problem.optimal_control_jacobian(x, p)
+    assert dudx.shape == (problem.n_controls, problem.n_states, n_samples)
+
+    compare_finite_difference(
+        x, dudx, lambda x: problem.optimal_control(x, p),
+        method=problem._fin_diff_method
+    )
+
+    # Check shape for flat vector inputs
+    if n_samples == 1:
+        dudx = problem.optimal_control_jacobian(x.flatten(), p.flatten())
+        assert dudx.shape == (problem.n_controls, problem.n_states)
