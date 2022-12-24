@@ -36,4 +36,4 @@ jobs:
       continue-on-error: true
     - name: Test
       run: |
-        pytest unit_tests/ -v
+        pytest tests/ -v

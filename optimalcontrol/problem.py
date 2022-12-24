@@ -3,6 +3,7 @@ from scipy import sparse
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
+from .sampling import UniformSampler
 from .utilities import approx_derivative, saturate
 
 class ProblemParameters:
@@ -51,7 +52,8 @@ class OptimalControlProblem:
             empty, defaults defined by the subclass will be used.
         '''
         if not isinstance(self._params, ProblemParameters):
-            self._params = ProblemParameters(**self._params)
+            problem_parameters = {**self._params, **problem_parameters}
+            self._params = ProblemParameters()
         self.parameters.update_fun = self._update_params
         self.parameters.update(**problem_parameters)
 
@@ -82,6 +84,25 @@ class OptimalControlProblem:
         called during initialization.'''
         pass
 
+    def sample_initial_conditions(self, n_samples=1, **kwargs):
+        '''
+        Generate initial conditions from the problem's domain of interest.
+
+        Parameters
+        ----------
+        n_samples : int, default=1
+            Number of sample points to generate.
+        kwargs
+            Other keyword arguments implemented by the subclass.
+
+        Returns
+        -------
+        x0 : (n_states, n_samples) or (n_states,) array
+            Samples of the system state, where each column is a different
+            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+        '''
+        raise NotImplementedError
+
     def distances(self, xa, xb):
         '''
         Calculate the problem-relevant distance metric of a batch of states from
@@ -102,25 +123,6 @@ class OptimalControlProblem:
         xa = xa.reshape(self.n_states, -1).T
         xb = xb.reshape(self.n_states, -1).T
         return cdist(xa, xb, metric='euclidean')
-
-    def sample_initial_conditions(self, n_samples=1, **kwargs):
-        '''
-        Generate initial conditions from the problem's domain of interest.
-
-        Parameters
-        ----------
-        n_samples : int, default=1
-            Number of sample points to generate.
-        kwargs
-            Other keyword arguments implemented by the subclass.
-
-        Returns
-        -------
-        x0 : (n_states, n_samples) or (n_states,) array
-            Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
-        '''
-        raise NotImplementedError
 
     def running_cost(self, x, u):
         '''
@@ -550,30 +552,39 @@ class OptimalControlProblem:
 class LinearQuadraticProblem(OptimalControlProblem):
     '''
     Template super class for defining an infinite horizon linear quadratic
-    regulator problem. Requires the following parameters upon initialization.
+    regulator problem. Takes the following parameters upon initialization.
 
     Parameters
     ----------
-    xf : (n_states, 1) array
-        Goal state, nominal linearization point.
-    uf : (n_controls, 1) array
-        Control values at nominal linearization point.
     A : (n_states, n_states) array
         State Jacobian matrix at nominal equilibrium.
     B : (n_states, n_controls) array
         Control Jacobian matrix at nominal equilibrium.
-        this with finite differences.
     Q : (n_states, n_states) array
         Hessian of running cost with respect to states. Must be positive
         semi-definite.
     R : (n_controls, n_controls) array
         Hessian of running cost with respect to controls. Must be positive
         definite.
+    u_lb : (n_controls, 1) or (n_controls,) array, optional
+        Lower control bounds.
+    u_ub : (n_controls, 1) or (n_controls,) array, optional
+        Upper control bounds.
+    xf : (n_states, 1) or (n_states,) array or float, default=0.
+        Goal state, nominal linearization point.
+    uf : (n_controls, 1) or (n_controls,) array or float, default=0.
+        Control values at nominal linearization point.
+    x0_lb : (n_states, 1) or (n_states,) array
+        Lower bounds for hypercube from which to sample initial conditions `x0`.
+    x0_ub : (n_states, 1) or (n_states,) array
+        Upper bounds for hypercube from which to sample initial conditions `x0`.
+    x0_sample_seed : int, optional
+        Random seed to use for sampling initial conditions.
     '''
     _params = ProblemParameters(
-        xf=None, uf=None,
         A=None, B=None, Q=None, R=None,
-        u_lb=None, u_ub=None
+        u_lb=None, u_ub=None, xf=0., uf=0.,
+        x0_lb=None, x0_ub=None, x0_sample_seed=None
     )
 
     def _saturate(self, u):
@@ -581,7 +592,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     @property
     def n_states(self):
-        '''The number of system states (positive int).'''
         if hasattr(self, 'A'):
             return self.A.shape[1]
         else:
@@ -589,7 +599,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     @property
     def n_controls(self):
-        '''The number of control inputs to the system (positive int).'''
         if hasattr(self, 'B'):
             return self.B.shape[1]
         else:
@@ -597,77 +606,96 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     @property
     def final_time(self):
-        '''Time horizon of the system.'''
         return np.inf
 
     def _update_params(self, **new_params):
-        if 'A' in new_params or not hasattr(self, 'A'):
+        if 'A' in new_params:
             try:
-                self.A = np.array(self._params.A)
-                self.A = self.A.reshape(self.A.shape[0], self.A.shape[0])
+                self._params.A = np.array(self._params.A).reshape(
+                    self._params.A.shape[0], self._params.A.shape[0]
+                )
             except:
-                raise RuntimeError(
-                    'Must initialize state Jacobian `A` with a square array.'
+                raise ValueError('State Jacobian matrix A must be square.')
+
+        if 'B' in new_params:
+            try:
+                self._params.B = np.reshape(self._params.B, (self.n_states, -1))
+            except:
+                raise ValueError(
+                    'Control Jacobian matrix B must have shape (n_states, n_controls).'
                 )
 
-        if 'B' in new_params or not hasattr(self, 'B'):
+        if 'Q' in new_params:
             try:
-                self.B = np.array(self._params.B)
-                self.B = self.B.reshape(self.n_states, -1)
+                self._params.Q = np.reshape(self._params.Q, self.A.shape)
+                eigs = np.linalg.eigvals(self._params.Q)
+                if not np.all(eigs >= 0.) or not np.allclose(Q, Q.T):
+                    raise RuntimeError
             except:
-                raise RuntimeError(
-                    'Must initialize control Jacobian `B` with an array of '
-                    + 'shape `(n_states, n_controls)`.'
+                raise ValueError(
+                    'State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite.'
                 )
 
-        if 'b' in new_params or 'xf' in new_params or not hasattr(self, 'uf'):
-            self.uf = self.xf[0] / self._params.b
+        if 'R' in new_params:
+            try:
+                self._params.R = np.reshape(
+                    self._params.R, (self.n_controls, self.n_controls)
+                )
+                eigs = np.linalg.eigvals(self._params.R)
+                if not np.all(eigs > 0.) or not np.allclose(R, R.T):
+                    raise RuntimeError
+            except:
+                raise ValueError(
+                    'Control cost matrix R must have shape (n_controls, n_controls) and be positive definite.'
+                )
 
-        if 'u_max' in new_params or not hasattr(self, 'u_max'):
-            self.u_max = np.abs(self._params.u_max)
+        for key in ('xf', 'uf'):
+            if key in new_params:
+                self._params.__dict__[key] = np.reshape(new_params[key], (-1,1))
+
+        for key in ('u_lb', 'u_ub'):
+            if key in new_params:
+                self._params.__dict__[key] = np.reshape(
+                    new_params[key], (self.n_controls,1)
+                )
+
+        for key in ('A', 'B', 'Q', 'R', 'u_lb', 'u_ub', 'xf', 'uf'):
+            self.__dict__[key] = self._params.__dict__[key]
 
         if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
-                norm=getattr(self._params, 'x0_sample_norm', 1),
-                seed=getattr(self._params, 'x0_sample_seed', None)
+                norm=self.Q, seed=getattr(self._params, 'x0_sample_seed', None)
             )
         elif any([
-                'lb' in new_params,
-                'ub' in new_params,
+                'x0_lb' in new_params,
+                'x0_ub' in new_params,
                 'x0_sample_seed' in new_params,
                 'xf' in new_params
             ]):
             self._x0_sampler.update(
-                lb=new_params.get('lb'),
-                ub=new_params.get('ub'),
+                lb=new_params.get('x0_lb'),
+                ub=new_params.get('x0_ub'),
                 xf=self.xf,
                 seed=new_params.get('x0_sample_seed')
             )
 
-        self.xf = np.reshape(xf, (-1,1))
-        self.uf = np.reshape(uf, (-1,1))
+    def sample_initial_conditions(self, n_samples=1, distance=None):
+        '''
+        Generate initial conditions uniformly from a hypercube.
 
-        self.n_states = self.xf.shape[0]
-        self.n_controls = self.uf.shape[0]
+        Parameters
+        ----------
+        n_samples : int, default=1
+            Number of sample points to generate.
+        distance : positive float, optional
+            Desired distance of samples from `self.xf`. The norm is defined by
+                `||x|| = sqrt(x.T @ self.Q @ x)`
 
-        # Approximate state matrices numerically if not given
-        if A is None or B is None:
-            _A, _B = jacobians(self.xf, self.uf, f0=np.zeros_like(self.xf))
-
-        if A is None:
-            A = _A
-            A[np.abs(A) < 1e-10] = 0.
-
-        if B is None:
-            B = _B
-            B[np.abs(B) < 1e-10] = 0.
-
-        # Approximate cost matrices numerically if not given
-        if Q is None or R is None:
-            raise NotImplementedError("need to implement numerical cost Hessians")
-
-        self.A = np.reshape(A, (self.n_states, self.n_states))
-        self.B = np.reshape(B, (self.n_states, self.n_controls))
-        self.Q = np.reshape(Q, (self.n_states, self.n_states))
-        self.R = np.reshape(R, (self.n_controls, self.n_controls))
+        Returns
+        -------
+        x0 : (n_states, n_samples) or (n_states,) array
+            Samples of the system state, where each column is a different
+            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+        '''
+        return self._x0_sampler(n_samples=n_samples, distance=distance)

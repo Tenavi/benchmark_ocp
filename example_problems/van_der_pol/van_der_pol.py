@@ -2,7 +2,8 @@ import numpy as np
 
 from ..example_config import Config
 from optimalcontrol.problem import OptimalControlProblem
-from optimalcontrol.utilities import saturate, UniformSampler
+from optimalcontrol.utilities import saturate
+from optimalcontrol.sampling import UniformSampler
 
 config = Config(
     ode_solver='RK23',
@@ -20,38 +21,37 @@ class VanDerPol(OptimalControlProblem):
         'mu': 2., 'b': 1.5, 'u_max': 1.,
         'x0_ub': np.array([[3.],[4.]]), 'x0_lb': -np.array([[3.],[4.]])
     }
+
     def _saturate(self, u):
         return saturate(u, -self.u_max, self.u_max)
 
     @property
     def n_states(self):
-        '''The number of system states (positive int).'''
         return 2
 
     @property
     def n_controls(self):
-        '''The number of control inputs to the system (positive int).'''
         return 1
 
     @property
     def final_time(self):
-        '''Time horizon of the system.'''
         return np.inf
 
     def _update_params(self, **new_params):
-        if 'xf' in new_params or not hasattr(self, 'xf'):
+        if 'xf' in new_params:
             self.xf = np.zeros((2,1))
             self.xf[0] = self._params.xf
 
-        if 'b' in new_params or not hasattr(self, 'B'):
+        if 'b' in new_params:
             self.B = np.zeros((2,1))
             self.B[1] = self._params.b
 
-        if 'b' in new_params or 'xf' in new_params or not hasattr(self, 'uf'):
+        if 'b' in new_params or 'xf' in new_params:
             self.uf = self.xf[0] / self._params.b
 
-        if 'u_max' in new_params or not hasattr(self, 'u_max'):
-            self.u_max = np.abs(self._params.u_max)
+        if 'u_max' in new_params:
+            self._params.u_max = np.abs(self._params.u_max)
+            self.u_max = self._params.u_max
 
         if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
@@ -60,14 +60,14 @@ class VanDerPol(OptimalControlProblem):
                 seed=getattr(self._params, 'x0_sample_seed', None)
             )
         elif any([
-                'lb' in new_params,
-                'ub' in new_params,
+                'x0_lb' in new_params,
+                'x0_ub' in new_params,
                 'x0_sample_seed' in new_params,
                 'xf' in new_params
             ]):
             self._x0_sampler.update(
-                lb=new_params.get('lb'),
-                ub=new_params.get('ub'),
+                lb=new_params.get('x0_lb'),
+                ub=new_params.get('x0_ub'),
                 xf=self.xf,
                 seed=new_params.get('x0_sample_seed')
             )
@@ -94,21 +94,6 @@ class VanDerPol(OptimalControlProblem):
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 
     def running_cost(self, x, u):
-        '''
-        Evaluate the running cost L(x,u) at one or more state-control pairs.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        L : float or (n_points,) array
-            Running cost(s) L(x,u) evaluated at pair(s) (x,u).
-        '''
         if x.ndim < 2:
             x_err = x - self.xf.flatten()
         else:
@@ -125,29 +110,6 @@ class VanDerPol(OptimalControlProblem):
         return L[0]
 
     def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
-        '''
-        Evaluate the gradients of the running cost, dL/dx (x,u) and dL/du (x,u),
-        at one or multiple state-control pairs. Default implementation
-        approximates this with central differences.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-        return_dLdx : bool, default=True
-            If True, compute the gradient with respect to states, dL/dx.
-        return_dLdu : bool, default=True
-            If True,compute the gradient with respect to controls, dL/du.
-
-        Returns
-        -------
-        dLdx : (n_states,) or (n_states, n_points) array
-            State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
-        dLdu : (controls,) or (n_controls, n_points) array
-            Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
-        '''
         if x.ndim < 2:
             x_err = x - self.xf.flatten()
         else:
@@ -171,29 +133,6 @@ class VanDerPol(OptimalControlProblem):
         return dLdx, dLdu
 
     def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
-        '''
-        Evaluate the Hessians of the running cost, d^2L/dx^2 (x,u) and
-        d^2L/du^2 (x,u), at one or multiple state-control pairs. Default
-        implementation approximates this with central differences.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-        return_dLdx : bool, default=True
-            If True, compute the Hessian with respect to states, dL/dx.
-        return_dLdu : bool, default=True
-            If True,compute the Hessian with respect to controls, dL/du.
-
-        Returns
-        -------
-        dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
-            State Hessians dL^2/dx^2 (x,u) evaluated at pair(s) (x,u).
-        dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
-            Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
-        '''
         if return_dLdx:
             Q = np.diag([self._params.Wx, self._params.Wy])
             if x.ndim >= 2:
@@ -211,21 +150,6 @@ class VanDerPol(OptimalControlProblem):
         return Q, R
 
     def dynamics(self, x, u):
-        '''
-        Evaluate the closed-loop dynamics at single or multiple time instances.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        dxdt : (n_states,) or (n_states, n_points) array
-            System dynamics dx/dt = f(x,u).
-        '''
         u = self._saturate(u)
         if x.ndim < 2 and u.ndim > 1:
             u = u.flatten()
@@ -239,31 +163,6 @@ class VanDerPol(OptimalControlProblem):
         return np.concatenate((dx1dt, dx2dt), axis=0)
 
     def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
-        '''
-        Evaluate the Jacobians of the dynamics with respect to states and
-        controls at single or multiple time instances. Default implementation
-        approximates the Jacobians with central differences.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-        return_dfdx : bool, default=True
-            If True, compute the Jacobian with respect to states, df/dx.
-        return_dfdu : bool, default=True
-            If True, compute the Jacobian with respect to controls, df/du.
-        f0 : ignored
-            For API consistency only.
-
-        Returns
-        -------
-        dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
-            Jacobian with respect to states.
-        dfdu : (n_states, n_controls) or (n_states, n_controls, n_points) array
-            Jacobian with respect to controls.
-        '''
         if return_dfdx:
             dfdx = np.zeros((self.n_states,) + x.shape)
             dfdx[0,1] = 1.
@@ -285,65 +184,15 @@ class VanDerPol(OptimalControlProblem):
         return dfdx, dfdu
 
     def optimal_control(self, x, p):
-        '''
-        Evaluate the optimal control as a function of state and costate.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        p : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        u : (n_controls,) or (n_controls, n_points) array
-            Optimal control(s) arranged by (dimension, time).
-        '''
         u = self.uf - self._params.b / self._params.Wu * p[1:]
         return self._saturate(u)
 
     def optimal_control_jacobian(self, x, p, u0=None):
-        '''
-        Evaluate the Jacobian of the optimal control with respect to the state,
-        leaving the costate fixed.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        p : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
-        u0 : ignored
-            For API consistency only.
-
-        Returns
-        -------
-        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
-            Jacobian of the optimal control with respect to states leaving
-            costates fixed, du/dx (x; p).
-        '''
         if p.ndim < 2:
             return np.zeros((self.n_controls, self.n_states))
         return np.zeros((self.n_controls, self.n_states, p.shape[-1]))
 
     def bvp_dynamics(self, t, xp):
-        '''
-        Evaluate the augmented dynamics for Pontryagin's Minimum Principle.
-
-        Parameters
-        ----------
-        t : (n_points,) array
-            Time collocation points for each state.
-        xp : (2*n_states, n_points) array
-            Current state and costate.
-
-        Returns
-        -------
-        dxpdt : (2*n_states, n_points) array
-            Concatenation of dynamics dx/dt = f(x,u^*) and costate dynamics,
-            dp/dt = -dH/dx(x,u^*,p), where u^* is the optimal control.
-        '''
         u = self.optimal_control(xp[:2], xp[2:])
 
         x1 = xp[:1]
