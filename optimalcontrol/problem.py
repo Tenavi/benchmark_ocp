@@ -1,10 +1,11 @@
 import numpy as np
+from copy import deepcopy
 from scipy import sparse
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
 from .sampling import UniformSampler
-from .utilities import approx_derivative, saturate
+from .utilities import approx_derivative, saturate, resize_vector
 
 class ProblemParameters:
     '''Utility class to store cost function and system dynamics parameters.'''
@@ -22,13 +23,13 @@ class ProblemParameters:
         '''Get or set a function to execute whenever problem parameters are
         modified by `update`.'''
         if not callable(self._update_fun):
-            raise ValueError("update_fun has not been set.")
+            raise ValueError('update_fun has not been set')
         return self._update_fun
 
     @update_fun.setter
     def update_fun(self, _update_fun):
         if not callable(_update_fun):
-            raise TypeError("update_fun must be set with a callable.")
+            raise TypeError('update_fun must be set with a callable')
         self._update_fun = _update_fun
 
 class OptimalControlProblem:
@@ -37,24 +38,24 @@ class OptimalControlProblem:
     dynamics, running cost, and optimal control as a function of costate.
     '''
     # Default cost and system parameters. Should be overwritten by subclass.
-    _params = ProblemParameters()
+    _default_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
     _fin_diff_method = '3-point'
 
     def __init__(self, **problem_parameters):
         '''
-        Initialize the OCP with some cost and system parameters.
         Parameters
         ----------
         problem_parameters : dict, default={}
             Parameters specifying the cost function and system dynamics. If
             empty, defaults defined by the subclass will be used.
         '''
-        if not isinstance(self._params, ProblemParameters):
-            problem_parameters = {**self._params, **problem_parameters}
-            self._params = ProblemParameters()
+        if not isinstance(self._default_parameters, dict):
+            raise TypeError('_default_parameters class attribute must be a dict')
+        self._params = ProblemParameters()
         self.parameters.update_fun = self._update_params
+        problem_parameters = {**self._default_parameters, **problem_parameters}
         self.parameters.update(**problem_parameters)
 
     @property
@@ -69,14 +70,14 @@ class OptimalControlProblem:
 
     @property
     def final_time(self):
-        '''Time horizon of the system; can be infinite
-        (positive float or np.inf).'''
+        '''Time horizon of the system; can be infinite (positive float or
+        np.inf).'''
         raise NotImplementedError
 
     @property
     def parameters(self):
-        '''Returns the `ProblemParameters` instance specifying parameters for
-        the cost function and system dynamics.'''
+        '''Returns a `ProblemParameters` instance specifying parameters for the
+        cost function(s) and system dynamics.'''
         return self._params
 
     def _update_params(self, **new_params):
@@ -566,42 +567,48 @@ class LinearQuadraticProblem(OptimalControlProblem):
     R : (n_controls, n_controls) array
         Hessian of running cost with respect to controls. Must be positive
         definite.
-    u_lb : (n_controls, 1) or (n_controls,) array, optional
-        Lower control bounds.
-    u_ub : (n_controls, 1) or (n_controls,) array, optional
-        Upper control bounds.
-    xf : (n_states, 1) or (n_states,) array or float, default=0.
-        Goal state, nominal linearization point.
+    xf : {(n_states, 1) or (n_states,) array, float}, default=0.
+        Goal state, nominal linearization point. If float, will be broadcast
+        into an array of shape `(n_states, 1)`.
     uf : (n_controls, 1) or (n_controls,) array or float, default=0.
-        Control values at nominal linearization point.
-    x0_lb : (n_states, 1) or (n_states,) array
+        Control values at nominal linearization point. If float, will be
+        broadcast into an array of shape `(n_controls, 1)`.
+    x0_lb : {(n_states, 1) or (n_states,) array, float}
         Lower bounds for hypercube from which to sample initial conditions `x0`.
-    x0_ub : (n_states, 1) or (n_states,) array
+        If float, will be broadcast into an array of shape `(n_states, 1)`.
+    x0_ub : {(n_states, 1) or (n_states,) array, float}
         Upper bounds for hypercube from which to sample initial conditions `x0`.
+        If float, will be broadcast into an array of shape `(n_states, 1)`.
+    u_lb : {(n_controls, 1) or (n_controls,) array, float}, optional
+        Lower control bounds. If float, will be broadcast into an array of shape
+        `(n_controls, 1)`.
+    u_ub : {(n_controls, 1) or (n_controls,) array, float}, optional
+        Upper control bounds. If float, will be broadcast into an array of shape
+        `(n_controls, 1)`.
     x0_sample_seed : int, optional
         Random seed to use for sampling initial conditions.
     '''
-    _params = ProblemParameters(
-        A=None, B=None, Q=None, R=None,
-        u_lb=None, u_ub=None, xf=0., uf=0.,
-        x0_lb=None, x0_ub=None, x0_sample_seed=None
-    )
+    _default_parameters = {
+        'A': None, 'B': None, 'Q': None, 'R': None,
+        'xf': 0., 'uf': 0., 'x0_lb': None, 'x0_ub': None,
+        'u_lb': None, 'u_ub': None, 'x0_sample_seed': None
+    }
 
     def _saturate(self, u):
         return saturate(u, self.u_lb, self.u_ub)
 
     @property
     def n_states(self):
-        if hasattr(self, 'A'):
-            return self.A.shape[1]
-        else:
+        try:
+            return self._params.A.shape[1]
+        except:
             raise RuntimeError('State Jacobian matrix has not been initialized.')
 
     @property
     def n_controls(self):
-        if hasattr(self, 'B'):
-            return self.B.shape[1]
-        else:
+        try:
+            return self._params.B.shape[1]
+        except:
             raise RuntimeError('Control Jacobian matrix has not been initialized.')
 
     @property
@@ -611,29 +618,29 @@ class LinearQuadraticProblem(OptimalControlProblem):
     def _update_params(self, **new_params):
         if 'A' in new_params:
             try:
-                self._params.A = np.array(self._params.A).reshape(
+                self._params.A = np.array(self._params.A)
+                self._params.A = self._params.A.reshape(
                     self._params.A.shape[0], self._params.A.shape[0]
                 )
             except:
-                raise ValueError('State Jacobian matrix A must be square.')
+                raise ValueError('State Jacobian matrix A must have shape (n_states, n_states)')
 
         if 'B' in new_params:
             try:
                 self._params.B = np.reshape(self._params.B, (self.n_states, -1))
             except:
-                raise ValueError(
-                    'Control Jacobian matrix B must have shape (n_states, n_controls).'
-                )
+                raise ValueError('Control Jacobian matrix B must have shape (n_states, n_controls)')
 
         if 'Q' in new_params:
             try:
-                self._params.Q = np.reshape(self._params.Q, self.A.shape)
+                self._params.Q = np.reshape(self._params.Q, (self.n_states, self.n_states))
                 eigs = np.linalg.eigvals(self._params.Q)
-                if not np.all(eigs >= 0.) or not np.allclose(Q, Q.T):
+                if not np.all(eigs >= 0.) or not np.allclose(self._params.Q, self._params.Q.T):
                     raise RuntimeError
+                singular_Q = np.any(np.isclose(eigs, 0.))
             except:
                 raise ValueError(
-                    'State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite.'
+                    'State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite'
                 )
 
         if 'R' in new_params:
@@ -642,30 +649,53 @@ class LinearQuadraticProblem(OptimalControlProblem):
                     self._params.R, (self.n_controls, self.n_controls)
                 )
                 eigs = np.linalg.eigvals(self._params.R)
-                if not np.all(eigs > 0.) or not np.allclose(R, R.T):
+                if not np.all(eigs > 0.) or not np.allclose(self._params.R, self._params.R.T):
                     raise RuntimeError
             except:
                 raise ValueError(
-                    'Control cost matrix R must have shape (n_controls, n_controls) and be positive definite.'
+                    'Control cost matrix R must have shape (n_controls, n_controls) and be positive definite'
                 )
 
-        for key in ('xf', 'uf'):
-            if key in new_params:
-                self._params.__dict__[key] = np.reshape(new_params[key], (-1,1))
+        for key in ('A', 'B', 'Q', 'R'):
+            if getattr(self._params, key) is None:
+                raise RuntimeError('LinearQuadraticProblem must be initialized with %s' % key)
+
+        if 'xf' in new_params:
+            self._params.xf = resize_vector(self._params.xf, self.n_states)
+
+        if 'uf' in new_params:
+            self._params.uf = resize_vector(self._params.uf, self.n_controls)
 
         for key in ('u_lb', 'u_ub'):
-            if key in new_params:
-                self._params.__dict__[key] = np.reshape(
-                    new_params[key], (self.n_controls,1)
+            if key in new_params and new_params[key] is not None:
+                self._params.__dict__[key] = resize_vector(
+                    new_params[key], self.n_controls
                 )
 
-        for key in ('A', 'B', 'Q', 'R', 'u_lb', 'u_ub', 'xf', 'uf'):
+        for key in ('A', 'B', 'Q', 'R', 'xf', 'uf', 'u_lb', 'u_ub'):
+            if hasattr(self, key) and hasattr(self.__dict__[key], 'shape'):
+                new_shape = self._params.__dict__[key].shape
+                old_shape = self.__dict__[key].shape
+                if new_shape != old_shape:
+                    raise ValueError(
+                        'New %s shape ' + new_shape + ' mismatched with old shape ' + old_shape
+                    )
             self.__dict__[key] = self._params.__dict__[key]
 
         if not hasattr(self, '_x0_sampler'):
+            if 'x0_lb' not in new_params or 'x0_ub' not in new_params:
+                raise RuntimeError(
+                    'LinearQuadraticProblem must be initialized with x0_lb and x0_ub'
+                )
+
+            if singular_Q:
+                norm = 1
+            else:
+                norm = self.Q
+
             self._x0_sampler = UniformSampler(
                 lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
-                norm=self.Q, seed=getattr(self._params, 'x0_sample_seed', None)
+                norm=norm, seed=getattr(self._params, 'x0_sample_seed', None)
             )
         elif any([
                 'x0_lb' in new_params,
@@ -689,8 +719,10 @@ class LinearQuadraticProblem(OptimalControlProblem):
         n_samples : int, default=1
             Number of sample points to generate.
         distance : positive float, optional
-            Desired distance of samples from `self.xf`. The norm is defined by
-                `||x|| = sqrt(x.T @ self.Q @ x)`
+            Desired distance of samples from `self.xf`. If `self.Q` is positive
+            definite, the distance is defined by the norm
+                `||x|| = sqrt(x.T @ self.Q @ x)`,
+            otherwise the `l1` norm is used.
 
         Returns
         -------

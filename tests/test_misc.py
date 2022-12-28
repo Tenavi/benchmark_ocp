@@ -2,9 +2,73 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.utilities import approx_derivative
+from optimalcontrol import utilities
 
 rng = np.random.default_rng()
+
+@pytest.mark.parametrize('n', [0., 1.5, np.array([[5],[6]]), [7,8], 'n'])
+def test_check_int_input_bad_type(n):
+    '''Make sure `check_int_input` catches a range of bad input types.'''
+    with pytest.raises(TypeError):
+        utilities.check_int_input(n, 'n')
+
+@pytest.mark.parametrize('min', [-7., np.pi, np.array([[1,2]]), [3,4], 'm'])
+def test_check_int_input_bad_min(min):
+    '''Make sure `check_int_input` catches a range of bad `min` input types.'''
+    with pytest.raises(TypeError):
+        utilities.check_int_input(rng.choice(100), 'n', min=min)
+
+@pytest.mark.parametrize('shape', [(),(1,),(1,1)])
+def test_check_int_input(shape):
+    '''Make sure `check_int_input` works with a variety of acceptable inputs.'''
+    n = rng.choice(100, size=shape) - 50
+    assert utilities.check_int_input(n.tolist(), 'n') == int(n)
+    for dtype in [np.int8, np.int16, np.int32, np.int64]:
+        assert utilities.check_int_input(n.astype(dtype), 'n') == int(n)
+
+@pytest.mark.parametrize('min', [0, 1, -5, 10])
+def test_check_int_input_with_min(min):
+    '''Make sure `check_int_input` works with minimum inputs and throws an error
+    if the desired minimum is not found.'''
+    assert utilities.check_int_input(min, 'n', min=min) == min
+    assert utilities.check_int_input(min + 1, 'n', min=min) == min + 1
+    with pytest.raises(ValueError):
+        utilities.check_int_input(min - 1, 'n', min=min)
+
+@pytest.mark.parametrize('n_rows', [1, 2, 3, -1])
+def test_resize_vector(n_rows):
+    if n_rows > 0:
+        x = rng.normal(size=n_rows)
+    else:
+        x = rng.normal(size=7)
+    y_expect = x.reshape(-1,1)
+
+    y = utilities.resize_vector(x, n_rows)
+    np.testing.assert_allclose(y, y_expect)
+
+    y = utilities.resize_vector(x.reshape(-1,1), n_rows)
+    np.testing.assert_allclose(y, y_expect)
+
+    y = utilities.resize_vector(x.reshape(1,-1), n_rows)
+    np.testing.assert_allclose(y, y_expect)
+
+    y = utilities.resize_vector(x.tolist(), n_rows)
+    np.testing.assert_allclose(y, y_expect)
+
+    if n_rows > 2:
+        with pytest.raises(ValueError):
+            y = utilities.resize_vector(x[:-1], n_rows)
+
+@pytest.mark.parametrize('n_rows', [2, 3])
+def test_resize_vector_float_in(n_rows):
+    x = np.full(n_rows, rng.normal())
+    y_expect = x.reshape(-1,1)
+
+    y = utilities.resize_vector(x[0], n_rows)
+    np.testing.assert_allclose(y, y_expect)
+
+    y = utilities.resize_vector(x[:1], n_rows)
+    np.testing.assert_allclose(y, y_expect)
 
 @pytest.mark.parametrize('n_points', range(4))
 @pytest.mark.parametrize('n_states', range(1,4))
@@ -57,7 +121,7 @@ def test_approx_derivative(n_states, n_out, n_points):
         dfdx_expected = dfdx_expected[0]
 
     for method in ['2-point', '3-point', 'cs']:
-        dfdx_approx = approx_derivative(vector_fun, x, method=method)
+        dfdx_approx = utilities.approx_derivative(vector_fun, x, method=method)
         np.testing.assert_allclose(
             dfdx_approx, dfdx_expected, rtol=1e-03, atol=1e-06
         )

@@ -16,7 +16,7 @@ config = Config(
 )
 
 class VanDerPol(OptimalControlProblem):
-    _params = {
+    _default_parameters = {
         'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
         'mu': 2., 'b': 1.5, 'u_max': 1.,
         'x0_ub': np.array([[3.],[4.]]), 'x0_lb': -np.array([[3.],[4.]])

@@ -1,5 +1,7 @@
 import numpy as np
 
+from .utilities import check_int_input, resize_vector
+
 class StateSampler:
     '''Generic base class for algorithms to sample states.'''
     def __init__(self, *args, **kwargs):
@@ -34,17 +36,19 @@ class UniformSampler(StateSampler):
         '''
         Parameters
         ----------
-        lb : (n_states,) or (n_states,1) array
-            Lower bounds for each dimension of the hypercube.
-        ub : (n_states,) or (n_states,1) array
-            Upper bounds for each dimension of the hypercube.
+        lb : {(n_states,) or (n_states,1) array, float}
+            Lower bounds for each dimension of the hypercube. If float, will be
+            broadcast into an array of shape `(n_states, 1)`.
+        ub : {(n_states,) or (n_states,1) array, float}
+            Upper bounds for each dimension of the hypercube. If float, will be
+            broadcast into an array of shape `(n_states, 1)`.
         xf : (n_states,) or (n_states,1) array
             Nominal state within the hypercube. If `sample` is called with a
             specified `distance` argument, this distance is calculated from `xf`
             with norm specified by `norm`.
         norm : {1, 2, (n_states, n_states) array}, default=2
             The norm (l1, l2, or matrix) with which to calculate distances from
-            `xf`. If `norm` is an array then it must be positive semi-definite.
+            `xf`. If `norm` is an array then it must be positive definite.
             In this case it is defined as
                 `||x|| = sqrt(x.T @ self.Q @ x)`
             where `Q` is the given matrix.
@@ -53,15 +57,27 @@ class UniformSampler(StateSampler):
         '''
         self.update(lb=lb, ub=ub, xf=xf)
 
-        if np.size(norm) == 1 and norm in [1,2]:
-            self.norm = int(norm)
+        bad_norm = False
+
+        if isinstance(norm, str):
+            bad_norm = True
+        elif np.size(norm) == 1:
+            if norm in [1,2]:
+                self.norm = norm
+            elif norm > 0. and self.n_states == 1:
+                self.norm = np.reshape(np.sqrt(norm), (1,1))
+            else:
+                bad_norm = True
         elif np.shape(norm) == (self.n_states, self.n_states):
             try:
                 self.norm = np.linalg.cholesky(norm).T
             except:
-                raise ValueError('If norm is an array it must be positive definite.')
+                raise ValueError('If norm is an array it must be positive definite')
         else:
-            raise ValueError('norm must be 1, 2, or an (n_states, n_states) array.')
+            bad_norm = True
+
+        if bad_norm:
+            raise ValueError('norm must be 1, 2, or a positive definite (n_states, n_states) array')
 
         self.rng = np.random.default_rng(seed)
 
@@ -82,19 +98,19 @@ class UniformSampler(StateSampler):
         seed : int, optional
             Random seed for the random number generator.
         '''
-        if lb is not None:
-            self.lb = np.reshape(lb, (-1,1))
-        if ub is not None:
-            self.ub = np.reshape(ub, (-1,1))
-        if xf is not None:
-            self.xf = np.reshape(xf, (-1,1))
-            self.n_states = self.xf.shape[0]
-
-        if self.n_states != self.ub.shape[0] or self.n_states != self.lb.shape[0]:
-            raise ValueError('lb, ub, and xf must have compatible shapes.')
+        try:
+            if xf is not None:
+                self.xf = resize_vector(xf, -1)
+                self.n_states = self.xf.shape[0]
+            if lb is not None:
+                self.lb = resize_vector(lb, self.n_states)
+            if ub is not None:
+                self.ub = resize_vector(ub, self.n_states)
+        except:
+            raise ValueError('lb, ub, and xf must have compatible shapes')
 
         if not np.all(self.xf <= self.ub) or not np.all(self.lb <= self.xf):
-            raise ValueError('Must have lb <= xf <= ub.')
+            raise ValueError('Must have lb <= xf <= ub')
 
         if seed is not None:
             self.rng = np.random.default_rng(seed)
@@ -120,8 +136,7 @@ class UniformSampler(StateSampler):
             Samples of the system state, where each column is a different
             sample. If `n_samples=1` then `x` will be a one-dimensional array.
         '''
-        if not n_samples:
-            raise ValueError('n_samples must be a positive int.')
+        n_samples = check_int_input(n_samples, 'n_samples', min=1)
 
         x = self.rng.uniform(
             low=self.lb, high=self.ub, size=(self.n_states, n_samples)
