@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from copy import deepcopy
 from scipy import sparse
 from scipy.integrate import cumulative_trapezoid as cumtrapz
@@ -8,85 +9,224 @@ from .sampling import UniformSampler
 from .utilities import approx_derivative, saturate, resize_vector
 
 class ProblemParameters:
-    '''Utility class to store cost function and system dynamics parameters.'''
-    def __init__(self, **params):
-        self.__dict__.update(params)
-        self._update_fun = None
+    """Utility class to store cost function and system dynamics parameters."""
+    def __init__(self, required={}, optional={}, update_fun=None):
+        """
+        Parameters
+        ----------
+        required : dict or list of strings, default={}
+            Dict or list of required parameter names as strings. The
+            `ProblemParameters` object will be initialized with the dict values
+            for each parameter; if a list is provided these are initialized with
+            `None`.
+        optional : dict or list of strings, default={}
+            Dict or list of optional parameter names as strings. The
+            `ProblemParameters` object will be initialized with the dict values
+            for each parameter; if a list is provided these are initialized with
+            `None`.
+        update_fun : callable, optional
+            A function to execute whenever problem parameters are modified by
+            `update`. The function must have the call signature
+            `update_fun(obj, **params)` where `obj` refers to the
+            `ProblemParameters` object instance and `params` are parameters to
+            be modified, specified as keyword arguments.
+        """
+        if update_fun is not None:
+            self.update_fun = update_fun
+        else:
+            self._update_fun = None
+
+        required = self._convert_param_dict(required)
+        optional = self._convert_param_dict(optional)
+
+        self.required = required.keys()
+        self.optional = optional.keys()
+
+        self.update(**required, **optional)
 
     def update(self, **params):
-        '''Modify individual or multiple parameters using keyword arguments.'''
-        self.__dict__.update(params)
-        self.update_fun(**params)
+        """Modify individual or multiple parameters using keyword arguments."""
+        for key, val in params.items():
+            if key in self.required or key in self.optional:
+                setattr(self, key, val)
+            else:
+                warnings.warn(
+                    key + " is not in the lists of required and optional parameters",
+                    category=RuntimeWarning
+                )
+        # Check that all required parameters have been set
+        for param in self.required:
+            if getattr(self, param, None) is None:
+                raise RuntimeError(param + " is required but has not been set")
+
+        # Run other operations
+        self.update_fun(self, **params)
 
     @property
     def update_fun(self):
-        '''Get or set a function to execute whenever problem parameters are
-        modified by `update`.'''
+        """
+        Get or set a function to execute whenever problem parameters are
+        modified by `update`. The function must have the call signature
+        `update_fun(obj, **params)` where `obj` refers to the
+        `ProblemParameters` object instance and `params` are parameters to be
+        modified, specified as keyword arguments.
+        """
         if not callable(self._update_fun):
-            raise ValueError('update_fun has not been set')
+            raise RuntimeError("update_fun has not been set")
         return self._update_fun
 
     @update_fun.setter
-    def update_fun(self, _update_fun):
-        if not callable(_update_fun):
-            raise TypeError('update_fun must be set with a callable')
-        self._update_fun = _update_fun
+    def update_fun(self, update_fun):
+        if not callable(update_fun):
+            raise TypeError("update_fun must be set with a callable")
+        self._update_fun = update_fun
+
+    @property
+    def required(self):
+        """
+        Get or set a list of strings which designate required parameters. Also
+        can be set with a dictionary, in which case `self.update` is called.
+        """
+        return getattr(self, "_required_params", [])
+
+    @property
+    def optional(self):
+        """
+        Get or set a list of strings which designate optional parameters. Also
+        can be set with a dictionary, in which case `self.update` is called.
+        """
+        return getattr(self, "_optional_params", [])
+
+    @required.setter
+    def required(self, required_params):
+        self._set_param_list(required_params, "_required_params", self.optional)
+
+    @optional.setter
+    def optional(self, optional_params):
+        self._set_param_list(optional_params, "_optional_params", self.required)
+
+    def _set_param_list(self, param_list, list_attr, other_list):
+        """
+        Used by the `required` and `optional` `setters` to extend the lists
+        of required or optional parameters. Makes sure that the lists each only
+        contain one copy of a parameter, and throws an error if the two lists
+        conflict.
+
+        Parameters
+        ----------
+        param_list : list of strings
+            New parameter names with which to extend the existing list.
+        list_attr : string
+            The name of the attribute to set, e.g. `"_required_params"` or
+            `"optional_params"`.
+        other_list : list of strings
+            Another list of strings to compare with for uniqueness.
+        """
+        param_dict = self._convert_param_dict(param_list)
+
+        if np.any(np.isin(param_dict.keys(), other_list, assume_unique=True)):
+            raise ValueError(param + " cannot be in both required and optional parameter lists")
+
+        if hasattr(self, list_attr):
+            param_list = getattr(self, list_attr) + list(param_dict.keys())
+            param_list = np.unique(param_list).tolist()
+            setattr(self, list_attr, param_list)
+        else:
+            setattr(self, list_attr, list(param_dict.keys()))
+
+        if np.any([val is not None for val in param_dict.values()]):
+            self.update(**param_dict)
+
+    @staticmethod
+    def _convert_param_dict(param_dict):
+        """Convert a dict or other iterable of strings into a dict, where
+        values are `None` if the original input is not already a dict."""
+        if isinstance(param_dict, dict):
+            pass
+        elif isinstance(param_dict, str):
+            param_dict = {param_dict: None}
+        elif hasattr(param_dict, "__iter__"):
+            param_dict = dict(zip(param_dict, [None]*len(param_dict)))
+        else:
+            raise TypeError("New parameter list or dict must be iterable")
+
+        for key in param_dict:
+            if not isinstance(key, str):
+                raise TypeError("Parameter list elements or dict keys must be strings")
+
+        return param_dict
 
 class OptimalControlProblem:
-    '''
+    """
     Template super class defining an optimal control problem (OCP) including
     dynamics, running cost, and optimal control as a function of costate.
-    '''
-    # Default cost and system parameters. Should be overwritten by subclass.
-    _default_parameters = {}
+    """
+    # Dicts of required and optional cost and system parameters.
+    # Parameters without default values should have None entries.
+    # To be overwritten by subclass implementations.
+    _required_params = {}
+    _optional_params = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
-    _fin_diff_method = '3-point'
+    _fin_diff_method = "3-point"
 
     def __init__(self, **problem_parameters):
-        '''
+        """
         Parameters
         ----------
         problem_parameters : dict, default={}
             Parameters specifying the cost function and system dynamics. If
             empty, defaults defined by the subclass will be used.
-        '''
-        if not isinstance(self._default_parameters, dict):
-            raise TypeError('_default_parameters class attribute must be a dict')
-        self._params = ProblemParameters()
-        self.parameters.update_fun = self._update_params
-        problem_parameters = {**self._default_parameters, **problem_parameters}
+        """
+        for param_dict in ["_required_params", "_optional_params"]:
+            if not isinstance(getattr(self, param_dict), dict):
+                raise TypeError(param_dict + " class attribute must be a dict")
+        self._params = ProblemParameters(
+            required=self._required_params,
+            optional=self._optional_params,
+            update_fun=self._update_params
+        )
         self.parameters.update(**problem_parameters)
 
     @property
     def n_states(self):
-        '''The number of system states (positive int).'''
+        """The number of system states (positive int)."""
         raise NotImplementedError
 
     @property
     def n_controls(self):
-        '''The number of control inputs to the system (positive int).'''
+        """The number of control inputs to the system (positive int)."""
         raise NotImplementedError
 
     @property
     def final_time(self):
-        '''Time horizon of the system; can be infinite (positive float or
-        np.inf).'''
+        """Time horizon of the system; can be infinite (positive float or
+        np.inf)."""
         raise NotImplementedError
 
     @property
     def parameters(self):
-        '''Returns a `ProblemParameters` instance specifying parameters for the
-        cost function(s) and system dynamics.'''
+        """Returns a `ProblemParameters` instance specifying parameters for the
+        cost function(s) and system dynamics."""
         return self._params
 
-    def _update_params(self, **new_params):
-        '''Things the subclass does when problem parameters are changed. Also
-        called during initialization.'''
+    def _update_params(self, obj, **new_params):
+        """
+        Things the subclass does when problem parameters are changed. Also
+        called during initialization.
+
+        Parameters
+        ----------
+        obj : ProblemParameters instance
+            Pass an instance of `ProblemParameters` to modify its instance
+            attributes, if needed.
+        **new_params : dict
+            Parameters which are changing.
+        """
         pass
 
     def sample_initial_conditions(self, n_samples=1, **kwargs):
-        '''
+        """
         Generate initial conditions from the problem's domain of interest.
 
         Parameters
@@ -101,11 +241,11 @@ class OptimalControlProblem:
         x0 : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples=1` then `x0` will be a one-dimensional array.
-        '''
+        """
         raise NotImplementedError
 
     def distances(self, xa, xb):
-        '''
+        """
         Calculate the problem-relevant distance metric of a batch of states from
         another state or batch of states. The default metric is Euclidean.
 
@@ -120,13 +260,13 @@ class OptimalControlProblem:
         -------
         dist : (n_a, n_b) array
             ||xa - xb|| for each point in xa and xb
-        '''
+        """
         xa = xa.reshape(self.n_states, -1).T
         xb = xb.reshape(self.n_states, -1).T
-        return cdist(xa, xb, metric='euclidean')
+        return cdist(xa, xb, metric="euclidean")
 
     def running_cost(self, x, u):
-        '''
+        """
         Evaluate the running cost L(x,u) at one or more state-control pairs.
 
         Parameters
@@ -140,11 +280,11 @@ class OptimalControlProblem:
         -------
         L : float or (n_points,) array
             Running cost(s) L(x,u) evaluated at pair(s) (x,u).
-        '''
+        """
         raise NotImplementedError
 
     def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
-        '''
+        """
         Evaluate the gradients of the running cost, dL/dx (x,u) and dL/du (x,u),
         at one or multiple state-control pairs. Default implementation
         approximates this with finite differences.
@@ -166,7 +306,7 @@ class OptimalControlProblem:
             State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
         dLdu : (n_controls,) or (n_controls, n_points) array
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
-        '''
+        """
         L = self.running_cost(x, u)
 
         if return_dLdx:
@@ -188,7 +328,7 @@ class OptimalControlProblem:
         return dLdx, dLdu
 
     def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
-        '''
+        """
         Evaluate the Hessians of the running cost, d^2L/dx^2 (x,u) and
         d^2L/du^2 (x,u), at one or multiple state-control pairs. Default
         implementation approximates this with finite differences.
@@ -210,7 +350,7 @@ class OptimalControlProblem:
             State Hessians dL^2/dx^2 (x,u) evaluated at pair(s) (x,u).
         dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
             Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
-        '''
+        """
         dLdx, dLdu = self.running_cost_gradients(x, u)
 
         if return_dLdx:
@@ -232,7 +372,7 @@ class OptimalControlProblem:
         return dLdx, dLdu
 
     def terminal_cost(self, x):
-        '''
+        """
         Evaluate the terminal cost F(x) at one or more states.
 
         Parameters
@@ -244,17 +384,34 @@ class OptimalControlProblem:
         -------
         F : float or (n_points,) array
             Terminal cost(s) F(x) evaluated.
-        '''
+        """
         raise NotImplementedError
 
     def total_cost(self, t, x, u):
-        '''Computes the accumulated running cost J(t) of a state-control trajectory.'''
+        """
+        Computes the accumulated running cost, J(t), of a state-control
+        trajectory, using trapezoidal integration.
+
+        Parameters
+        ----------
+        t : (n_points,) array
+            Time values at which state and control vectors are given.
+        x : (n_states, n_points) array
+            Time series of system states.
+        u : (n_controls, n_points) array
+            Time series of control inputs.
+
+        Returns
+        -------
+        J : (n_points,) array
+            Integral of the running cost over time.
+        """
         L = self.running_cost(x, u)
         J = cumtrapz(L.flatten(), t)
         return np.concatenate(([0.], J))
 
     def dynamics(self, x, u):
-        '''
+        """
         Evaluate the closed-loop dynamics at single or multiple time instances.
 
         Parameters
@@ -268,11 +425,11 @@ class OptimalControlProblem:
         -------
         dxdt : (n_states,) or (n_states, n_points) array
             System dynamics dx/dt = f(x,u).
-        '''
+        """
         raise NotImplementedError
 
     def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
-        '''
+        """
         Evaluate the Jacobians of the dynamics with respect to states and
         controls at single or multiple time instances. Default implementation
         approximates the Jacobians with finite differences.
@@ -296,7 +453,7 @@ class OptimalControlProblem:
             Jacobian with respect to states.
         dfdu : (n_states, n_controls) or (n_states, n_controls, n_points) array
             Jacobian with respect to controls.
-        '''
+        """
         if f0 is None:
             f0 = self.dynamics(x, u)
 
@@ -321,7 +478,7 @@ class OptimalControlProblem:
         return dfdx, dfdu
 
     def closed_loop_jacobian(self, x, controller):
-        '''
+        """
         Evaluate the Jacobian of the closed-loop dynamics at single or multiple
         time instances.
 
@@ -336,7 +493,7 @@ class OptimalControlProblem:
         -------
         dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
             Closed-loop Jacobian df/dx + df/du * du/dx.
-        '''
+        """
         dfdx, dfdu = self.jacobians(x, controller(x))
         dudx = controller.jacobian(x)
 
@@ -345,7 +502,7 @@ class OptimalControlProblem:
         while dudx.ndim < 3:
             dudx = dudx[...,None]
 
-        dfdx += np.einsum('ijk,jhk->ihk', dfdu, dudx)
+        dfdx += np.einsum("ijk,jhk->ihk", dfdu, dudx)
 
         if x.ndim < 2:
             return dfdx[:,:,0]
@@ -353,7 +510,7 @@ class OptimalControlProblem:
         return dfdx
 
     def optimal_control(self, x, p):
-        '''
+        """
         Evaluate the optimal control as a function of state and costate.
 
         Parameters
@@ -367,11 +524,11 @@ class OptimalControlProblem:
         -------
         u : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
-        '''
+        """
         raise NotImplementedError
 
     def optimal_control_jacobian(self, x, p, u0=None):
-        '''
+        """
         Evaluate the Jacobian of the optimal control with respect to the state,
         leaving the costate fixed. Default implementation uses finite
         differences.
@@ -390,7 +547,7 @@ class OptimalControlProblem:
         dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of the optimal control with respect to states leaving
             costates fixed, du/dx (x; p=p).
-        '''
+        """
         p = p.reshape(x.shape)
 
         return approx_derivative(
@@ -399,7 +556,7 @@ class OptimalControlProblem:
         )
 
     def bvp_dynamics(self, t, xp):
-        '''
+        """
         Evaluate the augmented dynamics for Pontryagin's Minimum Principle.
 
         Parameters
@@ -414,7 +571,7 @@ class OptimalControlProblem:
         dxpdt : (2*n_states, n_points) array
             Concatenation of dynamics dx/dt = f(x,u^*) and costate dynamics,
             dp/dt = -dH/dx(x,u^*,p), where u^* is the optimal control.
-        '''
+        """
         x = xp[:self.n_states]
         p = xp[self.n_states:]
         u = self.optimal_control(x, p)
@@ -426,7 +583,7 @@ class OptimalControlProblem:
         dfdx, dfdu = self.jacobians(x, u, f0=dxdt)
         dudx = self.optimal_control_jacobian(x, p, u0=u)
 
-        dfdx += np.einsum('ijk,jhk->ihk', dfdu, dudx)
+        dfdx += np.einsum("ijk,jhk->ihk", dfdu, dudx)
 
         dLdx, dLdu = self.running_cost_gradients(x, u)
 
@@ -435,15 +592,15 @@ class OptimalControlProblem:
         if dLdu.ndim < 2:
             dLdu = dLdu[:,None]
 
-        dLdx += np.einsum('ik,ijk->jk', dLdu, dudx)
+        dLdx += np.einsum("ik,ijk->jk", dLdu, dudx)
 
         # Costate dynamics (gradient of optimized Hamiltonian)
-        dHdx = dLdx + np.einsum('ijk,ik->jk', dfdx, p)
+        dHdx = dLdx + np.einsum("ijk,ik->jk", dfdx, p)
 
         return np.vstack((dxdt, -dHdx))
 
     def make_pontryagin_boundary(self, x0):
-        '''
+        """
         Generates a function to evaluate the boundary conditions for a given
         initial condition. Terminal cost is zero so final condition on costate
         is zero.
@@ -459,7 +616,7 @@ class OptimalControlProblem:
             Function of xp_0 (augmented states at initial time) and xp_1
             (augmented states at final time), returning a function which
             evaluates to zero if the boundary conditions are satisfied.
-        '''
+        """
         x0 = x0.flatten()
         def bc(xp_0, xp_1):
             return np.concatenate((
@@ -468,7 +625,7 @@ class OptimalControlProblem:
         return bc
 
     def hamiltonian(self, x, u, p):
-        '''
+        """
         Evaluate the Pontryagin Hamiltonian,
             H(x,u,p) = L(x,u) + <p, f(x,u)>
         where `L(x,u)` is the running cost, `p` is the costate or value
@@ -488,13 +645,13 @@ class OptimalControlProblem:
         -------
         H : (1,) or (n_points,) array
             Pontryagin Hamiltonian each each point in time.
-        '''
+        """
         L = self.running_cost(x, u)
         f = self.dynamics(x, u)
         return L + np.sum(p * f, axis=0)
 
     def constraint_fun(self, x):
-        '''
+        """
         A (vector-valued) function which is zero when the state constraints are
         satisfied.
 
@@ -508,11 +665,11 @@ class OptimalControlProblem:
         c : (n_constraints,) or (n_constraints, n_data) array or None
             Algebraic equation such that c(x)=0 means that x satisfies the state
             constraints.
-        '''
+        """
         return
 
     def constraint_jacobian(self, x):
-        '''
+        """
         Constraint function Jacobian dc/dx of self.constraint_fun. Default
         implementation approximates this with finite differences.
 
@@ -525,7 +682,7 @@ class OptimalControlProblem:
         -------
         dcdx : (n_constraints, n_states) array or None
             dc/dx evaluated at the point x, where c(x)=self.constraint_fun(x).
-        '''
+        """
         c0 = self.constraint_fun(x)
         if c0 is None:
             return
@@ -535,7 +692,7 @@ class OptimalControlProblem:
         )
 
     def make_integration_events(self):
-        '''
+        """
         Construct a (list of) callables that are tracked during integration for
         times at which they cross zero. Such events can terminate integration
         early.
@@ -547,11 +704,11 @@ class OptimalControlProblem:
             integrator finds a sign change in e then it searches for the time t
             at which this occurs. If event.terminal = True then integration
             stops.
-        '''
+        """
         return
 
 class LinearQuadraticProblem(OptimalControlProblem):
-    '''
+    """
     Template super class for defining an infinite horizon linear quadratic
     regulator problem. Takes the following parameters upon initialization.
 
@@ -587,11 +744,11 @@ class LinearQuadraticProblem(OptimalControlProblem):
         `(n_controls, 1)`.
     x0_sample_seed : int, optional
         Random seed to use for sampling initial conditions.
-    '''
+    """
     _default_parameters = {
-        'A': None, 'B': None, 'Q': None, 'R': None,
-        'xf': 0., 'uf': 0., 'x0_lb': None, 'x0_ub': None,
-        'u_lb': None, 'u_ub': None, 'x0_sample_seed': None
+        "A": None, "B": None, "Q": None, "R": None,
+        "xf": 0., "uf": 0., "x0_lb": None, "x0_ub": None,
+        "u_lb": None, "u_ub": None, "x0_sample_seed": None
     }
 
     def _saturate(self, u):
@@ -602,36 +759,36 @@ class LinearQuadraticProblem(OptimalControlProblem):
         try:
             return self._params.A.shape[1]
         except:
-            raise RuntimeError('State Jacobian matrix has not been initialized.')
+            raise RuntimeError("State Jacobian matrix has not been initialized.")
 
     @property
     def n_controls(self):
         try:
             return self._params.B.shape[1]
         except:
-            raise RuntimeError('Control Jacobian matrix has not been initialized.')
+            raise RuntimeError("Control Jacobian matrix has not been initialized.")
 
     @property
     def final_time(self):
         return np.inf
 
     def _update_params(self, **new_params):
-        if 'A' in new_params:
+        if "A" in new_params and new_params["A"] is not None:
             try:
                 self._params.A = np.array(self._params.A)
                 self._params.A = self._params.A.reshape(
                     self._params.A.shape[0], self._params.A.shape[0]
                 )
             except:
-                raise ValueError('State Jacobian matrix A must have shape (n_states, n_states)')
+                raise ValueError("State Jacobian matrix A must have shape (n_states, n_states)")
 
-        if 'B' in new_params:
+        if "B" in new_params and new_params["B"] is not None:
             try:
                 self._params.B = np.reshape(self._params.B, (self.n_states, -1))
             except:
-                raise ValueError('Control Jacobian matrix B must have shape (n_states, n_controls)')
+                raise ValueError("Control Jacobian matrix B must have shape (n_states, n_controls)")
 
-        if 'Q' in new_params:
+        if "Q" in new_params and new_params["Q"] is not None:
             try:
                 self._params.Q = np.reshape(self._params.Q, (self.n_states, self.n_states))
                 eigs = np.linalg.eigvals(self._params.Q)
@@ -640,10 +797,10 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 singular_Q = np.any(np.isclose(eigs, 0.))
             except:
                 raise ValueError(
-                    'State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite'
+                    "State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite"
                 )
 
-        if 'R' in new_params:
+        if "R" in new_params and new_params["R"] is not None:
             try:
                 self._params.R = np.reshape(
                     self._params.R, (self.n_controls, self.n_controls)
@@ -653,39 +810,39 @@ class LinearQuadraticProblem(OptimalControlProblem):
                     raise RuntimeError
             except:
                 raise ValueError(
-                    'Control cost matrix R must have shape (n_controls, n_controls) and be positive definite'
+                    "Control cost matrix R must have shape (n_controls, n_controls) and be positive definite"
                 )
 
-        for key in ('A', 'B', 'Q', 'R'):
+        for key in ("A", "B", "Q", "R"):
             if getattr(self._params, key) is None:
-                raise RuntimeError('LinearQuadraticProblem must be initialized with %s' % key)
+                raise RuntimeError("%s matrix not specified during initialization" % key)
 
-        if 'xf' in new_params:
+        if "xf" in new_params:
             self._params.xf = resize_vector(self._params.xf, self.n_states)
 
-        if 'uf' in new_params:
+        if "uf" in new_params:
             self._params.uf = resize_vector(self._params.uf, self.n_controls)
 
-        for key in ('u_lb', 'u_ub'):
+        for key in ("u_lb", "u_ub"):
             if key in new_params and new_params[key] is not None:
                 self._params.__dict__[key] = resize_vector(
                     new_params[key], self.n_controls
                 )
 
-        for key in ('A', 'B', 'Q', 'R', 'xf', 'uf', 'u_lb', 'u_ub'):
-            if hasattr(self, key) and hasattr(self.__dict__[key], 'shape'):
+        for key in ("A", "B", "Q", "R", "xf", "uf", "u_lb", "u_ub"):
+            if hasattr(self, key) and hasattr(self.__dict__[key], "shape"):
                 new_shape = self._params.__dict__[key].shape
                 old_shape = self.__dict__[key].shape
                 if new_shape != old_shape:
                     raise ValueError(
-                        'New %s shape ' + new_shape + ' mismatched with old shape ' + old_shape
+                        "New %s shape " + new_shape + " mismatched with old shape " + old_shape
                     )
             self.__dict__[key] = self._params.__dict__[key]
 
-        if not hasattr(self, '_x0_sampler'):
-            if 'x0_lb' not in new_params or 'x0_ub' not in new_params:
+        if not hasattr(self, "_x0_sampler"):
+            if "x0_lb" not in new_params or "x0_ub" not in new_params:
                 raise RuntimeError(
-                    'LinearQuadraticProblem must be initialized with x0_lb and x0_ub'
+                    "LinearQuadraticProblem must be initialized with x0_lb and x0_ub"
                 )
 
             if singular_Q:
@@ -695,23 +852,23 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
             self._x0_sampler = UniformSampler(
                 lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
-                norm=norm, seed=getattr(self._params, 'x0_sample_seed', None)
+                norm=norm, seed=getattr(self._params, "x0_sample_seed", None)
             )
         elif any([
-                'x0_lb' in new_params,
-                'x0_ub' in new_params,
-                'x0_sample_seed' in new_params,
-                'xf' in new_params
+                "x0_lb" in new_params,
+                "x0_ub" in new_params,
+                "x0_sample_seed" in new_params,
+                "xf" in new_params
             ]):
             self._x0_sampler.update(
-                lb=new_params.get('x0_lb'),
-                ub=new_params.get('x0_ub'),
+                lb=new_params.get("x0_lb"),
+                ub=new_params.get("x0_ub"),
                 xf=self.xf,
-                seed=new_params.get('x0_sample_seed')
+                seed=new_params.get("x0_sample_seed")
             )
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
-        '''
+        """
         Generate initial conditions uniformly from a hypercube.
 
         Parameters
@@ -729,5 +886,5 @@ class LinearQuadraticProblem(OptimalControlProblem):
         x0 : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples=1` then `x0` will be a one-dimensional array.
-        '''
+        """
         return self._x0_sampler(n_samples=n_samples, distance=distance)

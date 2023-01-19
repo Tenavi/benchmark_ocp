@@ -30,8 +30,23 @@ def test_init(n_states, n_controls):
     problem.parameters.update(A=A)
     np.testing.assert_allclose(problem.A, A)
 
-def test_bad_inits():
-    pass
+@pytest.mark.parametrize('n_states', [1,2])
+@pytest.mark.parametrize('n_controls', [1,2])
+def test_bad_inits(n_states, n_controls):
+    A = rng.normal(size=(n_states, n_states))
+    B = rng.normal(size=(n_states, n_controls))
+    Q = rng.normal(size=(n_states, n_states))
+    Q = Q.T @ Q
+    R = rng.normal(size=(n_controls, n_controls))
+    R = R.T @ R + 1e-08 * np.eye(n_controls)
+
+    # Missing A matrix
+    with pytest.raises(RuntimeError, match='A'):
+        problem = LinearQuadraticProblem(B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
+
+    # Missing B matrix
+    with pytest.raises(RuntimeError, match='B'):
+        problem = LinearQuadraticProblem(A=A, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
 
 def test_bad_updates():
     pass

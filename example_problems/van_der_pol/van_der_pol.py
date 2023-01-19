@@ -16,11 +16,12 @@ config = Config(
 )
 
 class VanDerPol(OptimalControlProblem):
-    _default_parameters = {
+    _required_params = {
         'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
-        'mu': 2., 'b': 1.5, 'u_max': 1.,
+        'mu': 2., 'b': 1.5,
         'x0_ub': np.array([[3.],[4.]]), 'x0_lb': -np.array([[3.],[4.]])
     }
+    _optional_params = {'u_max': 1.}
 
     def _saturate(self, u):
         return saturate(u, -self.u_max, self.u_max)
@@ -37,27 +38,28 @@ class VanDerPol(OptimalControlProblem):
     def final_time(self):
         return np.inf
 
-    def _update_params(self, **new_params):
+    def _update_params(self, obj, **new_params):
         if 'xf' in new_params:
             self.xf = np.zeros((2,1))
-            self.xf[0] = self._params.xf
+            self.xf[0] = obj.xf
 
         if 'b' in new_params:
             self.B = np.zeros((2,1))
-            self.B[1] = self._params.b
+            self.B[1] = obj.b
 
         if 'b' in new_params or 'xf' in new_params:
-            self.uf = self.xf[0] / self._params.b
+            self.uf = self.xf[0] / obj.b
 
         if 'u_max' in new_params:
-            self._params.u_max = np.abs(self._params.u_max)
-            self.u_max = self._params.u_max
+            if obj.u_max is not None:
+                obj.u_max = np.abs(obj.u_max)
+            self.u_max = obj.u_max
 
         if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
-                lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
-                norm=getattr(self._params, 'x0_sample_norm', 1),
-                seed=getattr(self._params, 'x0_sample_seed', None)
+                lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
+                norm=getattr(obj, 'x0_sample_norm', 1),
+                seed=getattr(obj, 'x0_sample_seed', None)
             )
         elif any([
                 'x0_lb' in new_params,

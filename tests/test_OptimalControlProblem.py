@@ -8,19 +8,19 @@ from optimalcontrol.utilities import approx_derivative
 ocp_dict = {}
 
 from example_problems.van_der_pol import van_der_pol
-ocp_dict['van_der_pol'] = {
-    'ocp': van_der_pol.VanDerPol, 'config': van_der_pol.config
+ocp_dict["van_der_pol"] = {
+    "ocp": van_der_pol.VanDerPol, "config": van_der_pol.config
 }
 
 rng = np.random.default_rng()
 
-def compare_finite_difference(x, jac, fun, method='3-point'):
+def compare_finite_difference(x, jac, fun, method="3-point"):
     expected_jac = approx_derivative(fun, x, method=method)
     np.testing.assert_allclose(jac, expected_jac)
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 def test_init(ocp_name):
-    problem = ocp_dict[ocp_name]['ocp'](dummy_variable=False)
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Check that basic properties have been implemented
     assert problem.n_states
@@ -28,15 +28,23 @@ def test_init(ocp_name):
     assert np.isinf(problem.final_time) or problem.final_time > 0.
     assert isinstance(problem.parameters, ProblemParameters)
 
+    for param in problem.parameters.required:
+        assert getattr(problem.parameters, param) is not None
+
     # Check that problem parameters can be updated
+    problem.parameters.optional = {"dummy_variable": False}
     assert not problem.parameters.dummy_variable
     problem.parameters.update(dummy_variable=True)
     assert problem.parameters.dummy_variable
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+    # Check that a new instance of the problem doesn't carry old parameters
+    problem2 = ocp_dict[ocp_name]["ocp"]()
+    assert not hasattr(problem2.parameters, "dummy_variable")
+
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_sample_initial_conditions(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     with pytest.raises(Exception):
         problem.sample_initial_conditions(n_samples=0)
@@ -52,10 +60,10 @@ def test_sample_initial_conditions(ocp_name, n_samples):
         assert x0.shape[1] == n_samples
     assert x0.shape[0] == problem.n_states
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_cost_functions(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and controls
     x = problem.sample_initial_conditions(n_samples=n_samples)
@@ -80,7 +88,7 @@ def test_cost_functions(ocp_name, n_samples):
             F = problem.terminal_cost(x.flatten())
             assert F.ndim == 0
     except NotImplementedError:
-        print('%s OCP has no terminal cost.' % ocp_name)
+        print("%s OCP has no terminal cost." % ocp_name)
 
     # Check that Jacobians give the correct size
     dLdx, dLdu = problem.running_cost_gradients(x, u)
@@ -124,10 +132,10 @@ def test_cost_functions(ocp_name, n_samples):
         assert dLdx.shape == (problem.n_states, problem.n_states)
         assert dLdu.shape == (problem.n_controls, problem.n_controls)
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_dynamics(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and controls
     x = problem.sample_initial_conditions(n_samples=n_samples)
@@ -161,10 +169,10 @@ def test_dynamics(ocp_name, n_samples):
         assert dfdx.shape == (problem.n_states, problem.n_states)
         assert dfdu.shape == (problem.n_states, problem.n_controls)
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_optimal_control(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and costates
     x = problem.sample_initial_conditions(n_samples=n_samples)
