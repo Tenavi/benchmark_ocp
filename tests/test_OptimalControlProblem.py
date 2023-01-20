@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.problem import ProblemParameters
+from optimalcontrol.parameters import ProblemParameters
 from optimalcontrol.utilities import approx_derivative
 
 ocp_dict = {}

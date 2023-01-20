@@ -2,13 +2,14 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.problem import LinearQuadraticProblem, ProblemParameters
+from optimalcontrol.problem import LinearQuadraticProblem
+from optimalcontrol.parameters import ProblemParameters
 from optimalcontrol.utilities import approx_derivative
 
 rng = np.random.default_rng()
 
-@pytest.mark.parametrize('n_states', [1,2])
-@pytest.mark.parametrize('n_controls', [1,2])
+@pytest.mark.parametrize("n_states", [1,2])
+@pytest.mark.parametrize("n_controls", [1,2])
 def test_init(n_states, n_controls):
     A = rng.normal(size=(n_states, n_states))
     B = rng.normal(size=(n_states, n_controls))
@@ -24,14 +25,19 @@ def test_init(n_states, n_controls):
     assert problem.n_controls == n_controls
     assert np.isinf(problem.final_time)
     assert isinstance(problem.parameters, ProblemParameters)
+    assert hasattr(problem, "_x0_sampler")
+    np.testing.assert_allclose(
+        np.linalg.cholesky(Q).T,
+        problem._x0_sampler.norm
+    )
 
     # Check that problem parameters can be updated
     A = rng.normal(size=(n_states, n_states))
     problem.parameters.update(A=A)
-    np.testing.assert_allclose(problem.A, A)
+    np.testing.assert_allclose(A, problem.A)
 
-@pytest.mark.parametrize('n_states', [1,2])
-@pytest.mark.parametrize('n_controls', [1,2])
+@pytest.mark.parametrize("n_states", [1,2])
+@pytest.mark.parametrize("n_controls", [1,2])
 def test_bad_inits(n_states, n_controls):
     A = rng.normal(size=(n_states, n_states))
     B = rng.normal(size=(n_states, n_controls))
@@ -41,21 +47,58 @@ def test_bad_inits(n_states, n_controls):
     R = R.T @ R + 1e-08 * np.eye(n_controls)
 
     # Missing A matrix
-    with pytest.raises(RuntimeError, match='A'):
+    with pytest.raises(RuntimeError, match="A"):
         problem = LinearQuadraticProblem(B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
 
+    # Non-square A matrix
+    with pytest.raises(ValueError, match="A"):
+        bad_mat = rng.normal(size=(7,))
+        problem = LinearQuadraticProblem(
+            A=bad_mat, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.
+        )
+
     # Missing B matrix
-    with pytest.raises(RuntimeError, match='B'):
+    with pytest.raises(RuntimeError, match="B"):
         problem = LinearQuadraticProblem(A=A, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
 
-def test_bad_updates():
-    pass
+    # B matrix of wrong size
+    with pytest.raises(ValueError, match="B"):
+        bad_mat = rng.normal(size=(n_states+1,n_controls))
+        problem = LinearQuadraticProblem(
+            A=A, B=bad_mat, Q=Q, R=R, x0_lb=-1., x0_ub=1.
+        )
 
-'''
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+    # Missing Q matrix
+    with pytest.raises(RuntimeError, match="Q"):
+        problem = LinearQuadraticProblem(A=A, B=B, R=R, x0_lb=-1., x0_ub=1.)
+
+    # Non-definite Q matrix
+    if n_states == 1:
+        bad_mats = [np.array([[-1e-14]]), rng.normal(size=(1,2))]
+    else:
+        bad_mats = [
+            rng.normal(size=(n_states,n_states)),
+            rng.normal(size=(n_states+1,n_states)),
+            rng.normal(size=(n_states,1))
+        ]
+        for i in (1,2):
+            bad_mats[i] = bad_mats[i] @ bad_mats[i].T
+        bad_mats[-1] -= 1e-14 * np.eye(n_states)
+    for bad_mat in bad_mats:
+        with pytest.raises(ValueError, match="Q"):
+            problem = LinearQuadraticProblem(
+                A=A, B=B, Q=bad_mat, R=R, x0_lb=-1., x0_ub=1.
+            )
+
+    # Missing R matrix
+    with pytest.raises(RuntimeError, match="R"):
+        problem = LinearQuadraticProblem(A=A, B=B, Q=Q, x0_lb=-1., x0_ub=1.)
+
+"""
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_cost_functions(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and controls
     x = problem.sample_initial_conditions(n_samples=n_samples)
@@ -80,7 +123,7 @@ def test_cost_functions(ocp_name, n_samples):
             F = problem.terminal_cost(x.flatten())
             assert F.ndim == 0
     except NotImplementedError:
-        print('%s OCP has no terminal cost.' % ocp_name)
+        print("%s OCP has no terminal cost." % ocp_name)
 
     # Check that Jacobians give the correct size
     dLdx, dLdu = problem.running_cost_gradients(x, u)
@@ -124,10 +167,10 @@ def test_cost_functions(ocp_name, n_samples):
         assert dLdx.shape == (problem.n_states, problem.n_states)
         assert dLdu.shape == (problem.n_controls, problem.n_controls)
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_dynamics(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and controls
     x = problem.sample_initial_conditions(n_samples=n_samples)
@@ -161,10 +204,10 @@ def test_dynamics(ocp_name, n_samples):
         assert dfdx.shape == (problem.n_states, problem.n_states)
         assert dfdu.shape == (problem.n_states, problem.n_controls)
 
-@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1,3))
+@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+@pytest.mark.parametrize("n_samples", range(1,3))
 def test_optimal_control(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]['ocp']()
+    problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and costates
     x = problem.sample_initial_conditions(n_samples=n_samples)
@@ -193,4 +236,4 @@ def test_optimal_control(ocp_name, n_samples):
     if n_samples == 1:
         dudx = problem.optimal_control_jacobian(x.flatten(), p.flatten())
         assert dudx.shape == (problem.n_controls, problem.n_states)
-'''
+"""

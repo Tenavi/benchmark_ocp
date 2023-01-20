@@ -1,160 +1,11 @@
 import numpy as np
-import warnings
-from copy import deepcopy
 from scipy import sparse
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
 from .sampling import UniformSampler
+from .parameters import ProblemParameters
 from .utilities import approx_derivative, saturate, resize_vector
-
-class ProblemParameters:
-    """Utility class to store cost function and system dynamics parameters."""
-    def __init__(self, required={}, optional={}, update_fun=None):
-        """
-        Parameters
-        ----------
-        required : dict or list of strings, default={}
-            Dict or list of required parameter names as strings. The
-            `ProblemParameters` object will be initialized with the dict values
-            for each parameter; if a list is provided these are initialized with
-            `None`.
-        optional : dict or list of strings, default={}
-            Dict or list of optional parameter names as strings. The
-            `ProblemParameters` object will be initialized with the dict values
-            for each parameter; if a list is provided these are initialized with
-            `None`.
-        update_fun : callable, optional
-            A function to execute whenever problem parameters are modified by
-            `update`. The function must have the call signature
-            `update_fun(obj, **params)` where `obj` refers to the
-            `ProblemParameters` object instance and `params` are parameters to
-            be modified, specified as keyword arguments.
-        """
-        if update_fun is not None:
-            self.update_fun = update_fun
-        else:
-            self._update_fun = None
-
-        required = self._convert_param_dict(required)
-        optional = self._convert_param_dict(optional)
-
-        self.required = required.keys()
-        self.optional = optional.keys()
-
-        self.update(**required, **optional)
-
-    def update(self, **params):
-        """Modify individual or multiple parameters using keyword arguments."""
-        for key, val in params.items():
-            if key in self.required or key in self.optional:
-                setattr(self, key, val)
-            else:
-                warnings.warn(
-                    key + " is not in the lists of required and optional parameters",
-                    category=RuntimeWarning
-                )
-        # Check that all required parameters have been set
-        for param in self.required:
-            if getattr(self, param, None) is None:
-                raise RuntimeError(param + " is required but has not been set")
-
-        # Run other operations
-        self.update_fun(self, **params)
-
-    @property
-    def update_fun(self):
-        """
-        Get or set a function to execute whenever problem parameters are
-        modified by `update`. The function must have the call signature
-        `update_fun(obj, **params)` where `obj` refers to the
-        `ProblemParameters` object instance and `params` are parameters to be
-        modified, specified as keyword arguments.
-        """
-        if not callable(self._update_fun):
-            raise RuntimeError("update_fun has not been set")
-        return self._update_fun
-
-    @update_fun.setter
-    def update_fun(self, update_fun):
-        if not callable(update_fun):
-            raise TypeError("update_fun must be set with a callable")
-        self._update_fun = update_fun
-
-    @property
-    def required(self):
-        """
-        Get or set a list of strings which designate required parameters. Also
-        can be set with a dictionary, in which case `self.update` is called.
-        """
-        return getattr(self, "_required_params", [])
-
-    @property
-    def optional(self):
-        """
-        Get or set a list of strings which designate optional parameters. Also
-        can be set with a dictionary, in which case `self.update` is called.
-        """
-        return getattr(self, "_optional_params", [])
-
-    @required.setter
-    def required(self, required_params):
-        self._set_param_list(required_params, "_required_params", self.optional)
-
-    @optional.setter
-    def optional(self, optional_params):
-        self._set_param_list(optional_params, "_optional_params", self.required)
-
-    def _set_param_list(self, param_list, list_attr, other_list):
-        """
-        Used by the `required` and `optional` `setters` to extend the lists
-        of required or optional parameters. Makes sure that the lists each only
-        contain one copy of a parameter, and throws an error if the two lists
-        conflict.
-
-        Parameters
-        ----------
-        param_list : list of strings
-            New parameter names with which to extend the existing list.
-        list_attr : string
-            The name of the attribute to set, e.g. `"_required_params"` or
-            `"optional_params"`.
-        other_list : list of strings
-            Another list of strings to compare with for uniqueness.
-        """
-        param_dict = self._convert_param_dict(param_list)
-
-        if np.any(np.isin(param_dict.keys(), other_list, assume_unique=True)):
-            raise ValueError(param + " cannot be in both required and optional parameter lists")
-
-        if hasattr(self, list_attr):
-            param_list = getattr(self, list_attr) + list(param_dict.keys())
-            param_list = np.unique(param_list).tolist()
-            setattr(self, list_attr, param_list)
-        else:
-            setattr(self, list_attr, list(param_dict.keys()))
-
-        if np.any([val is not None for val in param_dict.values()]):
-            self.update(**param_dict)
-
-    @staticmethod
-    def _convert_param_dict(param_dict):
-        """Convert a dict or other iterable of strings into a dict, where
-        values are `None` if the original input is not already a dict."""
-        if isinstance(param_dict, dict):
-            pass
-        elif isinstance(param_dict, str):
-            param_dict = {param_dict: None}
-        elif hasattr(param_dict, "__iter__"):
-            param_dict = dict(zip(param_dict, [None]*len(param_dict)))
-        else:
-            raise TypeError("New parameter list or dict must be iterable")
-
-        for key in param_dict:
-            if not isinstance(key, str):
-                raise TypeError("Parameter list elements or dict keys must be strings")
-
-        return param_dict
 
 class OptimalControlProblem:
     """
@@ -178,14 +29,16 @@ class OptimalControlProblem:
             Parameters specifying the cost function and system dynamics. If
             empty, defaults defined by the subclass will be used.
         """
-        for param_dict in ["_required_params", "_optional_params"]:
-            if not isinstance(getattr(self, param_dict), dict):
-                raise TypeError(param_dict + " class attribute must be a dict")
         self._params = ProblemParameters(
-            required=self._required_params,
-            optional=self._optional_params,
+            required=self._required_params.keys(),
+            optional=self._optional_params.keys(),
             update_fun=self._update_params
         )
+        problem_parameters = {
+            **self._required_params,
+            **self._optional_params,
+            **problem_parameters
+        }
         self.parameters.update(**problem_parameters)
 
     @property
@@ -745,10 +598,14 @@ class LinearQuadraticProblem(OptimalControlProblem):
     x0_sample_seed : int, optional
         Random seed to use for sampling initial conditions.
     """
-    _default_parameters = {
+    _required_params = {
         "A": None, "B": None, "Q": None, "R": None,
-        "xf": 0., "uf": 0., "x0_lb": None, "x0_ub": None,
-        "u_lb": None, "u_ub": None, "x0_sample_seed": None
+        "x0_lb": None, "x0_ub": None,
+    }
+    _optional_params = {
+        "xf": 0., "uf": 0.,
+        "u_lb": None, "u_ub": None,
+        "x0_sample_seed": None
     }
 
     def _saturate(self, u):
@@ -757,114 +614,96 @@ class LinearQuadraticProblem(OptimalControlProblem):
     @property
     def n_states(self):
         try:
-            return self._params.A.shape[1]
+            return self.parameters.A.shape[1]
         except:
-            raise RuntimeError("State Jacobian matrix has not been initialized.")
+            raise RuntimeError("State Jacobian matrix A has not been initialized.")
 
     @property
     def n_controls(self):
         try:
-            return self._params.B.shape[1]
+            return self.parameters.B.shape[1]
         except:
-            raise RuntimeError("Control Jacobian matrix has not been initialized.")
+            raise RuntimeError("Control Jacobian matrix B has not been initialized.")
 
     @property
     def final_time(self):
         return np.inf
 
-    def _update_params(self, **new_params):
-        if "A" in new_params and new_params["A"] is not None:
+    def _update_params(self, obj, **new_params):
+        if new_params.get("A") is not None:
             try:
-                self._params.A = np.array(self._params.A)
-                self._params.A = self._params.A.reshape(
-                    self._params.A.shape[0], self._params.A.shape[0]
-                )
+                obj.A = np.atleast_1d(obj.A)
+                obj.A = obj.A.reshape(obj.A.shape[0], obj.A.shape[0])
             except:
                 raise ValueError("State Jacobian matrix A must have shape (n_states, n_states)")
 
-        if "B" in new_params and new_params["B"] is not None:
+        if new_params.get("B") is not None:
             try:
-                self._params.B = np.reshape(self._params.B, (self.n_states, -1))
+                obj.B = np.asarray(obj.B)
+                if obj.B.ndim == 2 and obj.B.shape[0] != self.n_states:
+                    raise
+                else:
+                    obj.B = np.reshape(obj.B, (self.n_states, -1))
             except:
                 raise ValueError("Control Jacobian matrix B must have shape (n_states, n_controls)")
 
-        if "Q" in new_params and new_params["Q"] is not None:
+        if new_params.get("Q") is not None:
             try:
-                self._params.Q = np.reshape(self._params.Q, (self.n_states, self.n_states))
-                eigs = np.linalg.eigvals(self._params.Q)
-                if not np.all(eigs >= 0.) or not np.allclose(self._params.Q, self._params.Q.T):
-                    raise RuntimeError
+                obj.Q = np.reshape(obj.Q, (self.n_states, self.n_states))
+                eigs = np.linalg.eigvals(obj.Q)
+                if not np.all(eigs >= 0.) or not np.allclose(obj.Q, obj.Q.T):
+                    raise
                 singular_Q = np.any(np.isclose(eigs, 0.))
             except:
-                raise ValueError(
-                    "State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite"
-                )
+                raise ValueError("State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite")
 
-        if "R" in new_params and new_params["R"] is not None:
+        if new_params.get("R") is not None:
             try:
-                self._params.R = np.reshape(
-                    self._params.R, (self.n_controls, self.n_controls)
-                )
-                eigs = np.linalg.eigvals(self._params.R)
-                if not np.all(eigs > 0.) or not np.allclose(self._params.R, self._params.R.T):
-                    raise RuntimeError
+                obj.R = np.reshape(obj.R, (self.n_controls, self.n_controls))
+                eigs = np.linalg.eigvals(obj.R)
+                if not np.all(eigs > 0.) or not np.allclose(obj.R, obj.R.T):
+                    raise
             except:
-                raise ValueError(
-                    "Control cost matrix R must have shape (n_controls, n_controls) and be positive definite"
-                )
+                raise ValueError("Control cost matrix R must have shape (n_controls, n_controls) and be positive definite")
 
-        for key in ("A", "B", "Q", "R"):
-            if getattr(self._params, key) is None:
-                raise RuntimeError("%s matrix not specified during initialization" % key)
+        if "xf" in new_params and obj.A is not None:
+            obj.xf = resize_vector(obj.xf, self.n_states)
 
-        if "xf" in new_params:
-            self._params.xf = resize_vector(self._params.xf, self.n_states)
-
-        if "uf" in new_params:
-            self._params.uf = resize_vector(self._params.uf, self.n_controls)
+        if "uf" in new_params and obj.B is not None:
+            obj.uf = resize_vector(obj.uf, self.n_controls)
 
         for key in ("u_lb", "u_ub"):
             if key in new_params and new_params[key] is not None:
-                self._params.__dict__[key] = resize_vector(
-                    new_params[key], self.n_controls
+                setattr(
+                    obj, key, resize_vector(new_params[key], self.n_controls)
                 )
 
         for key in ("A", "B", "Q", "R", "xf", "uf", "u_lb", "u_ub"):
-            if hasattr(self, key) and hasattr(self.__dict__[key], "shape"):
-                new_shape = self._params.__dict__[key].shape
-                old_shape = self.__dict__[key].shape
-                if new_shape != old_shape:
-                    raise ValueError(
-                        "New %s shape " + new_shape + " mismatched with old shape " + old_shape
-                    )
-            self.__dict__[key] = self._params.__dict__[key]
+            if key in new_params:
+                setattr(self, key, getattr(obj, key))
 
-        if not hasattr(self, "_x0_sampler"):
-            if "x0_lb" not in new_params or "x0_ub" not in new_params:
-                raise RuntimeError(
-                    "LinearQuadraticProblem must be initialized with x0_lb and x0_ub"
-                )
-
+        if not hasattr(self, '_x0_sampler'):
             if singular_Q:
                 norm = 1
             else:
                 norm = self.Q
 
             self._x0_sampler = UniformSampler(
-                lb=self._params.x0_lb, ub=self._params.x0_ub, xf=self.xf,
-                norm=norm, seed=getattr(self._params, "x0_sample_seed", None)
+                lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
+                norm=norm,
+                seed=getattr(obj, "x0_sample_seed", None)
             )
         elif any([
-                "x0_lb" in new_params,
-                "x0_ub" in new_params,
-                "x0_sample_seed" in new_params,
-                "xf" in new_params
+                'x0_lb' in new_params,
+                'x0_ub' in new_params,
+                'x0_sample_seed' in new_params,
+                'xf' in new_params
             ]):
             self._x0_sampler.update(
-                lb=new_params.get("x0_lb"),
-                ub=new_params.get("x0_ub"),
+                lb=new_params.get('x0_lb'),
+                ub=new_params.get('x0_ub'),
                 xf=self.xf,
-                seed=new_params.get("x0_sample_seed")
+                seed=new_params.get('x0_sample_seed')
             )
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
