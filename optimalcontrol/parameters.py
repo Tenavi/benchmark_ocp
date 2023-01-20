@@ -131,8 +131,9 @@ class ProblemParameters:
         """
         param_dict = self._convert_param_dict(param_list)
 
-        if np.any(np.isin(param_dict.keys(), other_list, assume_unique=True)):
-            raise ValueError(param + " cannot be in both required and optional parameter lists")
+        for param in param_dict.keys():
+            if np.isin(param, other_list):
+                raise ValueError(param + " cannot be in both required and optional parameter lists")
 
         if hasattr(self, list_attr):
             param_list = getattr(self, list_attr) + list(param_dict.keys())
