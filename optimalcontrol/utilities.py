@@ -1,31 +1,113 @@
 import numpy as np
 from scipy.optimize import _numdiff
 
-def saturate(u, u_lb, u_ub):
+def saturate(u, min=None, max=None):
     '''
-    Hard saturation of control for numpy arrays.
+    Hard saturation of controls between given bounds.
 
     Parameters
     ----------
     u : (n_controls, n_data) or (n_controls,) array
         Control(s) to saturate.
-    u_lb : (n_controls, 1) array
+    min : (n_controls, 1) or (n_controls,) array, optional
         Lower control bounds.
-    u_ub : (n_controls, 1) array
-        upper control bounds.
+    max : (n_controls, 1) or (n_controls,) array, optional
+        Upper control bounds.
 
     Returns
     -------
     u : array with same shape as input
-        Control(s) saturated between u_lb and u_ub
+        Control(s) `u` saturated between `min` and `max`.
     '''
-    if u_lb is not None or u_ub is not None:
-        if u.ndim < 2:
-            u = np.clip(u, u_lb.flatten(), u_ub.flatten())
-        else:
-            u = np.clip(u, u_lb, u_ub)
+    if np.ndim(u) < 2:
+        if hasattr(min, 'flatten'):
+            min = min.flatten()
+        if hasattr(max, 'flatten'):
+            max = max.flatten()
 
-    return u
+    return np.clip(u, min, max)
+
+# ------------------------------------------------------------------------------
+
+def check_int_input(n, argname, min=None):
+    '''
+    Convert an input to an int, raising errors if this is not possible without
+    likely loss of information or if the int is less than a specified minimum.
+
+    Parameters
+    ----------
+    n : array-like
+        Input to check. Raises `TypeError` if `n` is not an `int` or `ndarray`.
+    argname : str
+        How to refer to the argument `n` in error messages.
+    min : int, optional
+        Minimum value which `n` should take. Raises `ValueError` if `n < min`.
+
+    Returns
+    -------
+    n : int
+        Input `n` converted to an `int`, if possible.
+    '''
+    if not isinstance(argname, str):
+        raise TypeError('argname must be a str')
+    if min is not None:
+        min = check_int_input(min, 'min')
+
+    bad_type = False
+
+    if np.size(n) != 1:
+        bad_type = True
+    else:
+        if isinstance(n, list):
+            n = np.asarray(n)
+
+        if hasattr(n, 'dtype') and 'int' in str(n.dtype):
+            n = int(n)
+        elif not isinstance(n, int):
+            bad_type = True
+
+    if bad_type:
+        raise TypeError('%s must be an int' % argname)
+
+    if min is not None and n < min:
+        raise ValueError('%s must be greater than or equal to %d' % (argname, min))
+
+    return n
+
+def resize_vector(array, n_rows):
+    '''
+    Reshapes or resizes a float or 1d array into a 2d array with one column and
+    a specified number of rows.
+
+    Parameters
+    ----------
+    array : array-like
+        Array to reshape or resize into shape `(n_rows,1)`.
+    n_rows : {int >= 1, -1}
+        Number of rows desired in `x`. If `n == -1` then uses `n = np.size(x)`.
+
+    Returns
+    -------
+    reshaped_array : (n_rows, 1) array
+        If `array.shape == (n_rows,1)` then returns the original `array`,
+        otherwise a copy is returned.
+    '''
+    n_rows = check_int_input(n_rows, 'n_rows')
+    if n_rows == -1:
+        n_rows = np.size(array)
+    elif n_rows <= 0:
+        raise ValueError('n_rows must be a positive int or -1')
+
+    if hasattr(array,'shape') and array.shape == (n_rows,1):
+        return array
+
+    array = np.reshape(array, (-1,1))
+    if array.shape[0] == n_rows:
+        return array
+    elif array.shape[0] == 1:
+        return np.tile(array, (n_rows,1))
+    else:
+        raise ValueError('The size of array is not compatible with the desired shape (n_rows,1)')
 
 # ------------------------------------------------------------------------------
 
@@ -166,123 +248,6 @@ def _dense_difference(fun, x0, f0, h, method):
         return np.moveaxis(dfdx_T, 0, -1)
 
     return np.moveaxis(dfdx_T, 0, -2)
-
-# ------------------------------------------------------------------------------
-
-class StateSampler:
-    '''Generic base class for algorithms to sample states.'''
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def update(self, **kwargs):
-        '''Update parameters of the sampler.'''
-        pass
-
-    def __call__(self, n_samples=1, **kwargs):
-        '''
-        Generate samples of the system state.
-
-        Parameters
-        ----------
-        n_samples : int, default=1
-            Number of sample points to generate.
-        kwargs
-            Other keyword arguments implemented by the subclass.
-
-        Returns
-        -------
-        x : (n_states, n_samples) or (n_states,) array
-            Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x` will be a one-dimensional array.
-        '''
-        raise NotImplementedError
-
-class UniformSampler(StateSampler):
-    '''Class which implements uniform sampling from a hypercube.'''
-    def __init__(self, lb, ub, xf, norm=2, seed=None):
-        '''
-        Parameters
-        ----------
-        lb : (n_states,) or (n_states,1) array
-            Lower bounds for each dimension of the hypercube.
-        ub : (n_states,) or (n_states,1) array
-            Upper bounds for each dimension of the hypercube.
-        xf : (n_states,) or (n_states,1) array
-            Nominal state within the hypercube. If `sample` is called with a
-            specified `distance` argument, this distance is calculated from `xf`
-            with norm specified by `norm`.
-        norm : {1,2}, default=2
-            Order of the norm (l1 or l2) with which to calculate distances from
-            `xf`.
-        seed : int, optional
-            Random seed for the random number generator.
-        '''
-        self.update(lb=lb, ub=ub, xf=xf)
-
-        if norm not in [1,2]:
-            raise ValueError('norm must be 1 or 2')
-        self.norm = int(norm)
-
-        self.rng = np.random.default_rng(seed)
-
-    def update(self, lb=None, ub=None, xf=None, seed=None):
-        '''
-        Update parameters of the sampler.
-
-        Parameters
-        '''
-        if lb is not None:
-            self.lb = np.reshape(lb, (-1,1))
-        if ub is not None:
-            self.ub = np.reshape(ub, (-1,1))
-        if xf is not None:
-            self.xf = np.reshape(xf, (-1,1))
-            self.n_states = self.xf.shape[0]
-
-        if self.n_states != self.ub.shape[0] or self.n_states != self.lb.shape[0]:
-            raise ValueError('lb, ub, and xf must have compatible shapes.')
-
-        if not np.all(self.xf <= self.ub) or not np.all(self.lb <= self.xf):
-            raise ValueError('Must have lb <= xf <= ub.')
-
-        if seed is not None:
-            self.rng = np.random.default_rng(seed)
-
-    def __call__(self, n_samples=1, distance=None):
-        '''
-        Generate samples of the system state uniformly in a hypercube with lower
-        and upper bound specified by `self.lb` and `self.ub`, respectively.
-
-        Parameters
-        ----------
-        n_samples : int, default=1
-            Number of sample points to generate.
-        distance : positive float, optional
-            Desired distance (in l1 or l2 norm) of samples from `self.xf`. The
-            type of norm is determined by `self.norm`. Note that depending on
-            how `distance` is specified, samples may be outside the hypercube.
-
-        Returns
-        -------
-        x : (n_states, n_samples) or (n_states,) array
-            Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x` will be a one-dimensional array.
-        '''
-        if not n_samples:
-            raise ValueError('n_samples must be a positive int.')
-
-        x = self.rng.uniform(
-            low=self.lb, high=self.ub, size=(self.n_states, n_samples)
-        )
-
-        if distance is not None:
-            x -= self.xf
-            x_norm = distance / np.linalg.norm(x, self.norm, axis=0)
-            x = x_norm * x + self.xf
-
-        if n_samples == 1:
-            return x.flatten()
-        return x
 
 # ------------------------------------------------------------------------------
 
