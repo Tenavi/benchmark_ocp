@@ -2,6 +2,7 @@ import pytest
 
 import numpy as np
 
+from optimalcontrol import OptimalControlProblem
 from optimalcontrol.parameters import ProblemParameters
 from optimalcontrol.utilities import approx_derivative
 
@@ -74,10 +75,6 @@ def test_cost_functions(ocp_name, n_samples):
     L = problem.running_cost(x, u)
     assert L.ndim == 1
     assert L.shape[0] == n_samples
-    # Cost functions should also handle flat vector inputs
-    if n_samples == 1:
-        L = problem.running_cost(x.flatten(), u.flatten())
-        assert L.ndim == 0
 
     try:
         F = problem.terminal_cost(x)
@@ -104,12 +101,6 @@ def test_cost_functions(ocp_name, n_samples):
         method=problem._fin_diff_method
     )
 
-    # Check shapes for flat vector inputs
-    if n_samples == 1:
-        dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
-        assert dLdx.shape == (problem.n_states,)
-        assert dLdu.shape == (problem.n_controls,)
-
     # Check that Hessians give the correct size
     dLdx, dLdu = problem.running_cost_hessians(x, u)
     assert dLdx.shape == (problem.n_states, problem.n_states, n_samples)
@@ -128,6 +119,13 @@ def test_cost_functions(ocp_name, n_samples):
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
+        L = problem.running_cost(x.flatten(), u.flatten())
+        assert L.ndim == 0
+
+        dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
+        assert dLdx.shape == (problem.n_states,)
+        assert dLdu.shape == (problem.n_controls,)
+
         dLdx, dLdu = problem.running_cost_hessians(x.flatten(), u.flatten())
         assert dLdx.shape == (problem.n_states, problem.n_states)
         assert dLdu.shape == (problem.n_controls, problem.n_controls)
@@ -145,10 +143,6 @@ def test_dynamics(ocp_name, n_samples):
     # Evaluate the vector field and check that the shape is correct
     f = problem.dynamics(x, u)
     assert f.shape == (problem.n_states, n_samples)
-    # Dynamics should also handle flat vector inputs
-    if n_samples == 1:
-        f = problem.dynamics(x.flatten(), u.flatten())
-        assert f.shape == (problem.n_states,)
 
     # Check that Jacobians give the correct size
     dfdx, dfdu = problem.jacobians(x, u)
@@ -165,6 +159,9 @@ def test_dynamics(ocp_name, n_samples):
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
+        f = problem.dynamics(x.flatten(), u.flatten())
+        assert f.shape == (problem.n_states,)
+
         dfdx, dfdu = problem.jacobians(x.flatten(), u.flatten())
         assert dfdx.shape == (problem.n_states, problem.n_states)
         assert dfdu.shape == (problem.n_states, problem.n_controls)
@@ -183,10 +180,6 @@ def test_optimal_control(ocp_name, n_samples):
     # Evaluate the optimal control and check that the shape is correct
     u = problem.optimal_control(x, p)
     assert u.shape == (problem.n_controls, n_samples)
-    # Optimal control should also handle flat vector inputs
-    if n_samples == 1:
-        u = problem.optimal_control(x.flatten(), p.flatten())
-        assert u.shape == (problem.n_controls,)
 
     # Check that Jacobian gives the correct size
     dudx = problem.optimal_control_jacobian(x, p)
@@ -199,5 +192,8 @@ def test_optimal_control(ocp_name, n_samples):
 
     # Check shape for flat vector inputs
     if n_samples == 1:
+        u = problem.optimal_control(x.flatten(), p.flatten())
+        assert u.shape == (problem.n_controls,)
+
         dudx = problem.optimal_control_jacobian(x.flatten(), p.flatten())
         assert dudx.shape == (problem.n_controls, problem.n_states)

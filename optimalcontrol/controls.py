@@ -4,55 +4,55 @@ from scipy.optimize._numdiff import approx_derivative
 from .utilities import saturate
 
 class Controller:
-    '''
+    """
     Base class for implementing a state feedback controller.
-    '''
+    """
     def __init__(self, *args, **kwargs):
         pass
 
     def __call__(self, x):
-        '''
+        """
         Evaluates the feedback control, u(x), for each sample state in x.
 
         Parameters
         ----------
-        x : (n_states, n_data) or (n_states,) array
+        x : (n_states, n_points) or (n_states,) array
             State(s) to evaluate the control for.
 
         Returns
         -------
-        u : (n_controls, n_data) or (n_controls,) array
+        u : (n_controls, n_points) or (n_controls,) array
             Feedback control for each column in x.
-        '''
+        """
         raise NotImplementedError
 
     def jacobian(self, x):
-        '''
+        """
         Evaluates the Jacobian of the feedback control, [du/dx](x), for each
         sample state in x.
 
         Parameters
         ----------
-        x : (n_states, n_data) or (n_states,) array
+        x : (n_states, n_points) or (n_states,) array
             State(s) to evaluate the control for.
 
         Returns
         -------
-        dudx : (n_controls, n_states, n_data) or (n_controls, n_states) array
+        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of feedback control for each column in x.
-        '''
+        """
         raise NotImplementedError
 
 class LinearQuadraticRegulator(Controller):
-    '''
+    """
     Implements a linear quadratic regulator (LQR) control with saturation
     constraints.
-    '''
+    """
     def __init__(
             self, xf, uf, A=None, B=None, Q=None, R=None,
             u_lb=None, u_ub=None, P=None
         ):
-        '''
+        """
         Parameters
         ----------
         xf : (n_states, 1) array
@@ -77,7 +77,7 @@ class LinearQuadraticRegulator(Controller):
             upper control saturation bounds.
         P : (n_states, n_states) array, optional
             Previously-computed Riccati equation solution for this problem.
-        '''
+        """
         self.xf = np.reshape(xf, (-1,1))
         self.uf = np.reshape(uf, (-1,1))
 
@@ -102,53 +102,32 @@ class LinearQuadraticRegulator(Controller):
         self.K = np.matmul(self.RB, self.P)
 
     def __call__(self, x):
-        '''
-        Evaluates the feedback control, u(x), for each sample state in x.
-
-        Parameters
-        ----------
-        x : (n_states, n_data) or (n_states,) array
-            State(s) to evaluate the control for.
-
-        Returns
-        -------
-        u : (n_controls, n_data) or (n_controls,) array
-            Feedback control for each column in x.
-        '''
-        x_err = x.reshape(x.shape[0], -1) - self.xf
+        x_err = np.reshape(x, (self.n_states, -1)) - self.xf
         u = self.uf - np.matmul(self.K, x_err)
         u = saturate(u, self.u_lb, self.u_ub)
 
-        if x.ndim < 2:
+        if np.ndim(x) < 2:
             return u.flatten()
 
         return u
 
     def jacobian(self, x):
-        '''
-        Evaluates the Jacobian of the feedback control, [du/dx](x), for each
-        sample state in x.
-
-        Parameters
-        ----------
-        x : (n_states, n_data) or (n_states,) array
-            State(s) to evaluate the control for.
-
-        Returns
-        -------
-        dudx : (n_controls, n_states, n_data) or (n_controls, n_states) array
-            Jacobian of feedback control for each column in x.
-        '''
         u = self(x)
 
-        if x.ndim < 2:
+        if np.ndim(x) < 2:
             dudx = - self.K
-            zero_idx = np.any([self.u_ub <= u, u <= self.lb], axis=0)
-            dudx[zero_idx] = 0.
+        else:
+            dudx = np.tile(- self.K[:,None], (1,np.shape(x)[1],1))
+            dudx = np.moveaxis(dudx, 1, 2)
+
+        if self.u_ub is not None and self.u_lb is not None:
+            zero_idx = np.any([self.u_ub <= u, u <= self.u_lb], axis=0)
+        elif self.u_ub is not None:
+            zero_idx = self.u_ub <= u
+        elif self.u_lb is not None:
+            zero_idx = u <= self.u_ub
+        else:
             return dudx
 
-        dudx = np.tile(- self.K[:,None], (1,x.shape[1],1))
-        zero_idx = np.any([self.u_ub <= u, u <= self.lb], axis=0)
         dudx[zero_idx] = 0.
-
-        return np.moveaxis(dudx, 1, 2)
+        return dudx

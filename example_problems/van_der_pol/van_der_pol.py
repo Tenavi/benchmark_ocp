@@ -6,7 +6,7 @@ from optimalcontrol.utilities import saturate
 from optimalcontrol.sampling import UniformSampler
 
 config = Config(
-    ode_solver='RK23',
+    ode_solver="RK23",
     atol=1e-08,
     rtol=1e-04,
     t1_sim=20.,
@@ -17,11 +17,11 @@ config = Config(
 
 class VanDerPol(OptimalControlProblem):
     _required_params = {
-        'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
-        'mu': 2., 'b': 1.5,
-        'x0_ub': np.array([[3.],[4.]]), 'x0_lb': -np.array([[3.],[4.]])
+        "Wx": .5, "Wy": 1., "Wu": 4., "xf": 0.,
+        "mu": 2., "b": 1.5,
+        "x0_ub": np.array([[3.],[4.]]), "x0_lb": -np.array([[3.],[4.]])
     }
-    _optional_params = {'u_max': 1.}
+    _optional_params = {"u_max": 1.}
 
     def _saturate(self, u):
         return saturate(u, -self.u_max, self.u_max)
@@ -39,43 +39,43 @@ class VanDerPol(OptimalControlProblem):
         return np.inf
 
     def _update_params(self, obj, **new_params):
-        if 'xf' in new_params:
+        if "xf" in new_params:
             self.xf = np.zeros((2,1))
             self.xf[0] = obj.xf
 
-        if 'b' in new_params:
+        if "b" in new_params:
             self.B = np.zeros((2,1))
             self.B[1] = obj.b
 
-        if 'b' in new_params or 'xf' in new_params:
+        if "b" in new_params or "xf" in new_params:
             self.uf = self.xf[0] / obj.b
 
-        if 'u_max' in new_params:
+        if "u_max" in new_params or not hasattr(self, "u_max"):
             if obj.u_max is not None:
                 obj.u_max = np.abs(obj.u_max)
             self.u_max = obj.u_max
 
-        if not hasattr(self, '_x0_sampler'):
+        if not hasattr(self, "_x0_sampler"):
             self._x0_sampler = UniformSampler(
                 lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
-                norm=getattr(obj, 'x0_sample_norm', 1),
-                seed=getattr(obj, 'x0_sample_seed', None)
+                norm=getattr(obj, "x0_sample_norm", 1),
+                seed=getattr(obj, "x0_sample_seed", None)
             )
         elif any([
-                'x0_lb' in new_params,
-                'x0_ub' in new_params,
-                'x0_sample_seed' in new_params,
-                'xf' in new_params
+                "x0_lb" in new_params,
+                "x0_ub" in new_params,
+                "x0_sample_seed" in new_params,
+                "xf" in new_params
             ]):
             self._x0_sampler.update(
-                lb=new_params.get('x0_lb'),
-                ub=new_params.get('x0_ub'),
+                lb=new_params.get("x0_lb"),
+                ub=new_params.get("x0_ub"),
                 xf=self.xf,
-                seed=new_params.get('x0_sample_seed')
+                seed=new_params.get("x0_sample_seed")
             )
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
-        '''
+        """
         Generate initial conditions uniformly from a hypercube.
 
         Parameters
@@ -92,7 +92,7 @@ class VanDerPol(OptimalControlProblem):
         x0 : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples=1` then `x0` will be a one-dimensional array.
-        '''
+        """
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 
     def running_cost(self, x, u):
@@ -112,7 +112,7 @@ class VanDerPol(OptimalControlProblem):
         return L[0]
 
     def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
-        if x.ndim < 2:
+        if np.ndim(x) < 2:
             x_err = x - self.xf.flatten()
         else:
             x_err = x - self.xf

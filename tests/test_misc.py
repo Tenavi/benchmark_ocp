@@ -40,7 +40,7 @@ def test_resize_vector(n_rows):
     if n_rows > 0:
         x = rng.normal(size=n_rows)
     else:
-        x = rng.normal(size=7)
+        x = rng.normal(size=17)
     y_expect = x.reshape(-1,1)
 
     y = utilities.resize_vector(x, n_rows)

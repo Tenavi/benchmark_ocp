@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import _numdiff
 
 def saturate(u, min=None, max=None):
-    '''
+    """
     Hard saturation of controls between given bounds.
 
     Parameters
@@ -18,19 +18,22 @@ def saturate(u, min=None, max=None):
     -------
     u : array with same shape as input
         Control(s) `u` saturated between `min` and `max`.
-    '''
+    """
     if np.ndim(u) < 2:
-        if hasattr(min, 'flatten'):
+        if hasattr(min, "flatten"):
             min = min.flatten()
-        if hasattr(max, 'flatten'):
+        if hasattr(max, "flatten"):
             max = max.flatten()
+
+    if min is None and max is None:
+        return u
 
     return np.clip(u, min, max)
 
 # ------------------------------------------------------------------------------
 
 def check_int_input(n, argname, min=None):
-    '''
+    """
     Convert an input to an int, raising errors if this is not possible without
     likely loss of information or if the int is less than a specified minimum.
 
@@ -47,11 +50,11 @@ def check_int_input(n, argname, min=None):
     -------
     n : int
         Input `n` converted to an `int`, if possible.
-    '''
+    """
     if not isinstance(argname, str):
-        raise TypeError('argname must be a str')
+        raise TypeError("argname must be a str")
     if min is not None:
-        min = check_int_input(min, 'min')
+        min = check_int_input(min, "min")
 
     bad_type = False
 
@@ -61,44 +64,44 @@ def check_int_input(n, argname, min=None):
         if isinstance(n, list):
             n = np.asarray(n)
 
-        if hasattr(n, 'dtype') and 'int' in str(n.dtype):
+        if hasattr(n, "dtype") and "int" in str(n.dtype):
             n = int(n)
         elif not isinstance(n, int):
             bad_type = True
 
     if bad_type:
-        raise TypeError('%s must be an int' % argname)
+        raise TypeError("%s must be an int" % argname)
 
     if min is not None and n < min:
-        raise ValueError('%s must be greater than or equal to %d' % (argname, min))
+        raise ValueError("%s must be greater than or equal to %d" % (argname, min))
 
     return n
 
 def resize_vector(array, n_rows):
-    '''
-    Reshapes or resizes a float or 1d array into a 2d array with one column and
-    a specified number of rows.
+    """
+    Reshapes or resizes an array-like to a 2d array with one column and a
+    specified number of rows.
 
     Parameters
     ----------
     array : array-like
         Array to reshape or resize into shape `(n_rows,1)`.
     n_rows : {int >= 1, -1}
-        Number of rows desired in `x`. If `n == -1` then uses `n = np.size(x)`.
-
+        Number of rows desired in `x`. If `n_rows == -1` then uses
+        `n_rows = np.size(x)`.
     Returns
     -------
     reshaped_array : (n_rows, 1) array
         If `array.shape == (n_rows,1)` then returns the original `array`,
         otherwise a copy is returned.
-    '''
-    n_rows = check_int_input(n_rows, 'n_rows')
+    """
+    n_rows = check_int_input(n_rows, "n_rows")
     if n_rows == -1:
         n_rows = np.size(array)
     elif n_rows <= 0:
-        raise ValueError('n_rows must be a positive int or -1')
+        raise ValueError("n_rows must be a positive int or -1")
 
-    if hasattr(array,'shape') and array.shape == (n_rows,1):
+    if hasattr(array,"shape") and array.shape == (n_rows,1):
         return array
 
     array = np.reshape(array, (-1,1))
@@ -107,15 +110,15 @@ def resize_vector(array, n_rows):
     elif array.shape[0] == 1:
         return np.tile(array, (n_rows,1))
     else:
-        raise ValueError('The size of array is not compatible with the desired shape (n_rows,1)')
+        raise ValueError("The size of array is not compatible with the desired shape (n_rows,1)")
 
 # ------------------------------------------------------------------------------
 
 def approx_derivative(
-        fun, x0, method='3-point', rel_step=None, abs_step=None, f0=None,
+        fun, x0, method="3-point", rel_step=None, abs_step=None, f0=None,
         args=(), kwargs={}
     ):
-    '''
+    """
     Compute (batched) finite difference approximation of the derivatives of an
     array-valued function. Modified from
     `scipy.optimize._numdiff.approx_derivative` to allow for array-valued
@@ -135,12 +138,12 @@ def approx_derivative(
         the input.
     x0 : array_like of shape (n,) or (n, n_points)
         Point(s) at which to estimate the derivatives.
-    method : {'3-point', '2-point', 'cs'}, optional
+    method : {"3-point", "2-point", "cs"}, optional
         Finite difference method to use:
-            - '2-point' - use the first order accuracy forward or backward
+            - "2-point" - use the first order accuracy forward or backward
                           difference.
-            - '3-point' - use central difference
-            - 'cs' - use a complex-step finite difference scheme. This assumes
+            - "3-point" - use central difference
+            - "cs" - use a complex-step finite difference scheme. This assumes
                      that the user function is real-valued and can be
                      analytically continued to the complex plane. Otherwise,
                      produces bogus results.
@@ -148,10 +151,10 @@ def approx_derivative(
         Relative step size to use. If None (default) the absolute step size is
         computed as ``h = rel_step * sign(x0) * max(1, abs(x0))``, with
         `rel_step` being selected automatically, see Notes. Otherwise
-        ``h = rel_step * sign(x0) * abs(x0)``. For ``method='3-point'`` the
+        ``h = rel_step * sign(x0) * abs(x0)``. For ``method="3-point"`` the
         sign of `h` is ignored.
     abs_step : array_like, optional
-        Absolute step size to use. For ``method='3-point'`` the sign of
+        Absolute step size to use. For ``method="3-point"`` the sign of
         `abs_step` is ignored. By default relative steps are used, only if
         ``abs_step is not None`` are absolute steps used.
     f0 : None or array_like, optional
@@ -171,15 +174,15 @@ def approx_derivative(
     -----
     If `rel_step` is not provided, it assigned as ``EPS**(1/s)``, where EPS is
     determined from the smallest floating point dtype of `x0` or `fun(x0)`,
-    ``np.finfo(x0.dtype).eps``, s=2 for '2-point' method and s=3 for '3-point'
+    ``np.finfo(x0.dtype).eps``, s=2 for "2-point" method and s=3 for "3-point"
     method. Such relative step approximately minimizes a sum of truncation and
     round-off errors. Relative steps are used by default. However, absolute
     steps are used when ``abs_step is not None``. If any of the absolute or
     relative steps produces an indistinguishable difference from the original
     `x0`, ``(x0 + dx) - x0 == 0``, then an automatic step size is substituted
     for that particular entry.
-    '''
-    if method not in ['2-point', '3-point', 'cs']:
+    """
+    if method not in ["2-point", "3-point", "cs"]:
         raise ValueError("Unknown method '%s'. " % method)
 
     x0 = np.atleast_1d(x0)
@@ -225,19 +228,19 @@ def _dense_difference(fun, x0, f0, h, method):
     dfdx_T = np.empty(x0.shape[:1] + f0.shape)
 
     for i in range(x0.shape[0]):
-        if method == '2-point':
+        if method == "2-point":
             x = np.copy(x0)
             x[i] += h[i]
             dx = x[i] - x0[i]  # Recompute dx as exactly representable number.
             df = fun(x) - f0
-        elif method == '3-point':
+        elif method == "3-point":
             x1, x2 = np.copy(x0), np.copy(x0)
             x1[i] += h[i]
             x2[i] -= h[i]
             dx = x2[i] - x1[i]
             df = fun(x2) - fun(x1)
-        elif method == 'cs':
-            x = x0.astype('complex128')
+        elif method == "cs":
+            x = x0.astype("complex128")
             x[i] += h[i] * 1.j
             df = fun(x).imag
             dx = h[i]
@@ -252,7 +255,7 @@ def _dense_difference(fun, x0, f0, h, method):
 # ------------------------------------------------------------------------------
 
 def find_fixed_point(OCP, controller, tol, X0=None, verbose=True):
-    '''
+    """
     Use root-finding to find a fixed point (equilibrium) of the closed-loop
     dynamics near the desired goal state OCP.X_bar. ALso computes the
     closed-loop Jacobian and its eigenvalues.
@@ -284,7 +287,7 @@ def find_fixed_point(OCP, controller, tol, X0=None, verbose=True):
         Eigenvalues of the closed-loop Jacobian
     max_eig : complex scalar
         Largest eigenvalue of the closed-loop Jacobian
-    '''
+    """
     raise NotImplementedError
 
     if X0 is None:
@@ -308,7 +311,7 @@ def find_fixed_point(OCP, controller, tol, X0=None, verbose=True):
             ))
         return J
 
-    sol = root(dynamics_wrapper, X0, jac=Jacobian_wrapper, method='lm')
+    sol = root(dynamics_wrapper, X0, jac=Jacobian_wrapper, method="lm")
 
     X_star = sol.x.reshape(-1,1)
     U_star = controller(X_star)
@@ -342,12 +345,12 @@ def find_fixed_point(OCP, controller, tol, X0=None, verbose=True):
             i += 1
 
     if verbose:
-        s = '||actual - desired_equilibrium|| = {norm:1.2e}'
+        s = "||actual - desired_equilibrium|| = {norm:1.2e}"
         print(s.format(norm=X_star_err))
         if np.max(np.abs(F_star)) > tol:
-            print('Dynamics f(X_star):')
+            print("Dynamics f(X_star):")
             print(F_star)
-        s = 'Largest Jacobian eigenvalue = {real:1.2e} + j{imag:1.2e} \n'
+        s = "Largest Jacobian eigenvalue = {real:1.2e} + j{imag:1.2e} \n"
         print(s.format(real=max_eig.real, imag=np.abs(max_eig.imag)))
 
     return X_star, X_star_err, F_star, Jac, eigs, max_eig
