@@ -16,12 +16,12 @@ config = Config(
 )
 
 class VanDerPol(OptimalControlProblem):
-    _required_params = {
+    _required_parameters = {
         "Wx": .5, "Wy": 1., "Wu": 4., "xf": 0.,
         "mu": 2., "b": 1.5,
         "x0_ub": np.array([[3.],[4.]]), "x0_lb": -np.array([[3.],[4.]])
     }
-    _optional_params = {"u_max": 1.}
+    _optional_parameters = {"u_max": 1.}
 
     def _saturate(self, u):
         return saturate(u, -self.u_max, self.u_max)

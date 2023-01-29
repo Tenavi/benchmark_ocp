@@ -1,5 +1,4 @@
 import numpy as np
-from scipy import sparse
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
@@ -15,8 +14,8 @@ class OptimalControlProblem:
     # Dicts of required and optional cost and system parameters.
     # Parameters without default values should have None entries.
     # To be overwritten by subclass implementations.
-    _required_params = {}
-    _optional_params = {}
+    _required_parameters = {}
+    __optional_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
     _fin_diff_method = "3-point"
@@ -30,13 +29,13 @@ class OptimalControlProblem:
             empty, defaults defined by the subclass will be used.
         """
         self._params = ProblemParameters(
-            required=self._required_params.keys(),
-            optional=self._optional_params.keys(),
+            required=self._required_parameters.keys(),
+            optional=self.__optional_parameters.keys(),
             update_fun=self._update_params
         )
         problem_parameters = {
-            **self._required_params,
-            **self._optional_params,
+            **self._required_parameters,
+            **self.__optional_parameters,
             **problem_parameters
         }
         self.parameters.update(**problem_parameters)
@@ -655,11 +654,11 @@ class LinearQuadraticProblem(OptimalControlProblem):
     x0_sample_seed : int, optional
         Random seed to use for sampling initial conditions.
     """
-    _required_params = {
+    _required_parameters = {
         "A": None, "B": None, "Q": None, "R": None,
         "x0_lb": None, "x0_ub": None,
     }
-    _optional_params = {
+    __optional_parameters = {
         "xf": 0., "uf": 0.,
         "u_lb": None, "u_ub": None,
         "x0_sample_seed": None
