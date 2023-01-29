@@ -2,7 +2,6 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol import OptimalControlProblem
 from optimalcontrol.parameters import ProblemParameters
 from optimalcontrol.utilities import approx_derivative
 
@@ -37,6 +36,9 @@ def test_init(ocp_name):
     assert not problem.parameters.dummy_variable
     problem.parameters.update(dummy_variable=True)
     assert problem.parameters.dummy_variable
+
+    # Check that updating with nothing doesn't make any errors
+    problem.parameters.update()
 
     # Check that a new instance of the problem doesn't carry old parameters
     problem2 = ocp_dict[ocp_name]["ocp"]()
@@ -87,7 +89,7 @@ def test_cost_functions(ocp_name, n_samples):
     except NotImplementedError:
         print("%s OCP has no terminal cost." % ocp_name)
 
-    # Check that Jacobians give the correct size
+    # Check that gradients give the correct size
     dLdx, dLdu = problem.running_cost_gradients(x, u)
     assert dLdx.shape == (problem.n_states, n_samples)
     assert dLdu.shape == (problem.n_controls, n_samples)

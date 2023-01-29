@@ -137,15 +137,15 @@ class VanDerPol(OptimalControlProblem):
     def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
         if return_dLdx:
             Q = np.diag([self._params.Wx, self._params.Wy])
-            if x.ndim >= 2:
-                Q = np.tile(Q[...,None], (1,1,x.shape[1]))
+            if np.ndim(x) >= 2:
+                Q = np.tile(Q[...,None], (1,1,np.shape(x)[1]))
             if not return_dLdu:
                 return Q
 
         if return_dLdu:
             R = np.reshape(self._params.Wu, (1,1))
-            if u.ndim >=2:
-                R = np.tile(R[...,None], (1,1,u.shape[1]))
+            if np.ndim(u) >=2:
+                R = np.tile(R[...,None], (1,1,np.shape(u)[1]))
             if not return_dLdx:
                 return R
 
@@ -153,7 +153,7 @@ class VanDerPol(OptimalControlProblem):
 
     def dynamics(self, x, u):
         u = self._saturate(u)
-        if x.ndim < 2 and u.ndim > 1:
+        if np.ndim(x) < 2 and np.ndim(u) > 1:
             u = u.flatten()
 
         x1 = x[:1]
@@ -166,7 +166,7 @@ class VanDerPol(OptimalControlProblem):
 
     def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
         if return_dfdx:
-            dfdx = np.zeros((self.n_states,) + x.shape)
+            dfdx = np.zeros((self.n_states,) + np.shape(x))
             dfdx[0,1] = 1.
             dfdx[1,0] = -1. - 2.*self._params.mu*x[0]*x[1]
             dfdx[1,1] = self._params.mu*(1. - x[0]**2)
@@ -176,7 +176,7 @@ class VanDerPol(OptimalControlProblem):
 
         if return_dfdu:
             if x.ndim > 1:
-                dfdu = np.tile(self.B[...,None], (1,1,x.shape[-1]))
+                dfdu = np.tile(self.B[...,None], (1,1,np.shape(x)[-1]))
             else:
                 dfdu = np.copy(self.B)
 
@@ -190,9 +190,7 @@ class VanDerPol(OptimalControlProblem):
         return self._saturate(u)
 
     def optimal_control_jacobian(self, x, p, u0=None):
-        if p.ndim < 2:
-            return np.zeros((self.n_controls, self.n_states))
-        return np.zeros((self.n_controls, self.n_states, p.shape[-1]))
+        return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
 
     def bvp_dynamics(self, t, xp):
         u = self.optimal_control(xp[:2], xp[2:])

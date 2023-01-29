@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import _numdiff
 
+# ------------------------------------------------------------------------------
+
 def saturate(u, min=None, max=None):
     """
     Hard saturation of controls between given bounds.
@@ -19,16 +21,45 @@ def saturate(u, min=None, max=None):
     u : array with same shape as input
         Control(s) `u` saturated between `min` and `max`.
     """
-    if np.ndim(u) < 2:
-        if hasattr(min, "flatten"):
-            min = min.flatten()
-        if hasattr(max, "flatten"):
-            max = max.flatten()
-
     if min is None and max is None:
         return u
 
+    if np.ndim(u) < 2:
+        if min is not None and np.ndim(min) > 1:
+            min = np.reshape(min, -1)
+        if max is not None and np.ndim(max) > 1:
+            max = np.reshape(max, -1)
+
     return np.clip(u, min, max)
+
+def find_saturated(u, min=None, max=None):
+    """
+    Find indices where controls are saturated between given bounds.
+
+    Parameters
+    ----------
+    u : (n_controls, n_data) or (n_controls,) array
+        Control(s) arranged by dimension, time.
+    min : (n_controls, 1) or (n_controls,) array, optional
+        Lower control bounds.
+    max : (n_controls, 1) or (n_controls,) array, optional
+        Upper control bounds.
+
+    Returns
+    -------
+    sat_idx : boolean array with same shape as input
+        `sat_idx[i,j] = True` if `u[i,j] >= max[i]` or `u[i,j] <= min[i]`. If
+        `max` or `min` is `None` then these are ignored.
+    """
+    if min is None and max is None:
+        return np.full(np.shape(u), False)
+
+    if min is not None and max is not None:
+        return np.any([max <= u, u <= min], axis=0)
+    elif max is not None:
+        return max <= u
+    else:
+        return u <= min
 
 # ------------------------------------------------------------------------------
 

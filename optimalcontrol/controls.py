@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize._numdiff import approx_derivative
 
-from .utilities import saturate
+from .utilities import resize_vector, saturate, find_saturated
 
 class Controller:
     """
@@ -49,16 +49,12 @@ class LinearQuadraticRegulator(Controller):
     constraints.
     """
     def __init__(
-            self, xf, uf, A=None, B=None, Q=None, R=None,
-            u_lb=None, u_ub=None, P=None
+            self, A=None, B=None, Q=None, R=None,
+            u_lb=None, u_ub=None, xf=0., uf=0., P=None
         ):
         """
         Parameters
         ----------
-        xf : (n_states, 1) array
-            Goal state, nominal linearization point.
-        uf : (n_controls, 1) array
-            Control values at nominal linearization point.
         A : (n_states, n_states) array, optional
             State Jacobian matrix at nominal equilibrium. Required if
             `P is None`.
@@ -75,11 +71,15 @@ class LinearQuadraticRegulator(Controller):
             Lower control saturation bounds.
         u_ub : (n_controls, 1) array, optional
             upper control saturation bounds.
+        xf : (n_states, 1) array, default=0.
+            Goal state, nominal linearization point.
+        uf : (n_controls, 1) array, default=0.
+            Control values at nominal linearization point.
         P : (n_states, n_states) array, optional
             Previously-computed Riccati equation solution for this problem.
         """
-        self.xf = np.reshape(xf, (-1,1))
-        self.uf = np.reshape(uf, (-1,1))
+        self.xf = resize_vector(xf, -1)
+        self.uf = resize_vector(uf, -1)
 
         self.n_states = self.xf.shape[0]
         self.n_controls = self.uf.shape[0]
@@ -87,9 +87,9 @@ class LinearQuadraticRegulator(Controller):
         self.u_lb, self.u_ub = u_lb, u_ub
 
         if self.u_lb is not None:
-            self.u_lb = np.reshape(self.u_lb, (self.n_controls,1))
+            self.u_lb = resize_vector(self.u_lb, self.n_controls)
         if self.u_ub is not None:
-            self.u_ub = np.reshape(self.u_ub, (self.n_controls,1))
+            self.u_ub = resize_vector(self.u_ub, self.n_controls)
 
         # Make Riccati matrix and LQR control gain matrix
         if P is not None:
@@ -120,14 +120,7 @@ class LinearQuadraticRegulator(Controller):
             dudx = np.tile(- self.K[:,None], (1,np.shape(x)[1],1))
             dudx = np.moveaxis(dudx, 1, 2)
 
-        if self.u_ub is not None and self.u_lb is not None:
-            zero_idx = np.any([self.u_ub <= u, u <= self.u_lb], axis=0)
-        elif self.u_ub is not None:
-            zero_idx = self.u_ub <= u
-        elif self.u_lb is not None:
-            zero_idx = u <= self.u_ub
-        else:
-            return dudx
+        zero_idx = find_saturated(u, min=self.u_lb, max=self.u_ub)
 
         dudx[zero_idx] = 0.
         return dudx

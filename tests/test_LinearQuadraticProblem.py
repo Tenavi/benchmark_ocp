@@ -2,8 +2,11 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol import LinearQuadraticProblem
+from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.parameters import ProblemParameters
+from optimalcontrol.controls import LinearQuadraticRegulator
+
+from .test_OptimalControlProblem import compare_finite_difference
 
 rng = np.random.default_rng()
 
@@ -68,6 +71,14 @@ def test_init(n_states, n_controls):
     assert not np.allclose(xf, problem.xf)
     problem.parameters.update(xf=xf)
     np.testing.assert_allclose(xf, problem.xf)
+
+    # Check that updating with nothing doesn't make any errors
+    problem.parameters.update()
+
+    # Check that a new instance of the problem doesn't carry old parameters
+    problem2 = LinearQuadraticProblem(A=A + 1., B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
+    np.testing.assert_allclose(problem.A, A)
+    np.testing.assert_allclose(problem2.A, A + 1.)
 
 @pytest.mark.parametrize("missing", ["A","B","Q","R","x0_lb","x0_ub"])
 def test_missing_inits(missing):
@@ -195,21 +206,24 @@ def test_cost_functions(n_states, n_controls, n_samples):
     assert L.ndim == 1
     assert L.shape[0] == n_samples
 
-    # Check that Jacobians give the correct size
+    # Check that gradients give the correct size
     dLdx, dLdu = problem.running_cost_gradients(x, u)
-    assert dLdx.shape == (problem.n_states, n_samples)
-    assert dLdu.shape == (problem.n_controls, n_samples)
+    assert dLdx.shape == (n_states, n_samples)
+    assert dLdu.shape == (n_controls, n_samples)
 
     # Check that Hessians give the correct size
     dLdx2, dLdu2 = problem.running_cost_hessians(x, u)
-    assert dLdx2.shape == (problem.n_states, problem.n_states, n_samples)
+    assert dLdx2.shape == (n_states, n_states, n_samples)
+    assert dLdu2.shape == (n_controls, n_controls, n_samples)
 
     # Check that control Hessians match with finite difference approximation,
-    # which for the unsaturated controls will be equal to 2 * R as usual.
-    np.testing.assert_allclose(
-        dLdu2,
-        super(LinearQuadraticProblem, problem).running_cost_hessians(x, u, return_dLdx=False)
+    # which is equal to 2 * R when the control is unsaturated and zero when
+    # saturated.
+    fin_diff_dLdu2 = (
+        super(LinearQuadraticProblem, problem)
+        .running_cost_hessians(x, u, return_dLdx=False)
     )
+    np.testing.assert_allclose(dLdu2, fin_diff_dLdu2)
 
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
@@ -229,55 +243,73 @@ def test_cost_functions(n_states, n_controls, n_samples):
         assert L.ndim == 0
 
         dLdx, dLdu = problem.running_cost_gradients(x.flatten(), u.flatten())
-        assert dLdx.shape == (problem.n_states,)
-        assert dLdu.shape == (problem.n_controls,)
+        assert dLdx.shape == (n_states,)
+        assert dLdu.shape == (n_controls,)
 
         dLdx, dLdu = problem.running_cost_hessians(x.flatten(), u.flatten())
-        assert dLdx.shape == (problem.n_states, problem.n_states)
-        assert dLdu.shape == (problem.n_controls, problem.n_controls)
+        assert dLdx.shape == (n_states, n_states)
+        assert dLdu.shape == (n_controls, n_controls)
 
-"""
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1,3))
-def test_dynamics(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]["ocp"]()
+@pytest.mark.parametrize("n_states", [1,2])
+@pytest.mark.parametrize("n_controls", [1,2])
+@pytest.mark.parametrize("n_samples", [1,10])
+def test_dynamics(n_states, n_controls, n_samples):
+    A, B, Q, R, xf, uf = make_good_inits(n_states, n_controls)
+    problem = LinearQuadraticProblem(
+        A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1., xf=xf, uf=uf,
+        u_lb=-0.5, u_ub=0.5
+    )
 
-    # Get some random states and controls
+    # Get some random states and controls. Some controls will be saturated.
     x = problem.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(problem.n_states, n_samples)
     u = rng.uniform(low=-1., high=1., size=(problem.n_controls, n_samples))
 
     # Evaluate the vector field and check that the shape is correct
     f = problem.dynamics(x, u)
-    assert f.shape == (problem.n_states, n_samples)
-    # Dynamics should also handle flat vector inputs
-    if n_samples == 1:
-        f = problem.dynamics(x.flatten(), u.flatten())
-        assert f.shape == (problem.n_states,)
+    assert f.shape == (n_states, n_samples)
 
     # Check that Jacobians give the correct size
     dfdx, dfdu = problem.jacobians(x, u)
-    assert dfdx.shape == (problem.n_states, problem.n_states, n_samples)
-    assert dfdu.shape == (problem.n_states, problem.n_controls, n_samples)
+    assert dfdx.shape == (n_states, n_states, n_samples)
+    assert dfdu.shape == (n_states, n_controls, n_samples)
 
-    compare_finite_difference(
-        x, dfdx, lambda x: problem.dynamics(x, u),
-        method=problem._fin_diff_method)
-    compare_finite_difference(
-        u, dfdu, lambda u: problem.dynamics(x, u),
-        method=problem._fin_diff_method
+    # Check that control Jacobians match with finite difference approximation,
+    # which is equal to B when the control is unsaturated and zero when
+    # saturated.
+    fin_diff_dfdu = (
+        super(LinearQuadraticProblem, problem)
+        .jacobians(x, u, return_dfdx=False)
     )
+    np.testing.assert_allclose(dfdu, fin_diff_dfdu)
+
+    # Check that vectorized construction matches brute force
+    for i in range(n_samples):
+        xi = x[:,i] - xf.flatten()
+        ui = problem._saturate(u[:,i]) - uf.flatten()
+
+        np.testing.assert_allclose(f[:,i], A @ xi + B @ ui)
+
+        np.testing.assert_allclose(dfdx[...,i], A)
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
-        dfdx, dfdu = problem.jacobians(x.flatten(), u.flatten())
-        assert dfdx.shape == (problem.n_states, problem.n_states)
-        assert dfdu.shape == (problem.n_states, problem.n_controls)
+        f = problem.dynamics(x.flatten(), u.flatten())
+        assert f.shape == (n_states,)
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1,3))
-def test_optimal_control(ocp_name, n_samples):
-    problem = ocp_dict[ocp_name]["ocp"]()
+        dfdx, dfdu = problem.jacobians(x.flatten(), u.flatten())
+        assert dfdx.shape == (n_states, n_states)
+        assert dfdu.shape == (n_states, n_controls)
+
+@pytest.mark.parametrize("n_states", [1,2])
+@pytest.mark.parametrize("n_controls", [1,2])
+@pytest.mark.parametrize("n_samples", [1,10])
+def test_optimal_control(n_states, n_controls, n_samples):
+    A, B, Q, R, xf, uf = make_good_inits(n_states, n_controls)
+    problem = LinearQuadraticProblem(
+        A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1., xf=xf, uf=uf,
+        u_lb=-0.5, u_ub=0.5
+    )
 
     # Get some random states and costates
     x = problem.sample_initial_conditions(n_samples=n_samples)
@@ -287,15 +319,11 @@ def test_optimal_control(ocp_name, n_samples):
 
     # Evaluate the optimal control and check that the shape is correct
     u = problem.optimal_control(x, p)
-    assert u.shape == (problem.n_controls, n_samples)
-    # Optimal control should also handle flat vector inputs
-    if n_samples == 1:
-        u = problem.optimal_control(x.flatten(), p.flatten())
-        assert u.shape == (problem.n_controls,)
+    assert u.shape == (n_controls, n_samples)
 
     # Check that Jacobian gives the correct size
     dudx = problem.optimal_control_jacobian(x, p)
-    assert dudx.shape == (problem.n_controls, problem.n_states, n_samples)
+    assert dudx.shape == (n_controls, n_states, n_samples)
 
     compare_finite_difference(
         x, dudx, lambda x: problem.optimal_control(x, p),
@@ -304,6 +332,19 @@ def test_optimal_control(ocp_name, n_samples):
 
     # Check shape for flat vector inputs
     if n_samples == 1:
+        u = problem.optimal_control(x.flatten(), p.flatten())
+        assert u.shape == (n_controls,)
+
         dudx = problem.optimal_control_jacobian(x.flatten(), p.flatten())
-        assert dudx.shape == (problem.n_controls, problem.n_states)
-"""
+        assert dudx.shape == (n_controls, n_states)
+
+    # Compare with LQR solution
+    LQR = LinearQuadraticRegulator(
+        A=A, B=B, Q=Q, R=R, xf=xf, uf=uf, u_lb=-0.5, u_ub=0.5
+    )
+
+    p = 2. * LQR.P @ (x - xf)
+    u = problem.optimal_control(x, p)
+    u_expected = LQR(x)
+
+    np.testing.assert_allclose(u, u_expected)

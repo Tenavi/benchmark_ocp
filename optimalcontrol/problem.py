@@ -3,9 +3,9 @@ from scipy import sparse
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
-from .sampling import UniformSampler
 from .parameters import ProblemParameters
-from .utilities import approx_derivative, saturate, resize_vector
+from .sampling import UniformSampler
+from . import utilities as utils
 
 class OptimalControlProblem:
     """
@@ -220,7 +220,7 @@ class OptimalControlProblem:
         L = self.running_cost(x, u)
 
         if return_dLdx:
-            dLdx = approx_derivative(
+            dLdx = utils.approx_derivative(
                 lambda x: self.running_cost(x, u), x,
                 f0=L, method=self._fin_diff_method
             )
@@ -228,7 +228,7 @@ class OptimalControlProblem:
                 return dLdx
 
         if return_dLdu:
-            dLdu = approx_derivative(
+            dLdu = utils.approx_derivative(
                 lambda u: self.running_cost(x, u), u,
                 f0=L, method=self._fin_diff_method
             )
@@ -264,7 +264,7 @@ class OptimalControlProblem:
         dLdx, dLdu = self.running_cost_gradients(x, u)
 
         if return_dLdx:
-            dLdx = approx_derivative(
+            dLdx = utils.approx_derivative(
                 lambda x: self.running_cost_gradients(x, u, return_dLdu=False),
                 x, f0=dLdx, method=self._fin_diff_method
             )
@@ -272,7 +272,7 @@ class OptimalControlProblem:
                 return dLdx
 
         if return_dLdu:
-            dLdu = approx_derivative(
+            dLdu = utils.approx_derivative(
                 lambda u: self.running_cost_gradients(x, u, return_dLdx=False),
                 u, f0=dLdu, method=self._fin_diff_method
             )
@@ -369,7 +369,7 @@ class OptimalControlProblem:
 
         # Jacobian with respect to states
         if return_dfdx:
-            dfdx = approx_derivative(
+            dfdx = utils.approx_derivative(
                 lambda x: self.dynamics(x, u), x,
                 f0=f0, method=self._fin_diff_method
             )
@@ -378,7 +378,7 @@ class OptimalControlProblem:
 
         # Jacobian with respect to controls
         if return_dfdu:
-            dfdu = approx_derivative(
+            dfdu = utils.approx_derivative(
                 lambda u: self.dynamics(x, u), u,
                 f0=f0, method=self._fin_diff_method
             )
@@ -460,7 +460,7 @@ class OptimalControlProblem:
         """
         p = np.reshape(p, x.shape)
 
-        return approx_derivative(
+        return utils.approx_derivative(
             lambda x: self.optimal_control(x, p), x,
             f0=u0, method=self._fin_diff_method
         )
@@ -597,7 +597,7 @@ class OptimalControlProblem:
         if c0 is None:
             return
 
-        return approx_derivative(
+        return utils.approx_derivative(
             self.constraint_fun, x, f0=c0, method=self._fin_diff_method
         )
 
@@ -634,22 +634,22 @@ class LinearQuadraticProblem(OptimalControlProblem):
     R : (n_controls, n_controls) array
         Hessian of running cost with respect to controls. Must be positive
         definite.
-    xf : {(n_states, 1) or (n_states,) array, float}, default=0.
+    xf : {(n_states, 1) array, float}, default=0.
         Goal state, nominal linearization point. If float, will be broadcast
         into an array of shape `(n_states, 1)`.
-    uf : (n_controls, 1) or (n_controls,) array or float, default=0.
+    uf : {(n_controls, 1) array, float}, default=0.
         Control values at nominal linearization point. If float, will be
         broadcast into an array of shape `(n_controls, 1)`.
-    x0_lb : {(n_states, 1) or (n_states,) array, float}
+    x0_lb : {(n_states, 1) array, float}
         Lower bounds for hypercube from which to sample initial conditions `x0`.
         If float, will be broadcast into an array of shape `(n_states, 1)`.
-    x0_ub : {(n_states, 1) or (n_states,) array, float}
+    x0_ub : {(n_states, 1) array, float}
         Upper bounds for hypercube from which to sample initial conditions `x0`.
         If float, will be broadcast into an array of shape `(n_states, 1)`.
-    u_lb : {(n_controls, 1) or (n_controls,) array, float}, optional
+    u_lb : {(n_controls, 1) array, float}, optional
         Lower control bounds. If float, will be broadcast into an array of shape
         `(n_controls, 1)`.
-    u_ub : {(n_controls, 1) or (n_controls,) array, float}, optional
+    u_ub : {(n_controls, 1) array, float}, optional
         Upper control bounds. If float, will be broadcast into an array of shape
         `(n_controls, 1)`.
     x0_sample_seed : int, optional
@@ -666,7 +666,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
     }
 
     def _saturate(self, u):
-        return saturate(u, self.u_lb, self.u_ub)
+        return utils.saturate(u, self.u_lb, self.u_ub)
 
     @property
     def n_states(self):
@@ -687,14 +687,14 @@ class LinearQuadraticProblem(OptimalControlProblem):
         return np.inf
 
     def _update_params(self, obj, **new_params):
-        if new_params.get("A") is not None:
+        if "A" in new_params:
             try:
                 obj.A = np.atleast_1d(obj.A)
                 obj.A = obj.A.reshape(obj.A.shape[0], obj.A.shape[0])
             except:
                 raise ValueError("State Jacobian matrix A must have shape (n_states, n_states)")
 
-        if new_params.get("B") is not None:
+        if "B" in new_params:
             try:
                 obj.B = np.asarray(obj.B)
                 if obj.B.ndim == 2 and obj.B.shape[0] != self.n_states:
@@ -704,7 +704,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
             except:
                 raise ValueError("Control Jacobian matrix B must have shape (n_states, n_controls)")
 
-        if new_params.get("Q") is not None:
+        if "Q" in new_params:
             try:
                 obj.Q = np.reshape(obj.Q, (self.n_states, self.n_states))
                 eigs = np.linalg.eigvals(obj.Q)
@@ -714,7 +714,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
             except:
                 raise ValueError("State cost matrix Q must have shape (n_states, n_states) and be positive semi-definite")
 
-        if new_params.get("R") is not None:
+        if "R" in new_params:
             try:
                 obj.R = np.reshape(obj.R, (self.n_controls, self.n_controls))
                 eigs = np.linalg.eigvals(obj.R)
@@ -724,21 +724,24 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 raise ValueError("Control cost matrix R must have shape (n_controls, n_controls) and be positive definite")
 
         if "xf" in new_params and obj.A is not None:
-            obj.xf = resize_vector(obj.xf, self.n_states)
+            obj.xf = utils.resize_vector(obj.xf, self.n_states)
 
         if "uf" in new_params and obj.B is not None:
-            obj.uf = resize_vector(obj.uf, self.n_controls)
+            obj.uf = utils.resize_vector(obj.uf, self.n_controls)
 
         for key in ("u_lb", "u_ub"):
             if key in new_params or not hasattr(self, key):
                 if getattr(obj, key) is not None:
-                    u_bound = resize_vector(new_params[key], self.n_controls)
+                    u_bound = utils.resize_vector(new_params[key], self.n_controls)
                     setattr(obj, key, u_bound)
                 setattr(self, key, getattr(obj, key))
 
         for key in ("A", "B", "Q", "R", "xf", "uf"):
             if key in new_params:
                 setattr(self, key, getattr(obj, key))
+
+        if "B" in new_params or "R" in new_params:
+            self.RB2 = np.linalg.solve(self.R, self.B.T) / 2.
 
         if "Q" in new_params or not hasattr(self, "_x0_sampler"):
             self._x0_sampler = UniformSampler(
@@ -760,6 +763,39 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 xf=self.xf,
                 seed=new_params.get("x0_sample_seed")
             )
+
+    def _center_inputs(self, x, u):
+        """
+        Wrapper of `_reshape_inputs` that reshapes 1d array state and controls
+        into 2d arrays, saturates the controls, and subtracts nominal states and
+        controls.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+
+        Returns
+        -------
+        x - xf : (n_states, n_points) array
+            State(s) arranged by (dimension, time). If the input was flat,
+            `n_points = 1`.
+        u - uf : (n_controls, n_points) array
+            Control(s) arranged by (dimension, time). If the input was flat,
+            `n_points = 1`.
+        squeeze: bool
+            True if either input was flat.
+
+        Raises
+        ------
+        ValueError
+            If cannot reshape states and controls to the correct sizes, or if
+            `x.shape[1] != u.shape[1]`.
+        """
+        x, u, squeeze = self._reshape_inputs(x, u)
+        return x - self.xf, self._saturate(u) - self.uf, squeeze
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
         """
@@ -808,14 +844,12 @@ class LinearQuadraticProblem(OptimalControlProblem):
         return cdist(xa, xb, metric="mahalanobis", VI=self.Q)
 
     def running_cost(self, x, u):
-        x, u, squeeze = self._reshape_inputs(x, u)
+        x, u, squeeze = self._center_inputs(x, u)
 
         # Batch multiply (x - xf).T @ Q @ (x - xf)
-        x = x - self.xf
         L = np.einsum("ij,ij->j", x, self.Q @ x)
 
         # Batch multiply (u - uf).T @ R @ (u - xf) and sum
-        u = self._saturate(u) - self.uf
         L += np.einsum("ij,ij->j", u, self.R @ u)
 
         if squeeze:
@@ -824,17 +858,17 @@ class LinearQuadraticProblem(OptimalControlProblem):
         return L
 
     def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
-        x, u, squeeze = self._reshape_inputs(x, u)
+        x, u, squeeze = self._center_inputs(x, u)
 
         if return_dLdx:
-            dLdx = 2. * np.einsum("ij,jb->ib", self.Q, x - self.xf)
+            dLdx = 2. * np.einsum("ij,jb->ib", self.Q, x)
             if squeeze:
                 dLdx = dLdx[...,0]
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
-            dLdu = 2. * np.einsum("ij,jb->ib", self.R, self._saturate(u) - self.uf)
+            dLdu = 2. * np.einsum("ij,jb->ib", self.R, u)
             if squeeze:
                 dLdu = dLdu[...,0]
             if not return_dLdx:
@@ -858,17 +892,8 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
             # Where the control is saturated, the gradient is constant so the
             # Hessian is zero
-            if self.u_ub is not None and self.u_lb is not None:
-                zero_idx = np.any([self.u_ub <= u, u <= self.u_lb], axis=0)
-            elif self.u_ub is not None:
-                zero_idx = self.u_ub <= u
-            elif self.u_lb is not None:
-                zero_idx = u <= self.u_ub
-            else:
-                zero_idx = None
-
-            if zero_idx is not None:
-                dLdu[:,zero_idx] = 0.
+            zero_idx = utils.find_saturated(u, min=self.u_lb, max=self.u_ub)
+            dLdu[:,zero_idx] = 0.
 
             if squeeze:
                 dLdu = dLdu[...,0]
@@ -876,3 +901,50 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 return dLdu
 
         return dLdx, dLdu
+
+    def dynamics(self, x, u):
+        x, u, squeeze = self._center_inputs(x, u)
+
+        dxdt = np.matmul(self.A, x) + np.matmul(self.B, u)
+
+        if squeeze:
+            return dxdt.flatten()
+
+        return dxdt
+
+    def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
+        x, u, squeeze = self._reshape_inputs(x, u)
+
+        if return_dfdx:
+            dfdx = np.copy(self.A)
+            if not squeeze:
+                dfdx = np.tile(dfdx[...,None], (1,1,x.shape[1]))
+            if not return_dfdu:
+                return dfdx
+
+        if return_dfdu:
+            dfdu = np.tile(self.B[...,None], (1,1,u.shape[1]))
+
+            # Where the control is saturated, the Jacobian is zero
+            zero_idx = utils.find_saturated(u, min=self.u_lb, max=self.u_ub)
+            dfdu[:,zero_idx] = 0.
+
+            if squeeze:
+                dfdu = dfdu[...,0]
+            if not return_dfdx:
+                return dfdu
+
+        return dfdx, dfdu
+
+    def optimal_control(self, x, p):
+        p = np.reshape(p, (self.n_states, -1))
+        u = self.uf - np.matmul(self.RB2, p)
+        u = self._saturate(u)
+
+        if np.ndim(x) < 2:
+            return u.flatten()
+
+        return u
+
+    def optimal_control_jacobian(self, x, p, u0=None):
+        return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
