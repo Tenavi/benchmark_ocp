@@ -1,12 +1,9 @@
 import numpy as np
-from scipy.optimize._numdiff import approx_derivative
 
-from .utilities import resize_vector, saturate, find_saturated
+from . import utilities as utils
 
 class Controller:
-    """
-    Base class for implementing a state feedback controller.
-    """
+    """Base class for implementing a state feedback controller."""
     def __init__(self, *args, **kwargs):
         pass
 
@@ -26,22 +23,24 @@ class Controller:
         """
         raise NotImplementedError
 
-    def jacobian(self, x):
+    def jacobian(self, x, u0=None):
         """
         Evaluates the Jacobian of the feedback control, [du/dx](x), for each
-        sample state in x.
+        sample state in x. Default implementation uses finite differences.
 
         Parameters
         ----------
         x : (n_states, n_points) or (n_states,) array
             State(s) to evaluate the control for.
+        u0 : (n_states, n_controls) or (n_controls,) array, optional
+            `self(x)`, pre-evaluated at the inputs.
 
         Returns
         -------
         dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of feedback control for each column in x.
         """
-        raise NotImplementedError
+        return utils.approx_derivative(self, f0=u0)
 
 class LinearQuadraticRegulator(Controller):
     """
@@ -78,8 +77,8 @@ class LinearQuadraticRegulator(Controller):
         P : (n_states, n_states) array, optional
             Previously-computed Riccati equation solution for this problem.
         """
-        self.xf = resize_vector(xf, -1)
-        self.uf = resize_vector(uf, -1)
+        self.xf = utils.resize_vector(xf, -1)
+        self.uf = utils.resize_vector(uf, -1)
 
         self.n_states = self.xf.shape[0]
         self.n_controls = self.uf.shape[0]
@@ -87,9 +86,9 @@ class LinearQuadraticRegulator(Controller):
         self.u_lb, self.u_ub = u_lb, u_ub
 
         if self.u_lb is not None:
-            self.u_lb = resize_vector(self.u_lb, self.n_controls)
+            self.u_lb = utils.resize_vector(self.u_lb, self.n_controls)
         if self.u_ub is not None:
-            self.u_ub = resize_vector(self.u_ub, self.n_controls)
+            self.u_ub = utils.resize_vector(self.u_ub, self.n_controls)
 
         # Make Riccati matrix and LQR control gain matrix
         if P is not None:
@@ -104,14 +103,14 @@ class LinearQuadraticRegulator(Controller):
     def __call__(self, x):
         x_err = np.reshape(x, (self.n_states, -1)) - self.xf
         u = self.uf - np.matmul(self.K, x_err)
-        u = saturate(u, self.u_lb, self.u_ub)
+        u = utils.saturate(u, self.u_lb, self.u_ub)
 
         if np.ndim(x) < 2:
             return u.flatten()
 
         return u
 
-    def jacobian(self, x):
+    def jacobian(self, x, u0=None):
         u = self(x)
 
         if np.ndim(x) < 2:
@@ -120,7 +119,7 @@ class LinearQuadraticRegulator(Controller):
             dudx = np.tile(- self.K[:,None], (1,np.shape(x)[1],1))
             dudx = np.moveaxis(dudx, 1, 2)
 
-        zero_idx = find_saturated(u, min=self.u_lb, max=self.u_ub)
+        zero_idx = utils.find_saturated(u, min=self.u_lb, max=self.u_ub)
 
         dudx[zero_idx] = 0.
         return dudx

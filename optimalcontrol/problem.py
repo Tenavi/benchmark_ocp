@@ -15,7 +15,7 @@ class OptimalControlProblem:
     # Parameters without default values should have None entries.
     # To be overwritten by subclass implementations.
     _required_parameters = {}
-    __optional_parameters = {}
+    _optional_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
     _fin_diff_method = "3-point"
@@ -30,12 +30,12 @@ class OptimalControlProblem:
         """
         self._params = ProblemParameters(
             required=self._required_parameters.keys(),
-            optional=self.__optional_parameters.keys(),
+            optional=self._optional_parameters.keys(),
             update_fun=self._update_params
         )
         problem_parameters = {
             **self._required_parameters,
-            **self.__optional_parameters,
+            **self._optional_parameters,
             **problem_parameters
         }
         self.parameters.update(**problem_parameters)
@@ -395,7 +395,7 @@ class OptimalControlProblem:
         ----------
         x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        controller : object
+        controller : controls.Controller object
             `Controller` instance implementing `__call__` and `jacobian`.
 
         Returns
@@ -403,18 +403,11 @@ class OptimalControlProblem:
         dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
             Closed-loop Jacobian df/dx + df/du * du/dx.
         """
-        dfdx, dfdu = self.jacobians(x, controller(x))
-        dudx = controller.jacobian(x)
+        u = controller(x)
+        dfdx, dfdu = self.jacobians(x, u)
+        dudx = controller.jacobian(x, u0=u)
 
-        while dfdu.ndim < 3:
-            dfdu = dfdu[...,None]
-        while dudx.ndim < 3:
-            dudx = dudx[...,None]
-
-        dfdx += np.einsum("ijk,jhk->ihk", dfdu, dudx)
-
-        if np.ndim(x) < 2:
-            return dfdx[:,:,0]
+        dfdx += np.einsum("ij...,jk...->ik...", dfdu, dudx)
 
         return dfdx
 
@@ -457,7 +450,7 @@ class OptimalControlProblem:
             Jacobian of the optimal control with respect to states leaving
             costates fixed, du/dx (x; p=p).
         """
-        p = np.reshape(p, x.shape)
+        p = np.reshape(p, np.shape(x))
 
         return utils.approx_derivative(
             lambda x: self.optimal_control(x, p), x,
@@ -564,6 +557,10 @@ class OptimalControlProblem:
         A (vector-valued) function which is zero when the state constraints are
         satisfied.
 
+        TODO: Replace with a @property returning a list of
+        scipy.optimize.Constraint objects, or something else compatible with
+        constrained optimization
+
         Parameters
         ----------
         x : (n_states, n_points) or (n_states,) array
@@ -600,19 +597,19 @@ class OptimalControlProblem:
             self.constraint_fun, x, f0=c0, method=self._fin_diff_method
         )
 
-    def make_integration_events(self):
+    @property
+    def integration_events(self):
         """
-        Construct a (list of) callables that are tracked during integration for
-        times at which they cross zero. Such events can terminate integration
-        early.
+        Get a (list of) callables that are tracked during integration for times
+        at which they cross zero. Such events can terminate integration early.
 
         Returns
         -------
         events : None, callable, or list of callables
-            Each callable has a function signature e = event(t, x). If the ODE
-            integrator finds a sign change in e then it searches for the time t
-            at which this occurs. If event.terminal = True then integration
-            stops.
+            Each callable has a function signature `e = event(t, x)`. If the ODE
+            integrator finds a sign change in `e` then it searches for the time
+            `t` at which this occurs. If `event.terminal = True` then
+            integration stops.
         """
         return
 
@@ -658,7 +655,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
         "A": None, "B": None, "Q": None, "R": None,
         "x0_lb": None, "x0_ub": None,
     }
-    __optional_parameters = {
+    _optional_parameters = {
         "xf": 0., "uf": 0.,
         "u_lb": None, "u_ub": None,
         "x0_sample_seed": None
@@ -730,7 +727,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         for key in ("u_lb", "u_ub"):
             if key in new_params or not hasattr(self, key):
-                if getattr(obj, key) is not None:
+                if getattr(obj, key, None) is not None:
                     u_bound = utils.resize_vector(new_params[key], self.n_controls)
                     setattr(obj, key, u_bound)
                 setattr(self, key, getattr(obj, key))

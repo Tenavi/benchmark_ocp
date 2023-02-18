@@ -139,8 +139,8 @@ def test_bad_inits(n_states, n_controls):
 
 @pytest.mark.parametrize("n_states", [1,2])
 def test_sample(n_states):
-    """Test that sampling initial conditions works as expected and distance
-    matrix can be updated."""
+    """Test that we can sample initial conditions from the LQ problem and the
+    distance matrix can be updated."""
     n_controls = rng.choice(range(1,10))
     A, B, Q, R, xf, uf = make_good_inits(n_states, n_controls)
     x0_lb = - rng.uniform(size=(n_states,1)) - 1.
@@ -190,6 +190,10 @@ def test_sample(n_states):
 @pytest.mark.parametrize("n_controls", [1,2])
 @pytest.mark.parametrize("n_samples", [1,10])
 def test_cost_functions(n_states, n_controls, n_samples):
+    """Test that cost function inputs and outputs have the correct shape and
+    that gradients and Hessians of return the expected Q and R matrices (except
+    when the control is saturated, in which case the corresponding parts of R
+    should be zero)."""
     A, B, Q, R, xf, uf = make_good_inits(n_states, n_controls)
     problem = LinearQuadraticProblem(
         A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1., xf=xf, uf=uf,
@@ -254,6 +258,9 @@ def test_cost_functions(n_states, n_controls, n_samples):
 @pytest.mark.parametrize("n_controls", [1,2])
 @pytest.mark.parametrize("n_samples", [1,10])
 def test_dynamics(n_states, n_controls, n_samples):
+    """Test that dynamic inputs and outputs have the correct shape and that the
+    Jacobians return the expected matrices (except when the control is
+    saturated, in which case the corresponding parts should be zero)."""
     A, B, Q, R, xf, uf = make_good_inits(n_states, n_controls)
     problem = LinearQuadraticProblem(
         A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1., xf=xf, uf=uf,
@@ -305,6 +312,8 @@ def test_dynamics(n_states, n_controls, n_samples):
 @pytest.mark.parametrize("n_controls", [1,2])
 @pytest.mark.parametrize("n_samples", [1,10])
 def test_optimal_control(n_states, n_controls, n_samples):
+    """Test that the optimal control as a function of state and costate matches
+    LQR when appropriate."""
     A, B, Q, R, xf, uf = make_good_inits(n_states, n_controls)
     problem = LinearQuadraticProblem(
         A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1., xf=xf, uf=uf,

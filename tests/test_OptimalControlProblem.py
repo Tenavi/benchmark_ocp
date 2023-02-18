@@ -20,6 +20,8 @@ def compare_finite_difference(x, jac, fun, method="3-point"):
 
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 def test_init(ocp_name):
+    """Basic check that each OCP can be initialized and allows parameters to be
+    updated as expected."""
     problem = ocp_dict[ocp_name]["ocp"]()
 
     # Check that basic properties have been implemented
@@ -47,6 +49,7 @@ def test_init(ocp_name):
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 @pytest.mark.parametrize("n_samples", range(1,3))
 def test_sample_initial_conditions(ocp_name, n_samples):
+    """Test that we can sample initial conditions from each OCP."""
     problem = ocp_dict[ocp_name]["ocp"]()
 
     with pytest.raises(Exception):
@@ -66,6 +69,9 @@ def test_sample_initial_conditions(ocp_name, n_samples):
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 @pytest.mark.parametrize("n_samples", range(1,3))
 def test_cost_functions(ocp_name, n_samples):
+    """Test that cost function inputs and outputs have the correct shape and
+    that gradients and Hessian of the cost function match finite difference
+    approximations."""
     problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and controls
@@ -135,6 +141,8 @@ def test_cost_functions(ocp_name, n_samples):
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 @pytest.mark.parametrize("n_samples", range(1,3))
 def test_dynamics(ocp_name, n_samples):
+    """Test that dynamics inputs and outputs have the correct shape and that
+    Jacobians match finite difference approximations."""
     problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and controls
@@ -171,6 +179,8 @@ def test_dynamics(ocp_name, n_samples):
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 @pytest.mark.parametrize("n_samples", range(1,3))
 def test_optimal_control(ocp_name, n_samples):
+    """Test that the optimal control as a function of state and costate returns
+    the correct shape and Jacobians match finite difference approximations."""
     problem = ocp_dict[ocp_name]["ocp"]()
 
     # Get some random states and costates
