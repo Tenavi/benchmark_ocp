@@ -522,20 +522,21 @@ class MakeOCP(TemplateOCP):
         jac[0, idx] = -2. * X.flatten()[idx]
         return jac
 
-    def make_integration_events(self):
+    @property
+    def integration_events(self):
         '''
-        Construct a (list of) callables that are tracked during integration for
-        times at which they cross zero. For the UAV problem, checks if altitude
-        is outside some large bounds and stops integration early to save time.
+        Get a callable that checks if altitude `pd` is outside the bound
+        specified by `self.parameters.altitude_ceiling` and stops integration
+        early to save time.
 
         Returns
         -------
         altitude_event : callable
-            Functions that check if the altitude crosses a large positive or
-            negative threshold.
+            Functions returning `abs(pd - self.parameters.altitude_ceiling)`,
+            with `altitude_event.terminal = True`.
         '''
-        def altitude_event(t, X):
+        def altitude_event(t, x):
             #print(t, X[STATES_IDX['pd']].flatten())
-            return np.abs(X[STATES_IDX['pd']].flatten()) - self.h_abs_ceil
+            return np.abs(x[STATES_IDX['pd']].flatten()) - self.h_abs_ceil
         altitude_event.terminal = True
         return altitude_event

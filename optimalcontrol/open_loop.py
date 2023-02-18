@@ -3,7 +3,13 @@ from copy import deepcopy
 import warnings
 from scipy.integrate import solve_bvp
 
-import pylgr
+try:
+    import pylgr
+except:
+    warnings.warn(
+        "Could not import `pylgr` library. `DirectSolver` is not available.",
+        ImportWarning
+    )
 
 class OpenLoopSolver:
     def __init__(self, OCP, **kwargs):
