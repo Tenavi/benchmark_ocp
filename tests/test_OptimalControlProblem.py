@@ -3,20 +3,11 @@ import pytest
 import numpy as np
 
 from optimalcontrol.parameters import ProblemParameters
-from optimalcontrol.utilities import approx_derivative
 
-ocp_dict = {}
-
-from example_problems.van_der_pol import van_der_pol
-ocp_dict["van_der_pol"] = {
-    "ocp": van_der_pol.VanDerPol, "config": van_der_pol.config
-}
+from ._problems import ocp_dict
+from ._utilities import compare_finite_difference
 
 rng = np.random.default_rng()
-
-def compare_finite_difference(x, jac, fun, method="3-point"):
-    expected_jac = approx_derivative(fun, x, method=method)
-    np.testing.assert_allclose(jac, expected_jac)
 
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())
 def test_init(ocp_name):

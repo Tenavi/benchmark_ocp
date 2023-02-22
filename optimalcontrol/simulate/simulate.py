@@ -3,7 +3,7 @@ import numpy as np
 from .ivp import solve_ivp
 
 def integrate_closed_loop(
-        dynamics, jacobian, controller, tspan, x0, t_eval=None, events=None,
+        problem, controller, tspan, x0, t_eval=None,
         method="RK45", atol=1e-06, rtol=1e-03
     ):
     """
@@ -12,13 +12,11 @@ def integrate_closed_loop(
 
     Parameters
     ----------
-    dynamics
-    jacobian
+    problem
     controller
     tspan
     x0
     t_eval
-    events
     method
     atol
     rtol
@@ -29,18 +27,14 @@ def integrate_closed_loop(
     x
     status
     """
-    def fun_wrapper(t, x):
-        u = controller(x)
-        return dynamics(x, u)
+    def fun(t, x):
+        return problem.dynamics(x, controller(x))
 
-    if callable(jacobian):
-        def jac_wrapper(t, x):
-            return jacobian(x, controller)
-    else:
-        jac_wrapper = jacobian
+    def jac(t, x):
+        return problem.jacobian(x, controller)
 
     ode_sol = solve_ivp(
-        fun_wrapper, tspan, x0, jac=jac_wrapper, events=events,
+        fun, tspan, x0, jac=jac, events=problem.integration_events,
         t_eval=t_eval, vectorized=True, method=method, rtol=rtol, atol=atol
     )
 
