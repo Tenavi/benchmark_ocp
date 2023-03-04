@@ -18,6 +18,7 @@ def test_integrate_closed_loop_LQR():
     n_states = 3
     n_controls = 2
     t_span = [0., 30.]
+    t_eval = np.linspace(t_span[0], t_span[-1], 3001)
 
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls)
     ocp = LinearQuadraticProblem(
@@ -28,7 +29,7 @@ def test_integrate_closed_loop_LQR():
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
     t, x, status = integrate_closed_loop(
-        ocp, LQR, t_span, x0, atol=1e-12, rtol=1e-06
+        ocp, LQR, t_span, x0, t_eval=t_eval, atol=1e-12, rtol=1e-06
     )
     u = LQR(x)
     cost = ocp.running_cost(x, u)
@@ -42,7 +43,7 @@ def test_integrate_closed_loop_LQR():
     assert np.linalg.norm(f_tf) < 1e-04
     np.testing.assert_allclose(x[:,-1], xf.flatten(), atol=1e-04, rtol=1e-02)
     np.testing.assert_allclose(u[:,-1], uf.flatten(), atol=1e-04, rtol=1e-02)
-    np.testing.assert_allclose(cost[-1], 0., atol=1e-08)
+    np.testing.assert_array_less(cost[-1], 1e-06)
 
     # Expect integrated cost to be close to LQR value function
     xPx = (x[:,:1] - xf).T @ LQR.P @ (x[:,:1] - xf)

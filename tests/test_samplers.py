@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.sampling import StateSampler, UniformSampler
+from optimalcontrol.sampling import UniformSampler
 
 rng = np.random.default_rng()
 
@@ -79,8 +79,8 @@ def test_UniformSampler_sample(norm, distance):
 
     sampler = UniformSampler(lb, ub, xf, norm=norm, seed=seed)
 
-    with pytest.raises(Exception):
-        problem.sample_initial_conditions(n_samples=0)
+    with pytest.raises(ValueError):
+       sampler(n_samples=0)
 
     for n_samples in range(1,4):
         sampler.update(seed=seed)

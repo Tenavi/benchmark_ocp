@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.optimize import _numdiff
 
-# ------------------------------------------------------------------------------
 
 def saturate(u, min=None, max=None):
     """
@@ -104,7 +103,9 @@ def check_int_input(n, argname, min=None):
         raise TypeError("%s must be an int" % argname)
 
     if min is not None and n < min:
-        raise ValueError("%s must be greater than or equal to %d" % (argname, min))
+        raise ValueError(
+            "%s must be greater than or equal to %d" % (argname, min)
+        )
 
     return n
 
