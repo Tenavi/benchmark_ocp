@@ -3,7 +3,7 @@ import numpy as np
 from .ivp import solve_ivp
 
 def integrate_closed_loop(
-        problem, controller, t_span, x0, t_eval=None,
+        ocp, controller, t_span, x0, t_eval=None,
         method="RK45", atol=1e-06, rtol=1e-03
     ):
     """
@@ -12,7 +12,7 @@ def integrate_closed_loop(
 
     Parameters
     ----------
-    problem : object
+    ocp : object
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobian`, and `integration_events` methods.
     controller : object
@@ -21,7 +21,7 @@ def integrate_closed_loop(
     t_span : 2-tuple of floats
         Interval of integration `(t0, tf)`. The solver starts with `t=t0` and
         integrates until it reaches `t=tf`.
-    x0 : array_like, shape (problem.n_states,)
+    x0 : array_like, shape (ocp.n_states,)
         Initial state.
     t_eval : array_like, optional
         Times at which to store the computed solution, must be sorted and lie
@@ -37,7 +37,7 @@ def integrate_closed_loop(
     -------
     t : ndarray, shape (n_points,)
         Time points.
-    x : ndarray, shape (problem.n_states, n_points)
+    x : ndarray, shape (ocp.n_states, n_points)
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
@@ -46,20 +46,20 @@ def integrate_closed_loop(
             *  1: A termination event occurred.
     """
     def fun(t, x):
-        return problem.dynamics(x, controller(x))
+        return ocp.dynamics(x, controller(x))
 
     def jac(t, x):
-        return problem.jacobian(x, controller)
+        return ocp.jacobian(x, controller)
 
     ode_sol = solve_ivp(
-        fun, t_span, x0, jac=jac, events=problem.integration_events,
+        fun, t_span, x0, jac=jac, events=ocp.integration_events,
         t_eval=t_eval, vectorized=True, method=method, rtol=rtol, atol=atol
     )
 
     return ode_sol.t, ode_sol.y, ode_sol.status
 
 def integrate_to_converge(
-        problem, controller, x0, t_int, t_max, ftol=1e-06,
+        ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
         method="RK45", atol=1e-06, rtol=1e-03
     ):
     """
@@ -70,25 +70,29 @@ def integrate_to_converge(
 
     Parameters
     ----------
-    problem : object
+    ocp : object
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobian`, and `integration_events` methods.
     controller : object
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
-    x0 : array_like, shape (problem.n_states,)
+    x0 : array_like, shape (ocp.n_states,)
         Initial state.
     t_int : float
         Time interval to step integration over. This function internally calls
-        `integrate_closed_loop` with `t_span=(t[-1], t[-1]+t_int)`.
+        `integrate_closed_loop` with `t_span=(t[-1], t[-1] + t_int)`.
     t_max : float
         Maximum time allowed for integration.
-    ftol : float or array_like, default=1e-06
-        Tolerance for detecting system steady states. Integration continues
-        until all `abs(f(x(t),u(t))) <= ftol`, where `f()` denotes the system
-        dynamics. If `ftol` is an array_like, then it must have shape
-        `(problem.n_states,)` and specifies a different convergence tolerance
-        for each component of the state.
+    norm : {1, 2, np.inf}, default=2
+            Integration continues until `||f(x,u)|| <= ftol`, where `f()`
+            denotes the system dynamics and `norm` specifies the norm used for
+            this calculation (l1, l2, or infinity).
+    ftol : float or array_like, default=1e-03
+        Tolerance for detecting system steady states. If `ftol` is an
+        `array_like`, then it must have shape `(ocp.n_states,)` and
+        specifies a different convergence tolerance for each component of the
+        state. This overrides and ignores `norm` so that the convergence
+        criteria becomes `all(f(x,u) <= ftol)`.
     method : string or `OdeSolver`, default="RK45"
         See `simulate.ivp.solve_ivp`.
     atol : float or array_like, default=1e-06
@@ -100,7 +104,7 @@ def integrate_to_converge(
     -------
     t : ndarray, shape (n_points,)
         Time points.
-    x : ndarray, shape (problem.n_states, n_points)
+    x : ndarray, shape (ocp.n_states, n_points)
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
@@ -109,10 +113,12 @@ def integrate_to_converge(
             *  1: A termination event occurred.
             *  2: `t` exceeded `t_max`.
     """
-
-    if np.size(ftol) not in (1,problem.n_states) or np.any(ftol <= 0.):
-        raise ValueError("ftol must be a positive float or array_like")
     ftol = np.reshape(ftol, -1)
+    if np.size(ftol) not in (1,ocp.n_states) or np.any(ftol <= 0.):
+        raise ValueError("ftol must be a positive float or array_like")
+
+    if norm not in (1, 2, np.inf):
+        raise ValueError("norm must be one of {1, 2, np.inf}")
 
     if np.size(t_int) > 1 or t_int <= 0.:
         raise ValueError("t_int must be a positive float")
@@ -130,7 +136,7 @@ def integrate_to_converge(
     while True:
         # Simulate the closed-loop system
         t_new, x_new, status = integrate_closed_loop(
-            problem, controller, (t[-1], t[-1] + t_int), x[:,-1],
+            ocp, controller, (t[-1], t[-1] + t_int), x[:,-1],
             method=method, atol=atol, rtol=rtol
         )
 
@@ -144,8 +150,11 @@ def integrate_to_converge(
             break
 
         # System reaches steady state (status already is 0)
-        f = problem.dynamics(x[:,-1], controller(x[:,-1]))
-        if np.all(np.abs(f) <= ftol):
+        f = ocp.dynamics(x[:,-1], controller(x[:,-1]))
+        if ftol.shape[0] == ocp.n_states:
+            if np.all(np.abs(f) <= ftol):
+                break
+        elif np.linalg.norm(f, ord=norm) < ftol:
             break
 
         # Time exceeds maximum time horizon

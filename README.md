@@ -21,3 +21,17 @@ To install the `optimalcontrol` package (in developer mode) run `pip install -e 
     pylgr
 
 The `pylgr` package can be downloaded at [https://github.com/Tenavi/PyLGR](https://github.com/Tenavi/PyLGR).
+
+## To-do list
+
+  * Open loop BVP solver
+  * Time-dependent problems
+  * `run` folder
+  * other examples
+  * update and publish `pylgr` package
+  * Open loop direct solver
+  * Open loop solvers for time-dependent problems
+  * Constraints and integration events
+  * RK4 batch integrator
+  * Zero-order hold control wrapper
+  * LQR integrator
