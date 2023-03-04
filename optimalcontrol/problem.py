@@ -652,13 +652,10 @@ class LinearQuadraticProblem(OptimalControlProblem):
         Random seed to use for sampling initial conditions.
     """
     _required_parameters = {
-        "A": None, "B": None, "Q": None, "R": None,
-        "x0_lb": None, "x0_ub": None,
+        "A": None, "B": None, "Q": None, "R": None, "x0_lb": None, "x0_ub": None
     }
     _optional_parameters = {
-        "xf": 0., "uf": 0.,
-        "u_lb": None, "u_ub": None,
-        "x0_sample_seed": None
+        "xf": 0., "uf": 0., "u_lb": None, "u_ub": None, "x0_sample_seed": None
     }
 
     def _saturate(self, u):
