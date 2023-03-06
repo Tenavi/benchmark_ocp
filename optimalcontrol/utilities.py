@@ -286,6 +286,38 @@ def _dense_difference(fun, x0, f0, h, method):
 
 # ------------------------------------------------------------------------------
 
+def closed_loop_jacobian(x, open_loop_jac, controller):
+    """
+    Evaluate the Jacobian of closed-loop dynamics,
+    `Df/Dx = df/dx + df/du @ du/dx`, where `f = f(x,u(x))` is a vector field
+    with open-loop partial derivatives `df/dx` and `df/du`.
+
+    Parameters
+    ----------
+    x : array_like, shape (n_states,) or (n_states, n_points)
+        State(s) arranged by (dimension, time).
+    open_loop_jac : callable
+        Function defining the open-loop partial derivatives `df/dx` and `df/du`.
+        See `OptimalControlProblem.Jacobians`.
+    controller : controls.Controller object
+        `Controller` instance implementing `__call__` and `jacobian`.
+
+    Returns
+    -------
+    DfDx : array_like, shape (n_states, n_states) or
+        (n_states, n_states, n_points)
+        Closed-loop Jacobian(s), with `DfDx[i,j] = Df[i]/Dx[j]`.
+    """
+    u = controller(x)
+    dfdx, dfdu = open_loop_jac(x, u)
+    dudx = controller.jacobian(x, u0=u)
+
+    dfdx += np.einsum("ij...,jk...->ik...", dfdu, dudx)
+
+    return dfdx
+
+# ------------------------------------------------------------------------------
+
 def find_fixed_point(OCP, controller, tol, X0=None, verbose=True):
     """
     Use root-finding to find a fixed point (equilibrium) of the closed-loop

@@ -9,7 +9,8 @@ from optimalcontrol.controls import LinearQuadraticRegulator
 
 from ._utilities import make_LQ_params
 
-def test_integrate_closed_loop_LQR():
+@pytest.mark.parametrize("method", ["RK45", "BDF"])
+def test_integrate_closed_loop_LQR(method):
     """
     Basic test of an LQR-controlled linear system integrated over a fixed time
     horizon. Since the closed-loop system should be stable, checks that the
@@ -29,7 +30,8 @@ def test_integrate_closed_loop_LQR():
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
     t, x, status = integrate_closed_loop(
-        ocp, LQR, t_span, x0, t_eval=t_eval, atol=1e-12, rtol=1e-06
+        ocp, LQR, t_span, x0, t_eval=t_eval,
+        method=method, atol=1e-12, rtol=1e-06
     )
     u = LQR(x)
     cost = ocp.running_cost(x, u)
@@ -51,7 +53,8 @@ def test_integrate_closed_loop_LQR():
     np.testing.assert_allclose(xPx, J, atol=1e-02, rtol=1e-02)
 
 @pytest.mark.parametrize("norm", [1, 2, np.inf])
-def test_integrate_to_converge_LQR(norm):
+@pytest.mark.parametrize("method", ["RK45", "BDF"])
+def test_integrate_to_converge_LQR(norm, method):
     """
     Basic test of an LQR-controlled linear system integrated over an infinite
     (i.e. very long) time horizon. Since the closed-loop system should be
@@ -71,7 +74,9 @@ def test_integrate_to_converge_LQR(norm):
     # Check that integration over a very short time horizon doesn't converge
     t_int = .5
     t_max = .75
-    t, x, status = integrate_to_converge(ocp, LQR, x0, t_int, t_max, norm=norm)
+    t, x, status = integrate_to_converge(
+        ocp, LQR, x0, t_int, t_max, norm=norm, method=method
+    )
 
     assert t[-1] >= t_max
     assert status == 2
@@ -82,7 +87,7 @@ def test_integrate_to_converge_LQR(norm):
     ftol = 1e-03
     t, x, status = integrate_to_converge(
         ocp, LQR, x0, t_int, t_max, norm=norm, ftol=ftol,
-        atol=ftol*1e-06, rtol=ftol*1e-03
+        method=method, atol=ftol*1e-06, rtol=ftol*1e-03
     )
 
     assert t[-1] < t_max
@@ -95,7 +100,8 @@ def test_integrate_to_converge_LQR(norm):
     np.testing.assert_allclose(t, t[idx])
     np.testing.assert_allclose(x, x[:, idx])
 
-def test_integrate_to_converge_ftol_array():
+@pytest.mark.parametrize("method", ["RK45", "BDF"])
+def test_integrate_to_converge_ftol_array(method):
     """
     Test that `integrate_to_converge` with a vector `ftol` converges differently
     for each state. Consider a closed loop system
@@ -127,7 +133,10 @@ def test_integrate_to_converge_ftol_array():
 
     t_int = 0.1
     t_max = 30.
-    t, x, status = integrate_to_converge(ocp, LQR, x0, t_int, t_max, ftol=ftol)
+    t, x, status = integrate_to_converge(
+        ocp, LQR, x0, t_int, t_max, ftol=ftol,
+        method=method, atol=1e-12, rtol=1e-06
+    )
 
     assert status == 0
     np.testing.assert_allclose(t[-1], 10. * np.log(10.), atol=t_int)

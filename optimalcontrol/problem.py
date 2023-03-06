@@ -6,6 +6,7 @@ from .parameters import ProblemParameters
 from .sampling import UniformSampler
 from . import utilities as utils
 
+
 class OptimalControlProblem:
     """
     Template super class defining an optimal control problem (OCP) including
@@ -386,31 +387,6 @@ class OptimalControlProblem:
 
         return dfdx, dfdu
 
-    def closed_loop_jacobian(self, x, controller):
-        """
-        Evaluate the Jacobian of the closed-loop dynamics at single or multiple
-        time instances.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        controller : controls.Controller object
-            `Controller` instance implementing `__call__` and `jacobian`.
-
-        Returns
-        -------
-        dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
-            Closed-loop Jacobian df/dx + df/du * du/dx.
-        """
-        u = controller(x)
-        dfdx, dfdu = self.jacobians(x, u)
-        dudx = controller.jacobian(x, u0=u)
-
-        dfdx += np.einsum("ij...,jk...->ik...", dfdu, dudx)
-
-        return dfdx
-
     def optimal_control(self, x, p):
         """
         Evaluate the optimal control as a function of state and costate.
@@ -612,6 +588,7 @@ class OptimalControlProblem:
             integration stops.
         """
         return
+
 
 class LinearQuadraticProblem(OptimalControlProblem):
     """
