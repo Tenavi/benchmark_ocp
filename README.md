@@ -13,7 +13,7 @@ To install the `optimalcontrol` package (in developer mode) run `pip install -e 
 from the command line. This package has been developed and tested with the
 following software dependencies:
 
-    python>=3.6
+    python>=3.7
     numpy>=1.21.6
     scipy>=1.7.3
     pandas>=1.3.5
