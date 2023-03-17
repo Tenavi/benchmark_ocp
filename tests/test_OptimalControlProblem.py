@@ -7,6 +7,7 @@ from optimalcontrol.parameters import ProblemParameters
 from ._problems import ocp_dict
 from ._utilities import compare_finite_difference
 
+
 rng = np.random.default_rng()
 
 @pytest.mark.parametrize("ocp_name", ocp_dict.keys())

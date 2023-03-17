@@ -4,6 +4,7 @@ import numpy as np
 
 from optimalcontrol.sampling import UniformSampler
 
+
 rng = np.random.default_rng()
 
 @pytest.mark.parametrize('lb_shape', [1,None])
@@ -26,14 +27,14 @@ def test_UniformSampler_init(lb_shape, n_states):
         assert sampler.__dict__[key].shape == (n_states,1)
         np.testing.assert_allclose(sampler.__dict__[key].flatten(), var)
 
-    sampler = UniformSampler(lb.reshape(-1,1), list(ub), xf, norm=np.array(1))
-    sampler = UniformSampler(lb, ub.reshape(-1,1), list(xf), norm=np.array([2]))
-    sampler = UniformSampler(list(lb), ub, xf.reshape(-1,1), norm=np.array([[1]]))
+    _ = UniformSampler(lb.reshape(-1,1), list(ub), xf, norm=np.array(1))
+    _ = UniformSampler(lb, ub.reshape(-1,1), list(xf), norm=np.array([2]))
+    _ = UniformSampler(list(lb), ub, xf.reshape(-1,1), norm=np.array([[1]]))
     norm = rng.normal(size=(n_states,n_states))
     norm = norm.T @ norm
-    sampler = UniformSampler(lb, ub, xf, norm=norm)
+    _ = UniformSampler(lb, ub, xf, norm=norm)
     if n_states == 1:
-        sampler = UniformSampler(lb, ub, xf, norm=float(norm))
+        _ = UniformSampler(lb, ub, xf, norm=float(norm))
 
 def test_UniformSampler_bad_init():
     n_states = 4
@@ -42,27 +43,27 @@ def test_UniformSampler_bad_init():
     xf = rng.uniform(low=-1., high=1., size=n_states)
 
     with pytest.raises(ValueError):
-        sampler = UniformSampler(lb, ub, xf[:-1])
+        _ = UniformSampler(lb, ub, xf[:-1])
 
     with pytest.raises(ValueError):
-        sampler = UniformSampler(lb, ub[:-1], xf)
+        _ = UniformSampler(lb, ub[:-1], xf)
 
     with pytest.raises(ValueError):
-        sampler = UniformSampler(lb[:-1], ub, xf)
+        _ = UniformSampler(lb[:-1], ub, xf)
 
     with pytest.raises(ValueError):
         _lb = np.copy(lb)
         _lb[0] = ub[0] + 1.
-        sampler = UniformSampler(_lb, ub, 0.*xf)
+        _ = UniformSampler(_lb, ub, 0.*xf)
 
     with pytest.raises(ValueError):
-        sampler = UniformSampler(lb, ub, xf + ub.max())
+        _ = UniformSampler(lb, ub, xf + ub.max())
 
     bad_mat_1 = rng.normal(size=(n_states, n_states+1))
     bad_mat_2 = rng.normal(size=(n_states, n_states))
     for bad_norm in [0, 1.5, 'xyz', bad_mat_1, bad_mat_2]:
         with pytest.raises(ValueError):
-            sampler = UniformSampler(lb, ub, xf, norm=bad_norm)
+            _ = UniformSampler(lb, ub, xf, norm=bad_norm)
 
 
 @pytest.mark.parametrize('norm', [1,2,'matrix'])
@@ -80,7 +81,7 @@ def test_UniformSampler_sample(norm, distance):
     sampler = UniformSampler(lb, ub, xf, norm=norm, seed=seed)
 
     with pytest.raises(ValueError):
-       sampler(n_samples=0)
+        sampler(n_samples=0)
 
     for n_samples in range(1,4):
         sampler.update(seed=seed)

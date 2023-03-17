@@ -3,10 +3,9 @@ import numpy as np
 from ._ivp import solve_ivp
 from ..utilities import closed_loop_jacobian
 
-def integrate_closed_loop(
-        ocp, controller, t_span, x0, t_eval=None,
-        method="RK45", atol=1e-06, rtol=1e-03
-    ):
+
+def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
+                          method="RK45", atol=1e-06, rtol=1e-03):
     """
     Integrate continuous-time system dynamics with a given feedback controller
     over a fixed time horizon.
@@ -52,17 +51,15 @@ def integrate_closed_loop(
     def jac(t, x):
         return closed_loop_jacobian(x, ocp.jacobians, controller)
 
-    ode_sol = solve_ivp(
-        fun, t_span, x0, jac=jac, events=ocp.integration_events,
-        t_eval=t_eval, vectorized=True, method=method, rtol=rtol, atol=atol
-    )
+    ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=ocp.integration_events,
+                        t_eval=t_eval, vectorized=True, method=method,
+                        rtol=rtol, atol=atol)
 
     return ode_sol.t, ode_sol.y, ode_sol.status
 
-def integrate_to_converge(
-        ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
-        method="RK45", atol=1e-06, rtol=1e-03
-    ):
+
+def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
+                          method="RK45", atol=1e-06, rtol=1e-03):
     """
     Integrate continuous-time system dynamics with a given feedback controller
     until a steady state is reached or a specified time horizon is exceeded.
@@ -109,6 +106,7 @@ def integrate_to_converge(
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
+
             * -1: Integration step failed.
             *  0: The system reached a steady state as determined by `ftol`.
             *  1: A termination event occurred.
@@ -137,21 +135,21 @@ def integrate_to_converge(
     while True:
         # Simulate the closed-loop system
         t_new, x_new, status = integrate_closed_loop(
-            ocp, controller, (t[-1], t[-1] + t_int), x[:,-1],
+            ocp, controller, (t[-1], t[-1] + t_int), x[:, -1],
             method=method, atol=atol, rtol=rtol
         )
 
         # Add new points to existing saved points. The first index of new points
         # duplicates the last index of existing points.
         t = np.concatenate((t, t_new[1:]))
-        x = np.hstack((x, x_new[:,1:]))
+        x = np.hstack((x, x_new[:, 1:]))
 
         # Integration fails
         if status != 0:
             break
 
         # System reaches steady state (status already is 0)
-        f = ocp.dynamics(x[:,-1], controller(x[:,-1]))
+        f = ocp.dynamics(x[:, -1], controller(x[:, -1]))
         if ftol.shape[0] == ocp.n_states:
             if np.all(np.abs(f) <= ftol):
                 break

@@ -8,6 +8,7 @@ from optimalcontrol.controls import LinearQuadraticRegulator
 
 from ._utilities import make_LQ_params, compare_finite_difference
 
+
 rng = np.random.default_rng()
 
 def make_nondefinite_matrices(n, strict=True):
