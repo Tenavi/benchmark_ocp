@@ -1,7 +1,6 @@
 import pytest
 
 import numpy as np
-from matplotlib import pyplot as plt
 
 from optimalcontrol.simulate import integrate_closed_loop, integrate_to_converge
 from optimalcontrol.problem import LinearQuadraticProblem

@@ -299,7 +299,7 @@ def closed_loop_jacobian(x, open_loop_jac, controller):
     open_loop_jac : callable
         Function defining the open-loop partial derivatives `df/dx` and `df/du`.
         See `OptimalControlProblem.Jacobians`.
-    controller : controls.Controller object
+    controller : Controller
         `Controller` instance implementing `__call__` and `jacobian`.
 
     Returns

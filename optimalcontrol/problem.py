@@ -193,7 +193,8 @@ class OptimalControlProblem:
         """
         raise NotImplementedError
 
-    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
+    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True,
+                               L0=None):
         """
         Evaluate the gradients of the running cost, dL/dx (x,u) and dL/du (x,u),
         at one or multiple state-control pairs. Default implementation
@@ -201,81 +202,86 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : (n_states,) or (n_states, n_points) array
+        x : array_like, shape (n_states,) or (n_states, n_points)
             State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
+        u : array_like, shape (n_controls,) or (n_controls, n_points)
             Control(s) arranged by (dimension, time).
         return_dLdx : bool, default=True
             If True, compute the gradient with respect to states, dL/dx.
         return_dLdu : bool, default=True
             If True, compute the gradient with respect to controls, dL/du.
+        L0 : array_like, shape (1,) or (n_points,), optional
+            Running cost evaluated at current state and control pair.
 
         Returns
         -------
-        dLdx : (n_states,) or (n_states, n_points) array
+        dLdx : ndarray, shape (n_states,) or (n_states, n_points)
             State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
-        dLdu : (n_controls,) or (n_controls, n_points) array
+        dLdu : ndarray, shape (n_controls,) or (n_controls, n_points)
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         """
-        L = self.running_cost(x, u)
+        if L0 is None:
+            L0 = self.running_cost(x, u)
 
         if return_dLdx:
-            dLdx = utils.approx_derivative(
-                lambda x: self.running_cost(x, u), x,
-                f0=L, method=self._fin_diff_method
-            )
+            dLdx = utils.approx_derivative(lambda x: self.running_cost(x, u), x,
+                f0=L0, method=self._fin_diff_method)
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
-            dLdu = utils.approx_derivative(
-                lambda u: self.running_cost(x, u), u,
-                f0=L, method=self._fin_diff_method
-            )
+            dLdu = utils.approx_derivative(lambda u: self.running_cost(x, u), u,
+                f0=L0, method=self._fin_diff_method)
             if not return_dLdx:
                 return dLdu
 
         return dLdx, dLdu
 
-    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
+    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True,
+                              L0=None):
         """
-        Evaluate the Hessians of the running cost, d^2L/dx^2 (x,u) and
-        d^2L/du^2 (x,u), at one or multiple state-control pairs. Default
+        Evaluate the Hessians of the running cost, $d^2L/dx^2 (x,u)$ and
+        $d^2L/du^2 (x,u)$, at one or multiple state-control pairs. Default
         implementation approximates this with finite differences.
 
         Parameters
         ----------
-        x : (n_states,) or (n_states, n_points) array
+        x : array_like, shape (n_states,) or (n_states, n_points)
             State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
+        u : array_like, shape (n_controls,) or (n_controls, n_points)
             Control(s) arranged by (dimension, time).
         return_dLdx : bool, default=True
             If True, compute the Hessian with respect to states, dL/dx.
         return_dLdu : bool, default=True
             If True,compute the Hessian with respect to controls, dL/du.
+        L0 : array_like, shape (1,) or (n_points,), optional
+            Running cost evaluated at current state and control pair.
 
         Returns
         -------
-        dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
+        dLdx : ndarray, shape (n_states, n_states) or (n_states, n_states, n_points)
             State Hessians dL^2/dx^2 (x,u) evaluated at pair(s) (x,u).
-        dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
+        dLdu : ndarray, shape (n_controls,) or (n_controls, n_controls, n_points)
             Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
         """
-        dLdx, dLdu = self.running_cost_gradients(x, u)
+        if L0 is None:
+            L0 = self.running_cost(x, u)
+
+        dLdx, dLdu = self.running_cost_gradients(x, u, L0=L0)
 
         if return_dLdx:
             dLdx = utils.approx_derivative(
-                lambda x: self.running_cost_gradients(x, u, return_dLdu=False),
-                x, f0=dLdx, method=self._fin_diff_method
-            )
+                lambda x: self.running_cost_gradients(x, u, return_dLdu=False,
+                                                      L0=L0),
+                x, f0=dLdx, method=self._fin_diff_method)
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
             dLdu = utils.approx_derivative(
-                lambda u: self.running_cost_gradients(x, u, return_dLdx=False),
-                u, f0=dLdu, method=self._fin_diff_method
-            )
+                lambda u: self.running_cost_gradients(x, u, return_dLdx=False,
+                                                      L0=L0),
+                u, f0=dLdu, method=self._fin_diff_method)
             if not return_dLdx:
                 return dLdu
 
@@ -439,19 +445,20 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        t : (n_points,) array
+        t : ndarray, shape (n_points,)
             Time collocation points for each state.
-        xp : (2*n_states, n_points) array
-            Current state and costate.
+        xp : ndarray, shape (2*n_states + 1, n_points)
+            Current state, costate, and value function.
 
         Returns
         -------
-        dxpdt : (2*n_states, n_points) array
-            Concatenation of dynamics dx/dt = f(x,u^*) and costate dynamics,
-            dp/dt = -dH/dx(x,u^*,p), where u^* is the optimal control.
+        dxpdt : ndarray (2*n_states + 1, n_points)
+            Concatenation of dynamics $dx/dt = f(x,u^*)$, costate dynamics,
+            $dp/dt = -dH/dx(x,u^*,p)$, and running cost $L(x,u^*)$, where
+            $u^* = u^*(x,p)$ is the optimal control.
         """
         x = xp[:self.n_states]
-        p = xp[self.n_states:]
+        p = xp[self.n_states:-1]
         u = self.optimal_control(x, p)
 
         # State dynamics
@@ -463,7 +470,8 @@ class OptimalControlProblem:
 
         dfdx += np.einsum("ijk,jhk->ihk", dfdu, dudx)
 
-        dLdx, dLdu = self.running_cost_gradients(x, u)
+        L = self.running_cost(x, u)
+        dLdx, dLdu = self.running_cost_gradients(x, u, L0=L)
 
         if dLdx.ndim < 2:
             dLdx = dLdx[:,None]
@@ -475,32 +483,7 @@ class OptimalControlProblem:
         # Costate dynamics (gradient of optimized Hamiltonian)
         dHdx = dLdx + np.einsum("ijk,ik->jk", dfdx, p)
 
-        return np.vstack((dxdt, -dHdx))
-
-    def make_pontryagin_boundary(self, x0):
-        """
-        Generates a function to evaluate the boundary conditions for a given
-        initial condition. Terminal cost is zero so final condition on costate
-        is zero.
-
-        Parameters
-        ----------
-        x0 : (n_states, 1) array
-            Initial condition.
-
-        Returns
-        -------
-        bc : callable
-            Function of xp_0 (augmented states at initial time) and xp_1
-            (augmented states at final time), returning a function which
-            evaluates to zero if the boundary conditions are satisfied.
-        """
-        x0 = x0.flatten()
-        def bc(xp_0, xp_1):
-            return np.concatenate((
-                xp_0[:self.n_states] - x0, xp_1[self.n_states:]
-            ))
-        return bc
+        return np.vstack((dxdt, -dHdx, -L))
 
     def hamiltonian(self, x, u, p):
         """
@@ -534,8 +517,8 @@ class OptimalControlProblem:
         satisfied.
 
         TODO: Replace with a @property returning a list of
-        scipy.optimize.Constraint objects, or something else compatible with
-        constrained optimization
+            scipy.optimize.Constraint objects, or something else compatible with
+            constrained optimization
 
         Parameters
         ----------
@@ -827,7 +810,8 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         return L
 
-    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
+    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True,
+                               L0=None):
         x, u, squeeze = self._center_inputs(x, u)
 
         if return_dLdx:
@@ -846,24 +830,25 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         return dLdx, dLdu
 
-    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
+    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True,
+                              L0=None):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
             dLdx = 2. * self.Q
             if not squeeze:
-                dLdx = np.tile(dLdx[...,None], (1,1,x.shape[1]))
+                dLdx = np.tile(dLdx[..., None], (1, 1, x.shape[1]))
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
             dLdu = 2. * self.R
-            dLdu = np.tile(dLdu[...,None], (1,1,u.shape[1]))
+            dLdu = np.tile(dLdu[...,None], (1, 1, u.shape[1]))
 
             # Where the control is saturated, the gradient is constant so the
             # Hessian is zero
             zero_idx = utils.find_saturated(u, min=self.u_lb, max=self.u_ub)
-            dLdu[:,zero_idx] = 0.
+            dLdu[:, zero_idx] = 0.
 
             if squeeze:
                 dLdu = dLdu[...,0]

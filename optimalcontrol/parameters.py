@@ -15,8 +15,8 @@ class ProblemParameters:
             A function to execute whenever problem parameters are modified by
             `update`. The function must have the call signature
             `update_fun(obj, **params)` where `obj` refers to the
-            `ProblemParameters` object instance and `params` are parameters to
-            be modified, specified as keyword arguments.
+            `ProblemParameters` instance and `params` are parameters to be
+            modified, specified as keyword arguments.
         """
         if update_fun is not None:
             self.update_fun = update_fun
@@ -75,8 +75,8 @@ class ProblemParameters:
         Get or set a function to execute whenever problem parameters are
         modified by `update`. The function must have the call signature
         `update_fun(obj, **params)` where `obj` refers to the
-        `ProblemParameters` object instance and `params` are parameters to be
-        modified, specified as keyword arguments.
+        `ProblemParameters` instance and `params` are parameters to be modified,
+        specified as keyword arguments.
         """
         if not callable(self._update_fun):
             raise RuntimeError("update_fun has not been set")

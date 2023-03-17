@@ -1,6 +1,6 @@
 import numpy as np
 
-from .ivp import solve_ivp
+from ._ivp import solve_ivp
 from ..utilities import closed_loop_jacobian
 
 def integrate_closed_loop(
@@ -13,10 +13,10 @@ def integrate_closed_loop(
 
     Parameters
     ----------
-    ocp : object
+    ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
-    controller : object
+    controller : Controller
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
     t_span : 2-tuple of floats
@@ -71,10 +71,10 @@ def integrate_to_converge(
 
     Parameters
     ----------
-    ocp : object
+    ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
-    controller : object
+    controller : Controller
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
     x0 : array_like, shape (ocp.n_states,)
