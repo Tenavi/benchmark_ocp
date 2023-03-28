@@ -26,15 +26,21 @@ class DirectSolution(OpenLoopSolution):
         return x, u, p, v
 
 
-def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
+def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                      verbose=0):
     """
-    Compute the open-loop optimal solution for a single initial condition
-    given an initial guess.
+    Compute the open-loop optimal solution of a fixed time optimal control
+    problem for a single initial condition.
 
+    This function applies a "direct method", which is to transform the optimal
+    control problem into a constrained optimization problem with Legendre-Gauss-
+    Lobatto pseudospectral collocation. The resulting optimization problem is
+    solved using is solved using sequential least squares quadratic programming
+    (SLSQP).
 
     Parameters
     ----------
+
     ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
@@ -43,9 +49,15 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
         sorted from smallest to largest.
     x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
-        condition is assumed to be contained in `x[:,0]`.
+        condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
+    n_nodes : int, default=32
+        Number of nodes to use in the pseudospectral discretization.
+    tol : float, default=1e-05
+        Convergence tolerance for the SLSQP optimizer.
+    max_iter : int, default=500
+        Maximum number of SLSQP iterations.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
             * 0 (default) : work silently.
@@ -56,20 +68,26 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     -------
     sol : OpenLoopSolution
         Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:,0]`.
-    success : bool
-        `True` if the algorithm succeeded.
+        problem for the initial condition `x[:, 0]`. Solution should only be
+        trusted if `sol.status == 0`.
     """
     raise NotImplementedError('pylgr has not yet implemented finite horizon')
 
 
-def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
+def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                            n_add_nodes=16, max_nodes=64, tol_scale=1.,
                            t1_tol=1e-10, verbose=0):
     """
-    Compute the open-loop optimal solution for a single initial condition
-    given an initial guess.
+    Compute the open-loop optimal solution of a finite horizon approximation of
+    an infinite horizon optimal control problem for a single initial condition.
 
+    This function applies a "direct method", which is to transform the optimal
+    control problem into a constrained optimization problem with Legendre-Gauss-
+    Radau pseudospectral collocation. The resulting optimization problem is
+    solved using is solved using sequential least squares quadratic programming
+    (SLSQP). The number of collocation nodes is increased as necessary until the
+    running cost at final time `t[-1]` is smaller than the specified tolerance
+    `t1_tol`.
 
     Parameters
     ----------
@@ -81,9 +99,26 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
         sorted from smallest to largest.
     x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
-        condition is assumed to be contained in `x[:,0]`.
+        condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
+    n_nodes : int, default=32
+        Number of nodes to use in the pseudospectral discretization.
+    tol : float, default=1e-05
+        Convergence tolerance for the SLSQP optimizer.
+    max_iter : int, default=500
+        Maximum number of SLSQP iterations.
+    n_add_nodes : int, default=16
+        Number of nodes to add to `n_nodes` if the running cost does not
+        converge.
+    max_nodes : int, default=64
+        Maximum number of pseudospectral collocation nodes.
+    tol_scale : float, default=1
+        If the running cost does not converge and the solution is attempted
+        again, multiplies `tol` by this amount.
+    t1_tol : float, default=1e-10
+        Tolerance for the running cost when determining convergence of the
+        finite horizon approximation.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
             * 0 (default) : work silently.
@@ -94,9 +129,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     -------
     sol : OpenLoopSolution
         Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:,0]`.
-    success : bool
-        `True` if the algorithm succeeded.
+        problem for the initial condition `x[:, 0]`. Solution should only be
+        trusted if `sol.status == 0`.
     """
     t1_tol = float(t1_tol)
 

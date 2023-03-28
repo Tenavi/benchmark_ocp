@@ -45,7 +45,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
         sorted from smallest to largest.
     x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
-        condition is assumed to be contained in `x[:,0]`.
+        condition is assumed to be contained in `x[:, 0]`.
     p : (n_states, n_points) array
         Initial guess for the costate at times `t`.
     u : (n_controls, n_points) array, optional
@@ -66,7 +66,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     -------
     sol : OpenLoopSolution
         Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:,0]`. Solution should only be
+        problem for the initial condition `x[:, 0]`. Solution should only be
         trusted if `sol.status == 0`.
     """
     t = np.reshape(t, -1)
@@ -96,10 +96,10 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
 
 
 def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
-                           tol=1e-05, t1_tol=1e-10, t1_add=None, verbose=0):
+                           tol=1e-05, t1_add=None, t1_tol=1e-10, verbose=0):
     """
-    Compute the open-loop optimal solution of an infinite horizon optimal
-    control problem for a single initial condition.
+    Compute the open-loop optimal solution of a finite horizon approximation of
+    an infinite horizon optimal control problem for a single initial condition.
 
     This is accomplished by solving a series of finite horizon problems using
     `indirect.solve_finite_horizon`. The time horizons are increased in length
@@ -116,7 +116,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         sorted from smallest to largest.
     x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
-        condition is assumed to be contained in `x[:,0]`.
+        condition is assumed to be contained in `x[:, 0]`.
     p : (n_states, n_points) array
         Initial guess for the costate at times `t`.
     u : (n_controls, n_points) array, optional
@@ -127,13 +127,13 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         Maximum number of collocation points to use when solving the BVP.
     tol : float, default=1e-05
         Convergence tolerance for the BVP solver.
+    t1_add : float, optional
+        Amount to increase the final time of the solution if the running cost
+        does not converge on the current time horizon. If not specified, the
+        default is `t1_add = t[-1]`, where `t` is the original guess for time.
     t1_tol : float, default=1e-10
         Tolerance for the running cost when determining convergence of the
         finite horizon approximation.
-    t1_add : float, optional
-        Amount to increase the final time of the solution in case convergence is
-        not achieved on the current time horizon. If not specified, the default
-        is `t1_add = t[-1]`, where `t` is the original guess for time.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
             * 0 (default) : work silently.
@@ -144,7 +144,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     -------
     sol : OpenLoopSolution
         Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:,0]`. Solution should only be
+        problem for the initial condition `x[:, 0]`. Solution should only be
         trusted if `sol.status == 0`.
     """
     t1_tol = float(t1_tol)
