@@ -21,9 +21,9 @@ def test_integrate_closed_loop_LQR(method):
     t_span = [0., 60.]
     t_eval = np.linspace(t_span[0], t_span[-1], 3001)
 
-    A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls)
-    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf, x0_lb=-1.,
-                                 x0_ub=1.)
+    A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
+    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+                                 x0_lb=-1., x0_ub=1., x0_sample_seed=456)
     LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
@@ -61,9 +61,9 @@ def test_integrate_to_converge_LQR(norm, method):
     n_states = 3
     n_controls = 2
 
-    A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls)
-    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf, x0_lb=-1.,
-                                 x0_ub=1.)
+    A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
+    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+                                 x0_lb=-1., x0_ub=1., x0_sample_seed=456)
     LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
