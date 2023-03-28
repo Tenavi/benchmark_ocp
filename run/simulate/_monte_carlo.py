@@ -97,7 +97,6 @@ def monte_carlo(
         # -------------------------------------------------------------------- #
 
         if solve_open_loop:
-            ocp_sol, cont_ocp_sol, ocp_converged[i] = solve_ocp(
                 OCP, config,
                 t_guess=t, X_guess=X, U_guess=U, dVdX_guess=dVdX, V_guess=V,
                 solve_to_converge=True,

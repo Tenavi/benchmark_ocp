@@ -5,6 +5,7 @@ from optimalcontrol.problem import OptimalControlProblem
 from optimalcontrol.utilities import saturate
 from optimalcontrol.sampling import UniformSampler
 
+
 config = Config(
     ode_solver="RK23",
     atol=1e-08,
@@ -14,6 +15,7 @@ config = Config(
     n_trajectories_train=50,
     n_trajectories_test=50
 )
+
 
 class VanDerPol(OptimalControlProblem):
     _required_parameters = {
@@ -111,7 +113,8 @@ class VanDerPol(OptimalControlProblem):
 
         return L[0]
 
-    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True):
+    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True,
+                               L0=None):
         if np.ndim(x) < 2:
             x_err = x - self.xf.flatten()
         else:
@@ -134,7 +137,8 @@ class VanDerPol(OptimalControlProblem):
 
         return dLdx, dLdu
 
-    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True):
+    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True,
+                              L0=None):
         if return_dLdx:
             Q = np.diag([self._params.Wx, self._params.Wy])
             if np.ndim(x) >= 2:
@@ -193,7 +197,8 @@ class VanDerPol(OptimalControlProblem):
         return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
 
     def bvp_dynamics(self, t, xp):
-        u = self.optimal_control(xp[:2], xp[2:])
+        u = self.optimal_control(xp[:2], xp[2:-1])
+        L = self.running_cost(xp[:2], u)
 
         x1 = xp[:1]
         x2 = xp[1:2]
@@ -212,4 +217,4 @@ class VanDerPol(OptimalControlProblem):
         dp1dt = -self._params.Wx * x1_err + p2 * (2.*self._params.mu*x1*x2 + 1.)
         dp2dt = -self._params.Wy * x2 - p1 - p2 * self._params.mu * (1. - x1**2)
 
-        return np.vstack((dx1dt, dx2dt, dp1dt, dp2dt))
+        return np.vstack((dx1dt, dx2dt, dp1dt, dp2dt, -L))

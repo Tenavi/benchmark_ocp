@@ -4,6 +4,7 @@ import numpy as np
 
 from optimalcontrol import utilities
 
+
 rng = np.random.default_rng()
 
 @pytest.mark.parametrize("n", [0., 1.5, np.array([[5],[6]]), [7,8], "n"])

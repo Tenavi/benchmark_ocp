@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 
+
 class ProblemParameters:
     """Utility class to store cost function and system dynamics parameters."""
     def __init__(self, required=[], optional=[], update_fun=None):
@@ -15,8 +16,8 @@ class ProblemParameters:
             A function to execute whenever problem parameters are modified by
             `update`. The function must have the call signature
             `update_fun(obj, **params)` where `obj` refers to the
-            `ProblemParameters` object instance and `params` are parameters to
-            be modified, specified as keyword arguments.
+            `ProblemParameters` instance and `params` are parameters to be
+            modified, specified as keyword arguments.
         """
         if update_fun is not None:
             self.update_fun = update_fun
@@ -75,8 +76,8 @@ class ProblemParameters:
         Get or set a function to execute whenever problem parameters are
         modified by `update`. The function must have the call signature
         `update_fun(obj, **params)` where `obj` refers to the
-        `ProblemParameters` object instance and `params` are parameters to be
-        modified, specified as keyword arguments.
+        `ProblemParameters` instance and `params` are parameters to be modified,
+        specified as keyword arguments.
         """
         if not callable(self._update_fun):
             raise RuntimeError("update_fun has not been set")
@@ -133,7 +134,8 @@ class ProblemParameters:
 
         for param in param_dict.keys():
             if np.isin(param, other_list):
-                raise ValueError(param + " cannot be in both required and optional parameter lists")
+                raise ValueError(f"{param} cannot be in both required and "
+                                 f"optional parameter lists")
 
         if hasattr(self, list_attr):
             param_list = getattr(self, list_attr) + list(param_dict.keys())
@@ -160,6 +162,7 @@ class ProblemParameters:
 
         for key in param_dict:
             if not isinstance(key, str):
-                raise TypeError("Parameter list elements or dict keys must be strings")
+                raise TypeError("Parameter list elements or dict keys must be"
+                                "strings")
 
         return param_dict
