@@ -21,7 +21,7 @@ def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
     t_span : 2-tuple of floats
         Interval of integration `(t0, tf)`. The solver starts with `t=t0` and
         integrates until it reaches `t=tf`.
-    x0 : array_like, shape (ocp.n_states,)
+    x0 : (ocp.n_states,) array
         Initial state.
     t_eval : array_like, optional
         Times at which to store the computed solution, must be sorted and lie
@@ -35,9 +35,9 @@ def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
 
     Returns
     -------
-    t : ndarray, shape (n_points,)
+    t : (n_points,) array
         Time points.
-    x : ndarray, shape (ocp.n_states, n_points)
+    x : (ocp.n_states, n_points) array
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
@@ -74,7 +74,7 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     controller : Controller
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
-    x0 : array_like, shape (ocp.n_states,)
+    x0 : (ocp.n_states,) array
         Initial state.
     t_int : float
         Time interval to step integration over. This function internally calls
@@ -100,9 +100,9 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
 
     Returns
     -------
-    t : ndarray, shape (n_points,)
+    t : (n_points,) array
         Time points.
-    x : ndarray, shape (ocp.n_states, n_points)
+    x : (ocp.n_states, n_points) array
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:

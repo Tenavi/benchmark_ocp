@@ -5,26 +5,25 @@ from ._solve import OpenLoopSolution
 
 try:
     import pylgr
-except:
+except ImportError:
     warnings.warn(
-        "Could not import pylgr library. DirectSolver is not available.",
-        ImportWarning
-    )
+        'Could not import pylgr library. Direct methods are not available.',
+        ImportWarning)
 
 
 class DirectSolution(OpenLoopSolution):
-    def __init__(self, t, x, u, dVdx, V, ps_sol=None):
+    def __init__(self, t, x, u, p, v, status, message, ps_sol=None):
         if not isinstance(ps_sol, pylgr.solve.DirectSolution):
-            raise TypeError("ps_sol must be provided at initialization")
+            raise RuntimeError('ps_sol must be provided at initialization')
         self._ps_sol = ps_sol
-        super().__init__(t, x, u, dVdx, V)
+        super().__init__(t, x, u, p, v, status, message)
 
     def __call__(self, t):
-        x = np.atleast_2d(self._ps_sol.sol_X(t)
-        u = np.atleast_2d(self.ps_sol.sol_U(t))
-        dVdx = np.atleast_2d(self.ps_sol.sol_dVdX(t))
-        V = self.ps_sol.sol_V(t)
-        return x, u, dVdx, V
+        x = np.atleast_2d(self._ps_sol.sol_X(t))
+        u = np.atleast_2d(self._ps_sol.sol_U(t))
+        p = np.atleast_2d(self._ps_sol.sol_dVdX(t))
+        v = self._ps_sol.sol_V(t).reshape(-1)
+        return x, u, p, v
 
 
 def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
@@ -39,13 +38,13 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
-    t : ndarray, shape (n_points,)
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : ndarray, shape (n_states, n_points)
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:,0]`.
-    u : ndarray, shape (n_controls, n_points)
+    u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
@@ -61,27 +60,12 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     success : bool
         `True` if the algorithm succeeded.
     """
-    raise NotImplementedError
-
-    self.ps_sol = pylgr.solve_ocp(
-        self.OCP.dynamics, self.OCP.running_cost, t, X, U,
-        U_lb=self.OCP.U_lb, U_ub=self.OCP.U_ub,
-        dynamics_jac=self.OCP.jacobians,
-        cost_grad=self.OCP.running_cost_gradient,
-        tol=self.tol, n_nodes=self.n_nodes, maxiter=self.max_iter,
-        verbose=verbose
-    )
-
-    self.sol['t'] = self.ps_sol.t.flatten()
-    self.sol['X'] = self.ps_sol.X
-    self.sol['dVdX'] = self.ps_sol.dVdX
-    self.sol['V'] = self.ps_sol.V
-    self.sol['U'] = self.ps_sol.U
+    raise NotImplementedError('pylgr has not yet implemented finite horizon')
 
 
 def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
                            n_add_nodes=16, max_nodes=64, tol_scale=1.,
-                           verbose=0):
+                           t1_tol=1e-10, verbose=0):
     """
     Compute the open-loop optimal solution for a single initial condition
     given an initial guess.
@@ -92,13 +76,13 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
-    t : ndarray, shape (n_points,)
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : ndarray, shape (n_states, n_points)
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:,0]`.
-    u : ndarray, shape (n_controls, n_points)
+    u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
@@ -114,19 +98,52 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     success : bool
         `True` if the algorithm succeeded.
     """
-    raise NotImplementedError
+    t1_tol = float(t1_tol)
 
+    tol_scale = float(tol_scale)
+    if tol_scale <= 0.:
+        raise ValueError('tol_scale must be a positive float')
+    n_add_nodes = int(n_add_nodes)
+    if n_add_nodes < 1:
+        raise ValueError('n_add_nodes must be a positive int')
 
-def _extend_horizon(self):
-    if self.ps_sol is None:
-        return False
-    # Cannot extend horizon if exceeded number of mesh nodes
-    if self.n_nodes >= self.max_nodes:
-        return False
+    ps_sol = pylgr.solve_ocp(ocp.dynamics, ocp.running_cost, t, x, u,
+                             U_lb=getattr(ocp.parameters, 'u_lb', None),
+                             U_ub=getattr(ocp.parameters, 'u_ub', None),
+                             dynamics_jac=ocp.jacobians,
+                             cost_grad=ocp.running_cost_gradients, tol=tol,
+                             n_nodes=n_nodes, maxiter=max_iter, verbose=verbose)
 
-    self.n_nodes = min(self.max_nodes, self.n_nodes+self.n_add_nodes)
-    self.tol = self.tol * self.tol_scale
+    t = ps_sol.t.flatten()
+    x = ps_sol.X
+    u = ps_sol.U
+    p = ps_sol.dVdX
+    v = ps_sol.V.flatten()
 
-    return True
+    ocp_sol = DirectSolution(t, x, u, p, v, ps_sol.status, ps_sol.message,
+                             ps_sol=ps_sol)
 
+    # Stop if algorithm succeeded and running cost is small enough
+    if ocp_sol.check_convergence(ocp.running_cost, t1_tol, verbose=verbose > 0):
+        return ocp_sol
 
+    # Stop if maximum nodes is reached
+    if n_nodes >= max_nodes:
+        ocp_sol.message = (f'n_nodes exceeded max_nodes. Last status was '
+                           f'{ocp_sol.status}: {ocp_sol.message}')
+        ocp_sol.status = 10
+        return ocp_sol
+
+    # Increase number of nodes if needed
+    n_nodes = n_nodes + n_add_nodes
+    if n_nodes > max_nodes:
+        n_nodes = int(max_nodes)
+    tol = tol * tol_scale
+
+    if verbose > 0:
+        print(f'Increasing n_nodes to {n_nodes:d}')
+
+    return solve_infinite_horizon(ocp, t, x, u, n_nodes=n_nodes, tol=tol,
+                                  max_iter=max_iter, n_add_nodes=n_add_nodes,
+                                  max_nodes=max_nodes, tol_scale=tol_scale,
+                                  t1_tol=t1_tol, verbose=verbose)

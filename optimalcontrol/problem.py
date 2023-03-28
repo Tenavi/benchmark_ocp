@@ -32,13 +32,10 @@ class OptimalControlProblem:
         self._params = ProblemParameters(
             required=self._required_parameters.keys(),
             optional=self._optional_parameters.keys(),
-            update_fun=self._update_params
-        )
-        problem_parameters = {
-            **self._required_parameters,
-            **self._optional_parameters,
-            **problem_parameters
-        }
+            update_fun=self._update_params)
+        problem_parameters = {**self._required_parameters,
+                              **self._optional_parameters,
+                              **problem_parameters}
         self.parameters.update(**problem_parameters)
 
     @property
@@ -202,22 +199,22 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : array_like, shape (n_states,) or (n_states, n_points)
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : array_like, shape (n_controls,) or (n_controls, n_points)
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
         return_dLdx : bool, default=True
             If True, compute the gradient with respect to states, dL/dx.
         return_dLdu : bool, default=True
             If True, compute the gradient with respect to controls, dL/du.
-        L0 : array_like, shape (1,) or (n_points,), optional
+        L0 : (1,) or (n_points,) array, optional
             Running cost evaluated at current state and control pair.
 
         Returns
         -------
-        dLdx : ndarray, shape (n_states,) or (n_states, n_points)
+        dLdx : (n_states,) or (n_states, n_points) array
             State gradients dL/dx (x,u) evaluated at pair(s) (x,u).
-        dLdu : ndarray, shape (n_controls,) or (n_controls, n_points)
+        dLdu : (n_controls,) or (n_controls, n_points) array
             Control gradients dL/du (x,u) evaluated at pair(s) (x,u).
         """
         if L0 is None:
@@ -246,22 +243,22 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : array_like, shape (n_states,) or (n_states, n_points)
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : array_like, shape (n_controls,) or (n_controls, n_points)
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
         return_dLdx : bool, default=True
             If True, compute the Hessian with respect to states, dL/dx.
         return_dLdu : bool, default=True
             If True,compute the Hessian with respect to controls, dL/du.
-        L0 : array_like, shape (1,) or (n_points,), optional
+        L0 : (1,) or (n_points,) array, optional
             Running cost evaluated at current state and control pair.
 
         Returns
         -------
-        dLdx : ndarray, shape (n_states, n_states) or (n_states, n_states, n_points)
+        dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
             State Hessians dL^2/dx^2 (x,u) evaluated at pair(s) (x,u).
-        dLdu : ndarray, shape (n_controls,) or (n_controls, n_controls, n_points)
+        dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
             Control Hessians dL^2/du^2 (x,u) evaluated at pair(s) (x,u).
         """
         if L0 is None:
@@ -445,14 +442,14 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        t : ndarray, shape (n_points,)
+        t : (n_points,) array
             Time collocation points for each state.
-        xp : ndarray, shape (2*n_states + 1, n_points)
+        xp : (2*n_states + 1, n_points) array
             Current state, costate, and value function.
 
         Returns
         -------
-        dxpdt : ndarray (2*n_states + 1, n_points)
+        dxpdt : (2*n_states + 1, n_points) array
             Concatenation of dynamics $dx/dt = f(x,u^*)$, costate dynamics,
             $dp/dt = -dH/dx(x,u^*,p)$, and running cost $L(x,u^*)$, where
             $u^* = u^*(x,p)$ is the optimal control.

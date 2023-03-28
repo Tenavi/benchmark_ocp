@@ -5,18 +5,18 @@ from ._solve import OpenLoopSolution
 
 
 class IndirectSolution(OpenLoopSolution):
-    def __init__(self, t, x, u, p, v, bvp_sol=None, u_fun=None):
-        if not callable(bvp_sol) or not callable(u_fun):
+    def __init__(self, t, x, u, p, v, status, message, cont_sol=None,
+                 u_fun=None):
+        if not callable(cont_sol) or not callable(u_fun):
             raise RuntimeError(
-                "bvp_sol and u_fun must be provided at initialization"
-            )
-        self._bvp_sol = bvp_sol
+                'cont_sol and u_fun must be provided at initialization')
+        self._cont_sol = cont_sol
         self._u_fun = u_fun
         self._n_states = np.shape(x)[0]
-        super().__init__(t, x, u, p, v)
+        super().__init__(t, x, u, p, v, status, message)
 
     def __call__(self, t):
-        xp = np.atleast_2d(self._bvp_sol(t))
+        xp = np.atleast_2d(self._cont_sol(t))
         x = xp[:self._n_states]
         p = xp[self._n_states:-1]
         v = xp[-1]
@@ -28,28 +28,29 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
                      verbose=0):
     """
     Compute the open-loop optimal solution of a fixed time optimal control
-    problem for a single initial condition. This function applies the "indirect
-    method", which is to solve the two-point boundary value problem (BVP)
-    arising from Pontryagin's Maximum Principle (PMP), based on an initial guess
-    for the optimal state and costate pair. The underlying BVP solver is
-    `scipy.integrate.solve_bvp`.
+    problem for a single initial condition.
+
+    This function applies the "indirect method", which is to solve the two-point
+    boundary value problem (BVP) arising from Pontryagin's Maximum Principle
+    (PMP), based on an initial guess for the optimal state and costate pair. The
+    underlying BVP solver is `scipy.integrate.solve_bvp`.
 
     Parameters
     ----------
     ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    t : array_like, shape (n_points,)
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : array_like, shape (n_states, n_points)
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:,0]`.
-    p : array_like, shape (n_states, n_points)
+    p : (n_states, n_points) array
         Initial guess for the costate at times `t`.
-    u : array_like, shape (n_controls, n_points), optional
+    u : (n_controls, n_points) array, optional
         Initial guess for the optimal control at times `t`.
-    v : array_like, shape (n_points,), optional
+    v : (n_points,) array, optional
         Initial guess for the value function `v(x(t))`.
     max_nodes : int, default=1000
         Maximum number of collocation points to use when solving the BVP.
@@ -66,13 +67,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     sol : OpenLoopSolution
         Bunch object containing the solution of the open-loop optimal control
         problem for the initial condition `x[:,0]`. Solution should only be
-        trusted if `status == 0`.
-    status : int
-        Reason for BVP solver termination:
-            * 0: The algorithm converged to the desired accuracy.
-            * 1: The maximum number of mesh nodes is exceeded.
-            * 2: A singular Jacobian encountered when solving the collocation
-                 system.
+        trusted if `sol.status == 0`.
     """
     t = np.reshape(t, -1)
     x = np.reshape(x, (ocp.n_states, -1))
@@ -96,43 +91,37 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     v = bvp_sol.y[-1]
     u = ocp.optimal_control(x, p)
 
-    ocp_sol = IndirectSolution(t, x, u, p, v, bvp_sol=bvp_sol.sol,
-                               u_fun=ocp.optimal_control)
-
-    return ocp_sol, bvp_sol.status
+    return IndirectSolution(t, x, u, p, v, bvp_sol.status, bvp_sol.message,
+                            cont_sol=bvp_sol.sol, u_fun=ocp.optimal_control)
 
 
 def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
                            tol=1e-05, t1_tol=1e-10, t1_add=None, verbose=0):
     """
     Compute the open-loop optimal solution of an infinite horizon optimal
-    control problem for a single initial condition. This is accomplished by
-    solving a series of finite horizon problems (using
-    `open_loop.indirect.solve_finite_horizon`) over increasingly long time
-    horizons until the running cost at final time `t[-1]` is smaller than the
-    specified tolerance `t1_tol`.
+    control problem for a single initial condition.
 
-    This function applies the "indirect method", which is to solve the two-point
-    boundary value problem (BVP) arising from Pontryagin's Maximum Principle
-    (PMP), based on an initial guess for the optimal state and costate pair. The
-    underlying BVP solver is `scipy.integrate.solve_bvp`.
+    This is accomplished by solving a series of finite horizon problems using
+    `indirect.solve_finite_horizon`. The time horizons are increased in length
+    until the running cost at final time `t[-1]` is smaller than the specified
+    tolerance `t1_tol`.
 
     Parameters
     ----------
     ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    t : array_like, shape (n_points,)
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : array_like, shape (n_states, n_points)
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:,0]`.
-    p : array_like, shape (n_states, n_points)
+    p : (n_states, n_points) array
         Initial guess for the costate at times `t`.
-    u : array_like, shape (n_controls, n_points), optional
+    u : (n_controls, n_points) array, optional
         Initial guess for the optimal control at times `t`.
-    v : array_like, shape (n_points,), optional
+    v : (n_points,) array, optional
         Initial guess for the value function `v(x(t))`.
     max_nodes : int, default=1000
         Maximum number of collocation points to use when solving the BVP.
@@ -156,45 +145,37 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     sol : OpenLoopSolution
         Bunch object containing the solution of the open-loop optimal control
         problem for the initial condition `x[:,0]`. Solution should only be
-        trusted if `status == 0`.
-    status : int
-        Reason for algorithm termination:
-            * 0: The algorithm converged to the desired accuracy and running
-                 cost at final time was smaller than `t1_tol`.
-            * 1: The maximum number of mesh nodes is exceeded.
-            * 2: A singular Jacobian encountered when solving the collocation
-            system.
+        trusted if `sol.status == 0`.
     """
     t1_tol = float(t1_tol)
 
     if t1_add is None:
         t1_add = np.max(t)
     elif np.size(t1_add) != 1 or t1_add <= 0.:
-        raise ValueError("t1_add must be a positive float")
+        raise ValueError('t1_add must be a positive float')
 
     while True:
-        ocp_sol, status = solve_fixed_time(ocp, t, x, p, u=u, v=v,
-                                            max_nodes=max_nodes, tol=tol,
-                                            verbose=verbose)
+        ocp_sol = solve_fixed_time(ocp, t, x, p, u=u, v=v, max_nodes=max_nodes,
+                                   tol=tol, verbose=verbose)
 
         # Stop if maximum nodes is reached
-        if status == 1:
-            return ocp_sol, status
+        if ocp_sol.status == 1:
+            return ocp_sol
 
         # Stop if algorithm succeeded and running cost is small enough
-        L = ocp.running_cost(ocp_sol.x[:, -1], ocp_sol.u[:, -1])
-        if status == 0 and L <= t1_tol:
-            return ocp_sol, status
+        if ocp_sol.check_convergence(ocp.running_cost, t1_tol,
+                                     verbose=verbose > 0):
+            return ocp_sol
 
         # Otherwise, increase final time and continue
         t = np.concatenate([ocp_sol.t, ocp_sol.t[-1:] + t1_add])
         x = np.hstack([ocp_sol.x, ocp_sol.x[:, -1:]])
         p = np.hstack([ocp_sol.p, np.zeros((ocp.n_states, 1))])
         u = np.hstack([ocp_sol.u, ocp_sol.u[:, -1:]])
-        v = np.concatenate([ocp_sol.v, np.atleast_1d(L)])
+        v = np.concatenate([ocp_sol.v, ocp_sol.v[-1:]])
 
         if verbose > 0:
-            print("Running cost > t1_tol; increasing time horizon")
+            print(f'\nIncreasing time horizon to {t[-1]}')
 
 
 def make_pontryagin_boundary(x0):
@@ -205,7 +186,7 @@ def make_pontryagin_boundary(x0):
 
     Parameters
     ----------
-    x0 : array_like, shape (n_states,)
+    x0 : (n_states,) array
         Initial condition.
 
     Returns

@@ -289,24 +289,23 @@ def _dense_difference(fun, x0, f0, h, method):
 def closed_loop_jacobian(x, open_loop_jac, controller):
     """
     Evaluate the Jacobian of closed-loop dynamics,
-    `Df/Dx = df/dx + df/du @ du/dx`, where `f = f(x,u(x))` is a vector field
-    with open-loop partial derivatives `df/dx` and `df/du`.
+    Df/Dx = df/dx + df/du @ du/dx, where f = f(x,u(x)) is a vector field with
+    partial derivatives df/dx and df/du.
 
     Parameters
     ----------
-    x : array_like, shape (n_states,) or (n_states, n_points)
+    x : (n_states,) or (n_states, n_points) array
         State(s) arranged by (dimension, time).
     open_loop_jac : callable
-        Function defining the open-loop partial derivatives `df/dx` and `df/du`.
-        See `OptimalControlProblem.Jacobians`.
+        Function defining the open-loop partial derivatives df/dx and df/du. See
+        `OptimalControlProblem.jacobians`.
     controller : Controller
         `Controller` instance implementing `__call__` and `jacobian`.
 
     Returns
     -------
-    DfDx : array_like, shape (n_states, n_states) or
-        (n_states, n_states, n_points)
-        Closed-loop Jacobian(s), with `DfDx[i,j] = Df[i]/Dx[j]`.
+    DfDx : (n_states, n_states) or (n_states, n_states, n_points) array
+        Closed-loop Jacobian(s), with DfDx[i,j] = Df[i]/Dx[j].
     """
     u = controller(x)
     dfdx, dfdu = open_loop_jac(x, u)

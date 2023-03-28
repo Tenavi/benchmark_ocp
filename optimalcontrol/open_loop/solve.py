@@ -1,129 +1,161 @@
 import numpy as np
-import warnings
-from copy import deepcopy
 
-from .indirect import IndirectSolver
-from .direct import DirectSolver
+from . import direct, indirect
 
 
-def solve_ocp(
-        OCP, config,
-        t_guess=None, X_guess=None, U_guess=None, dVdX_guess=None, V_guess=None,
-        solve_to_converge=False, verbose=0, suppress_warnings=True
-    ):
-    if config.ocp_solver == 'indirect':
-        solver = IndirectSolver(
-            OCP,
-            tol=config.indirect_tol,
-            t1_scale=config.t1_scale,
-            t1_max=config.t1_max,
-            max_nodes=config.indirect_max_nodes
-        )
-    elif config.ocp_solver == 'direct':
-        solver = DirectSolver(
-            OCP,
-            tol=config.direct_tol,
-            tol_scale=config.direct_tol_scale,
-            n_init_nodes=config.direct_n_init_nodes,
-            n_add_nodes=config.direct_n_add_nodes,
-            max_nodes=config.direct_max_nodes,
-            max_iter=config.direct_max_slsqp_iter
-        )
-    elif config.ocp_solver == 'direct_to_indirect':
-        config_copy = deepcopy(config)
-        config_copy.ocp_solver = 'direct'
-
-        direct_start, _, _ = solve_ocp(
-            OCP,
-            config_copy,
-            t_guess=t_guess,
-            X_guess=X_guess,
-            U_guess=U_guess,
-            dVdX_guess=dVdX_guess,
-            V_guess=V_guess,
-            solve_to_converge=True,
-            verbose=verbose,
-            suppress_warnings=suppress_warnings
-        )
-
-        config_copy.ocp_solver = 'indirect'
-
-        idx = direct_start['t'] <= t_guess[-1]
-        dVdX_guess = direct_start['dVdX'][:,idx]
-        dVdX_guess[:,-1] = 0.
-
-        return solve_ocp(
-            OCP,
-            config_copy,
-            t_guess=direct_start['t'][idx],
-            X_guess=direct_start['X'][:,idx],
-            U_guess=direct_start['U'][:,idx],
-            dVdX_guess=dVdX_guess,
-            V_guess=direct_start['V'][:,idx],
-            solve_to_converge=solve_to_converge,
-            verbose=verbose,
-            suppress_warnings=suppress_warnings
-        )
-    else:
-        raise ValueError(
-            'config.ocp_solver must be one of "direct", "indirect", or "direct_to_indirect"'
-        )
-
-    with warnings.catch_warnings():
-        if suppress_warnings:
-            np.seterr(over='warn', divide='warn', invalid='warn')
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-        solver.solve(
-            t=t_guess, X=X_guess, U=U_guess, dVdX=dVdX_guess, V=V_guess,
-            verbose=verbose
-        )
-        converged = solver.check_converged(config.fp_tol)
-
-        # Solves the OCP over an extended time interval until convergece
-        # conditions are satisfied
-        if solve_to_converge and not converged:
-            if suppress_warnings:
-                # If we don't want to see warnings, treat these as errors so the
-                # try context will catch them and mark the trajectory as not
-                # converged instead of printing out the warning.
-                warnings.filterwarnings("error", category=RuntimeWarning)
-
-            try:
-                while not converged and solver.extend_horizon():
-                    solver.solve(**solver.sol, verbose=verbose)
-                    converged = solver.check_converged(config.fp_tol)
-            except RuntimeWarning:
-                pass
-
-        return solver.sol, solver.continuous_sol, converged
+__all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 
 
-def clip_trajectory(t, X, U, criteria):
-    '''
-    Go backwards in time and check to see when a function (typically the
-    running cost or vector field norm) is sufficiently small.
+def solve_fixed_time(ocp, t, x, p=None, u=None, v=None, method='direct',
+                     verbose=0, **kwargs):
+    """
+    Compute the open-loop optimal solution of a fixed time optimal control
+    problem for a single initial condition. This function allows using either a
+    direct or indirect method (see below), or a user-supplied callable.
+
+    If `method=='direct'` then this function calls `direct.solve_fixed_time`,
+    which uses pseudospectral collocation to transform optimal control problem
+    into a constrained optimization problem, which is then solved using
+    sequential least squares quadratic programming (SLSQP).
+
+    If `method=='indirect'` then this function wraps
+    `indirect.solve_fixed_time`, which solves the two-point boundary value
+    problem (BVP) arising from Pontryagin's Maximum Principle (PMP). The
+    underlying BVP solver is `scipy.integrate.solve_bvp`.
+
+    The direct method is generally considered to be more robust than the
+    indirect method, which is known to be highly sensitive to the initial guess
+    for the costates. On the other hand, when successful, the indirect method
+    often yields more accurate results and can also be faster.
 
     Parameters
     ----------
-    criteria : callable
+    ocp : OptimalControlProblem
+        An instance of an `OptimalControlProblem` subclass implementing
+        `bvp_dynamics` and `optimal_control` methods.
+    t : (n_points,) array
+        Time points at which the initial guess is supplied. Assumed to be
+        sorted from smallest to largest.
+    x : (n_states, n_points) array
+        Initial guess for the state trajectory at times `t`. The initial
+        condition is assumed to be contained in `x[:,0]`.
+    p : (n_states, n_points) array, optional
+        Initial guess for the costate at times `t`. Required if
+        `method=='indirect'`.
+    u : (n_controls, n_points) array, optional
+        Initial guess for the optimal control at times `t`.  Required if
+        `method=='direct'`.
+    v : (n_points,) array, optional
+        Initial guess for the value function `v(x(t))`.
+    method : {'direct', 'indirect', callable}, default='direct'
+        Which solution method to use. If `method` is callable, then it will be
+        called as
+        `sol = method(ocp, t, x, u=u, p=p, v=v, verbose=verbose, **kwargs)`.
+    verbose : {0, 1, 2}, default=0
+        Level of algorithm's verbosity:
+            * 0 (default) : work silently.
+            * 1 : display a termination report.
+            * 2 : display progress during iterations.
+    **kwargs : dict
+        Keyword arguments to pass to the solver. See `direct.solve_fixed_time`
+        and `indirect.solve_fixed_time` for options.
 
     Returns
     -------
-    converged_idx : int
-        Integer such that X[:,converged_idx], U[:,converged_idx] is the first
-        state-control pair for which criteria(X, U) < tol.
-    converged : bool
-        True if some pair X, U satisfied criteria(X, U) < tol, False if no
-        such pair was found.
-    '''
-    converged_idx = criteria(X, U).flatten()
-
-    converged = converged_idx.any()
-
-    if converged:
-        converged_idx = np.min(np.argwhere(converged_idx))
+    sol : OpenLoopSolution
+        Bunch object containing the solution of the open-loop optimal control
+        problem for the initial condition `x[:,0]`. Solution should only be
+        trusted if `sol.status == 0`.
+    """
+    if callable(method):
+        return method(ocp, t, x, u=u, p=p, v=v, verbose=verbose, **kwargs)
+    elif method == 'direct':
+        if u is None:
+            u = np.zeros((ocp.n_controls, np.size(t)))
+        return direct.solve_fixed_time(ocp, t, x, u, verbose=verbose, **kwargs)
+    elif method == 'indirect':
+        if p is None:
+            p = np.zeros_like(x)
+        return indirect.solve_fixed_time(ocp, t, x, p, u=u, v=v,
+                                         verbose=verbose, **kwargs)
     else:
-        converged_idx = t.shape[0] - 1
+        raise RuntimeError(f"method={method} is not one of the allowed options,"
+                           f" 'direct', 'indirect', or callable")
 
-    return converged_idx, converged
+
+def solve_infinite_horizon(ocp, t, x, p=None, u=None, v=None, method='direct',
+                           verbose=0, **kwargs):
+    """
+    Compute the open-loop optimal solution of a fixed time optimal control
+    problem for a single initial condition. This function allows using either a
+    direct or indirect method (see below), or a user-supplied callable.
+
+    If `method=='direct'` then this function calls `direct.solve_fixed_time`,
+    which uses pseudospectral collocation to transform optimal control problem
+    into a constrained optimization problem, which is then solved using
+    sequential least squares quadratic programming (SLSQP).
+
+    If `method=='indirect'` then this function wraps
+    `indirect.solve_fixed_time`, which solves the two-point boundary value
+    problem (BVP) arising from Pontryagin's Maximum Principle (PMP). The
+    underlying BVP solver is `scipy.integrate.solve_bvp`.
+
+    The direct method is generally considered to be more robust than the
+    indirect method, which is known to be highly sensitive to the initial guess
+    for the costates. On the other hand, when successful, the indirect method
+    often yields more accurate results and can also be faster.
+
+    Parameters
+    ----------
+    ocp : OptimalControlProblem
+        An instance of an `OptimalControlProblem` subclass implementing
+        `bvp_dynamics` and `optimal_control` methods.
+    t : (n_points,) array
+        Time points at which the initial guess is supplied. Assumed to be
+        sorted from smallest to largest.
+    x : (n_states, n_points) array
+        Initial guess for the state trajectory at times `t`. The initial
+        condition is assumed to be contained in `x[:,0]`.
+    p : (n_states, n_points) array, optional
+        Initial guess for the costate at times `t`. Required if
+        `method=='indirect'`.
+    u : (n_controls, n_points) array, optional
+        Initial guess for the optimal control at times `t`.  Required if
+        `method=='direct'`.
+    v : (n_points,) array, optional
+        Initial guess for the value function `v(x(t))`.
+    method : {'direct', 'indirect', callable}, default='direct'
+        Which solution method to use. If `method` is callable, then it will be
+        called as
+        `sol = method(ocp, t, x, u=u, p=p, v=v, verbose=verbose, **kwargs)`.
+    verbose : {0, 1, 2}, default=0
+        Level of algorithm's verbosity:
+            * 0 (default) : work silently.
+            * 1 : display a termination report.
+            * 2 : display progress during iterations.
+    **kwargs : dict
+        Keyword arguments to pass to the solver. See `direct.solve_fixed_time`
+        and `indirect.solve_fixed_time` for options.
+
+    Returns
+    -------
+    sol : OpenLoopSolution
+        Bunch object containing the solution of the open-loop optimal control
+        problem for the initial condition `x[:,0]`. Solution should only be
+        trusted if `sol.status == 0`.
+    """
+    if callable(method):
+        return method(ocp, t, x, u=u, p=p, v=v, verbose=verbose, **kwargs)
+    elif method == 'direct':
+        if u is None:
+            u = np.zeros((ocp.n_controls, np.size(t)))
+        return direct.solve_infinite_horizon(ocp, t, x, u, verbose=verbose,
+                                             **kwargs)
+    elif method == 'indirect':
+        if p is None:
+            p = np.zeros_like(x)
+        return indirect.solve_infinite_horizon(ocp, t, x, p, u=u, v=v,
+                                               verbose=verbose, **kwargs)
+    else:
+        raise RuntimeError(f"method={method} is not one of the allowed options,"
+                           f" 'direct', 'indirect', or callable")
