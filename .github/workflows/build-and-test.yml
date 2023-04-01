@@ -34,13 +34,20 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install .
 
+      - name: Test
+        run: |
+          pip install pytest
+          pytest tests/
+
+  check-syntax:
+
+    runs-on: ubuntu-latest
+    python-version: "3.11"
+
+    steps:
       - name: Check syntax
         run: |
           pip install flake8
           # Check for Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         continue-on-error: true
-
-      - name: Test
-        run: |
-          pytest tests/
