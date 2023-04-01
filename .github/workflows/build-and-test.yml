@@ -40,9 +40,8 @@ jobs:
           pytest tests/
 
   check-syntax:
-
+    needs: build-and-test
     runs-on: ubuntu-latest
-    python-version: "3.11"
 
     steps:
       # Check for Python syntax errors or undefined names
@@ -53,9 +52,8 @@ jobs:
         continue-on-error: true
 
   document:
-
+    needs: build-and-test
     runs-on: ubuntu-latest
-    python-version: "3.11"
 
     steps:
       # For now, just verify that the documentation successfully compiles
