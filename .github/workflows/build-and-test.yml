@@ -14,14 +14,13 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  build-and-test:
 
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        #python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-        python-version: ["3.11"]
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v3
@@ -34,38 +33,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install .
+          pip install flake8 pdoc pytest
 
-      - name: Test
-        run: |
-          pip install pytest
-          pytest tests/
-
-  check-syntax:
-    # Check for Python syntax errors or undefined names
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Install
-        run: pip install flake8
-
+      # Check for Python syntax errors or undefined names
       - name: Check syntax
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         continue-on-error: true
 
-  document:
-    # For now, just verify that the documentation successfully compiles
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install .
-          pip install pdoc
-
+      # For now, just verify that the documentation successfully compiles
       - name: Document
         run: pdoc optimalcontrol -o .docs/ --d numpy --math
 
       - uses: actions/upload-pages-artifact@v1
         with:
           path: .docs/
+
+      - name: Test
+        run: pytest tests/
