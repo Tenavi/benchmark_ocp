@@ -12,7 +12,7 @@ def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
 
     Parameters
     ----------
-    ocp : OptimalControlProblem
+    ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
     controller : Controller
