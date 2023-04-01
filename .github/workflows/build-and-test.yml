@@ -6,7 +6,7 @@ name: benchmarkocp
 
 on:
   push:
-    branches: [ "main", "docs" ]
+    branches: [ "main" , "docs"]
   pull_request:
     branches: [ "main" ]
 
@@ -14,7 +14,39 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install .
+          pip install flake8 pdoc
+
+      # Check for Python syntax errors or undefined names
+      - name: Check syntax
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        continue-on-error: true
+
+      # For now, just verify that the documentation successfully compiles
+      - name: Document
+        run: pdoc optimalcontrol -o .docs/ --d numpy --math
+
+      - uses: actions/upload-pages-artifact@v1
+        with:
+          path: .docs/
+
+  test:
+
+    needs: build
 
     runs-on: ${{ matrix.os }}
     strategy:
@@ -33,20 +65,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install .
-          pip install flake8 pdoc pytest
-
-      # Check for Python syntax errors or undefined names
-      - name: Check syntax
-        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        continue-on-error: true
-
-      # For now, just verify that the documentation successfully compiles
-      - name: Document
-        run: pdoc optimalcontrol -o .docs/ --d numpy --math
-
-      - uses: actions/upload-pages-artifact@v1
-        with:
-          path: .docs/
+          pip install pytest
 
       - name: Test
         run: pytest tests/
