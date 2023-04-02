@@ -1,5 +1,5 @@
-# This workflow will install Python dependencies, run tests and lint with a
-# multiple versions of Python. For more information see:
+# This workflow will install Python dependencies, build documentation, lint, and
+#run tests and with multiple versions of Python. For more information see:
 # https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
 name: benchmarkocp
@@ -51,7 +51,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        #os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
 
     steps:
