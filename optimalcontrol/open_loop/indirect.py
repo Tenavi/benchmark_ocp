@@ -1,7 +1,10 @@
 import numpy as np
 from scipy.integrate import solve_bvp
 
-from ._solve import OpenLoopSolution
+from .solutions import OpenLoopSolution
+
+
+__all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 
 
 class IndirectSolution(OpenLoopSolution):
@@ -37,37 +40,37 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
 
     Parameters
     ----------
-    ocp : OptimalControlProblem
+    ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    t : (n_points,) array
+    t : `(n_points,)` array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : (n_states, n_points) array
+    x : `(n_states, n_points)` array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    p : (n_states, n_points) array
+    p : `(n_states, n_points)` array
         Initial guess for the costate at times `t`.
-    u : (n_controls, n_points) array, optional
+    u : `(n_controls, n_points)` array, optional
         Initial guess for the optimal control at times `t`.
-    v : (n_points,) array, optional
-        Initial guess for the value function `v(x(t))`.
+    v : `(n_points,)` array, optional
+        Initial guess for the value function at states `x`.
     max_nodes : int, default=1000
         Maximum number of collocation points to use when solving the BVP.
     tol : float, default=1e-05
         Convergence tolerance for the BVP solver.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
+
             * 0 (default) : work silently.
             * 1 : display a termination report.
             * 2 : display progress during iterations.
 
     Returns
     -------
-    sol : OpenLoopSolution
-        Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:, 0]`. Solution should only be
-        trusted if `sol.status == 0`.
+    sol : `OpenLoopSolution`
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status == 0`.
     """
     t = np.reshape(t, -1)
     x = np.reshape(x, (ocp.n_states, -1))
@@ -80,7 +83,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
 
     xp = np.vstack((x, p, np.reshape(v, (1, -1))))
 
-    bc = make_pontryagin_boundary(x[:, 0])
+    bc = _make_pontryagin_boundary(x[:, 0])
 
     bvp_sol = solve_bvp(ocp.bvp_dynamics, bc, t, xp, tol=tol,
                         max_nodes=max_nodes, verbose=verbose)
@@ -102,27 +105,27 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     an infinite horizon optimal control problem for a single initial condition.
 
     This is accomplished by solving a series of finite horizon problems using
-    `indirect.solve_finite_horizon`. The time horizons are increased in length
-    until the running cost at final time `t[-1]` is smaller than the specified
-    tolerance `t1_tol`.
+    `solve_finite_horizon`. The time horizons are increased in length until the
+    running cost at final time `t[-1]` is smaller than the specified tolerance
+    `t1_tol`.
 
     Parameters
     ----------
-    ocp : OptimalControlProblem
+    ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    t : (n_points,) array
+    t : `(n_points,)` array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : (n_states, n_points) array
+    x : `(n_states, n_points)` array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    p : (n_states, n_points) array
+    p : `(n_states, n_points)` array
         Initial guess for the costate at times `t`.
-    u : (n_controls, n_points) array, optional
+    u : `(n_controls, n_points)` array, optional
         Initial guess for the optimal control at times `t`.
-    v : (n_points,) array, optional
-        Initial guess for the value function `v(x(t))`.
+    v : `(n_points,)` array, optional
+        Initial guess for the value function at states `x`.
     max_nodes : int, default=1000
         Maximum number of collocation points to use when solving the BVP.
     tol : float, default=1e-05
@@ -136,16 +139,16 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         finite horizon approximation.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
+
             * 0 (default) : work silently.
             * 1 : display a termination report.
             * 2 : display progress during iterations.
 
     Returns
     -------
-    sol : OpenLoopSolution
-        Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:, 0]`. Solution should only be
-        trusted if `sol.status == 0`.
+    sol : `OpenLoopSolution`
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status == 0`.
     """
     t1_tol = float(t1_tol)
 
@@ -178,7 +181,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
             print(f'\nIncreasing time horizon to {t[-1]}')
 
 
-def make_pontryagin_boundary(x0):
+def _make_pontryagin_boundary(x0):
     """
     Generates a function to evaluate the boundary conditions for a given initial
     condition. Terminal cost is zero so final condition on costate and value
@@ -186,15 +189,15 @@ def make_pontryagin_boundary(x0):
 
     Parameters
     ----------
-    x0 : (n_states,) array
+    x0 : `(n_states,)` array
         Initial condition.
 
     Returns
     -------
     bc : callable
-        Function of xp_0 (augmented states at initial time) and xp_1 (augmented
-        states at final time), returning a function which evaluates to zero if
-        the boundary conditions are satisfied.
+        Function of `xp_0` (augmented states at initial time) and `xp_1`
+        (augmented states at final time), returning a function which evaluates
+        to zero if the boundary conditions are satisfied.
     """
     x0 = np.reshape(x0, -1)
     n_states = x0.shape[0]

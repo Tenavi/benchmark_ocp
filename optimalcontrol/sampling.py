@@ -2,6 +2,7 @@ import numpy as np
 
 from .utilities import check_int_input, resize_vector
 
+
 class StateSampler:
     """Generic base class for algorithms to sample states."""
     def __init__(self, *args, **kwargs):
@@ -19,16 +20,17 @@ class StateSampler:
         ----------
         n_samples : int, default=1
             Number of sample points to generate.
-        kwargs
+        **kwargs : dict
             Other keyword arguments implemented by the subclass.
 
         Returns
         -------
-        x : (n_states, n_samples) or (n_states,) array
+        x : `(n_states, n_samples)` or `(n_states,)` array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x` will be a one-dimensional array.
+            sample. If `n_samples=1` then `x` will be a 1d array.
         """
         raise NotImplementedError
+
 
 class UniformSampler(StateSampler):
     """Class which implements uniform sampling from a hypercube."""
@@ -36,21 +38,20 @@ class UniformSampler(StateSampler):
         """
         Parameters
         ----------
-        lb : {(n_states,) or (n_states,1) array, float}
+        lb : {`(n_states,)` or `(n_states, 1)` array, float}
             Lower bounds for each dimension of the hypercube. If float, will be
             broadcast into an array of shape `(n_states, 1)`.
-        ub : {(n_states,) or (n_states,1) array, float}
+        ub : {`(n_states,)` or `(n_states, 1)` array, float}
             Upper bounds for each dimension of the hypercube. If float, will be
             broadcast into an array of shape `(n_states, 1)`.
-        xf : (n_states,) or (n_states,1) array
+        xf : `(n_states,)` or `(n_states,1)` array
             Nominal state within the hypercube. If `sample` is called with a
             specified `distance` argument, this distance is calculated from `xf`
             with norm specified by `norm`.
-        norm : {1, 2, (n_states, n_states) array}, default=2
+        norm : {1, 2, `(n_states, n_states)` array}, default=2
             The norm (l1, l2, or matrix) with which to calculate distances from
             `xf`. If `norm` is an array then it must be positive definite.
-            In this case it is defined as
-                `||x|| = sqrt(x.T @ self.Q @ x)`
+            In this case it is defined as `norm(x) = sqrt(x.T @ self.Q @ x)`
             where `Q` is the given matrix.
         seed : int, optional
             Random seed for the random number generator.
@@ -62,22 +63,24 @@ class UniformSampler(StateSampler):
         if isinstance(norm, str):
             bad_norm = True
         elif np.size(norm) == 1:
-            if norm in [1,2]:
+            if norm in [1, 2]:
                 self.norm = norm
             elif norm > 0. and self.n_states == 1:
-                self.norm = np.reshape(np.sqrt(norm), (1,1))
+                self.norm = np.reshape(np.sqrt(norm), (1, 1))
             else:
                 bad_norm = True
         elif np.shape(norm) == (self.n_states, self.n_states):
             try:
                 self.norm = np.linalg.cholesky(norm).T
             except:
-                raise ValueError("If norm is an array it must be positive definite")
+                raise ValueError('If norm is an array it must be positive '
+                                 'definite')
         else:
             bad_norm = True
 
         if bad_norm:
-            raise ValueError("norm must be 1, 2, or a positive definite (n_states, n_states) array")
+            raise ValueError('norm must be 1, 2, or a positive definite '
+                             '(n_states, n_states) array')
 
         self.rng = np.random.default_rng(seed)
 
@@ -87,11 +90,11 @@ class UniformSampler(StateSampler):
 
         Parameters
         ----------
-        lb : (n_states,) or (n_states,1) array, optional
+        lb : `(n_states,)` or `(n_states,1)` array, optional
             Lower bounds for each dimension of the hypercube.
-        ub : (n_states,) or (n_states,1) array, optional
+        ub : `(n_states,)` or `(n_states,1)` array, optional
             Upper bounds for each dimension of the hypercube.
-        xf : (n_states,) or (n_states,1) array, optional
+        xf : `(n_states,)` or `(n_states,1)` array, optional
             Nominal state within the hypercube. If `sample` is called with a
             specified `distance` argument, this distance is calculated from `xf`
             with norm specified by `norm`.
@@ -107,10 +110,10 @@ class UniformSampler(StateSampler):
             if ub is not None:
                 self.ub = resize_vector(ub, self.n_states)
         except:
-            raise ValueError("lb, ub, and xf must have compatible shapes")
+            raise ValueError('lb, ub, and xf must have compatible shapes')
 
         if not np.all(self.xf <= self.ub) or not np.all(self.lb <= self.xf):
-            raise ValueError("Must have lb <= xf <= ub")
+            raise ValueError('Must have lb <= xf <= ub')
 
         if seed is not None:
             self.rng = np.random.default_rng(seed)
@@ -118,7 +121,7 @@ class UniformSampler(StateSampler):
     def __call__(self, n_samples=1, distance=None):
         """
         Generate samples of the system state uniformly in a hypercube with lower
-        and upper bound specified by `self.lb` and `self.ub`, respectively.
+        and upper bounds specified by `self.lb` and `self.ub`, respectively.
 
         Parameters
         ----------
@@ -132,23 +135,22 @@ class UniformSampler(StateSampler):
 
         Returns
         -------
-        x : (n_states, n_samples) or (n_states,) array
+        x : `(n_states, n_samples)` or `(n_states,)` array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x` will be a one-dimensional array.
+            sample. If `n_samples=1` then `x` will be a 1d array.
         """
-        n_samples = check_int_input(n_samples, "n_samples", min=1)
+        n_samples = check_int_input(n_samples, "n_samples", low=1)
 
-        x = self.rng.uniform(
-            low=self.lb, high=self.ub, size=(self.n_states, n_samples)
-        )
+        x = self.rng.uniform(low=self.lb, high=self.ub,
+                             size=(self.n_states, n_samples))
 
         if distance is not None:
             x -= self.xf
             if isinstance(self.norm, int):
                 x_norm = distance / np.linalg.norm(x, self.norm, axis=0)
             else:
-                x_norm = np.einsum("ij,js->is", self.norm, x)
-                x_norm = np.einsum("is,is->s", x_norm, x_norm)
+                x_norm = np.einsum('ij,js->is', self.norm, x)
+                x_norm = np.einsum('is,is->s', x_norm, x_norm)
                 x_norm = distance / np.sqrt(x_norm)
             x *= x_norm
             x += self.xf

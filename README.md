@@ -1,5 +1,3 @@
-# benchmark_ocp
-
 This software repository contains a collection of benchmark optimal feedback control problems. Some of these problems are described in
 
   * [Neural Network Optimal Feedback Control with Guaranteed Local Stability](https://doi.org/10.1109/OJCSYS.2022.3205863)
@@ -21,7 +19,7 @@ following software dependencies:
     matplotlib>=3.5.3
     pylgr
 
-The `pylgr` package can be downloaded at [https://github.com/Tenavi/PyLGR](https://github.com/Tenavi/PyLGR).
+The `pylgr` package can be downloaded at https://github.com/Tenavi/PyLGR.
 
 ### Testing
 

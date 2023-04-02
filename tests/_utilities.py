@@ -3,9 +3,11 @@ import numpy as np
 from optimalcontrol.utilities import approx_derivative
 
 
-def compare_finite_difference(x, jac, fun, method="3-point"):
+def compare_finite_difference(x, jac, fun,method='3-point',
+                              rtol=1e-06, atol=1e-12):
     expected_jac = approx_derivative(fun, x, method=method)
-    np.testing.assert_allclose(jac, expected_jac)
+    np.testing.assert_allclose(jac, expected_jac, rtol=rtol, atol=atol)
+
 
 def make_LQ_params(n_states, n_controls, seed=None):
     """Generate random dynamics matrices `A` and `B` of specified size and

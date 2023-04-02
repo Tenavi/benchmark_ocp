@@ -1,20 +1,21 @@
 class OpenLoopSolution:
     """
-    Bunch object containing the solution to an open loop optimal control problem
-    for one initial condition.
+    Object containing the solution to an open loop optimal control problem for
+    one initial condition. The solution is stored at the time points chosen by
+    the solver, as well as an interpolant appropriate for the solution type.
 
     Attributes
     ----------
-    t : (n_points,) array
+    t : `(n_points,)` array
         Time points returned by the open loop solver.
-    x : (n_states, n_points) array
+    x : `(n_states, n_points)` array
         Values of the optimal state trajectory at times `t`.
-    u : (n_controls, n_points) array
+    u : `(n_controls, n_points)` array
         Values of the optimal control at times `t`.
-    p : (n_states, n_points) array
+    p : `(n_states, n_points)` array
         Values of the costate at times `t`.
-    v : (n_points,) array
-        The value function evaluated at `v(x(t))`.
+    v : `(n_points,)` array
+        The value function evaluated at the points `x`.
     status : int
         Reason for solver termination. `status==0` indicates success, other
         values indicated various failure modes. See `message` for details.
@@ -36,19 +37,19 @@ class OpenLoopSolution:
 
         Parameters
         ----------
-        t : (n_points,) array
+        t : `(n_points,)` array
             Time points at which to evaluate the continuous solution.
 
         Returns
         -------
-        x : (n_states, n_points) array
+        x : `(n_states, n_points)` array
             Values of the optimal state trajectory at times `t`.
-        u : (n_controls, n_points) array
+        u : `(n_controls, n_points)` array
             Values of the optimal control at times `t`.
-        p : (n_states, n_points) array
+        p : `(n_states, n_points)` array
             Values of the costate at times `t`.
-        v : (n_points,) array
-            The value function evaluated at `v(x(t))`.
+        v : `(n_points,)` array
+            The value function evaluated at the points `x`.
         """
         raise NotImplementedError
 
@@ -60,7 +61,7 @@ class OpenLoopSolution:
         Parameters
         ----------
         fun : callable
-            Running cost function. See `problem.running_cost`.
+            Running cost function. See `OptimalControlProblem.running_cost`.
         tol : float
             The maximum allowable final time running cost. This can be negative
             for cost functions which are allowed to be negative (rare).

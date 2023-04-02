@@ -6,7 +6,7 @@ name: benchmarkocp
 
 on:
   push:
-    branches: [ "main" , "docs"]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -38,7 +38,7 @@ jobs:
 
       # For now, just verify that the documentation successfully compiles
       - name: Document
-        run: pdoc optimalcontrol -o .docs/ --d numpy --math
+        run: pdoc optimalcontrol -o .docs/ --d numpy --math -t .docs/.template/
 
       - uses: actions/upload-pages-artifact@v1
         with:

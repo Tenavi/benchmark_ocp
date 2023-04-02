@@ -26,7 +26,8 @@ def test_solve_infinite_horizon(method):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
-    optimal.
+    optimal. This test implicitly tests `indirect.solve_fixed_time`, since this
+    is used for `indirect.solve_infinite_horizon`.
     """
     n_states = 3
     n_controls = 2
@@ -35,7 +36,7 @@ def test_solve_infinite_horizon(method):
     # Direct method is much less accurate than indirect, but the solution is
     # still considered reasonable.
     if method == 'direct':
-        kwargs = {'max_nodes': 100, 'tol': 10*t1_tol}
+        kwargs = {'max_nodes': 100, 'tol': 1e-12, 'verbose': 1}
         tol = 1e-02
     elif method == 'indirect':
         kwargs = {'max_nodes': 1000}
