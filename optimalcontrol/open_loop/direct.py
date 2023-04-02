@@ -1,7 +1,16 @@
+"""
+#### Warning:
+
+**The functions implemented in this module depend on the
+[`pylgr`](https://github.com/Tenavi/PyLGR) package, which is not yet available
+on `pip` and must be installed manually. `pylgr` is also under development and
+its performance is not guaranteed.**
+"""
+
 import numpy as np
 import warnings
 
-from ._solve import OpenLoopSolution
+from .solutions import OpenLoopSolution
 
 try:
     import pylgr
@@ -9,6 +18,9 @@ except ImportError:
     warnings.warn(
         'Could not import pylgr library. Direct methods are not available.',
         ImportWarning)
+
+
+__all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 
 
 class DirectSolution(OpenLoopSolution):
@@ -29,6 +41,8 @@ class DirectSolution(OpenLoopSolution):
 def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                      verbose=0):
     """
+    ### NOT YET IMPLEMENTED
+
     Compute the open-loop optimal solution of a fixed time optimal control
     problem for a single initial condition.
 
@@ -67,9 +81,8 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     Returns
     -------
     sol : OpenLoopSolution
-        Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:, 0]`. Solution should only be
-        trusted if `sol.status == 0`.
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status == 0`.
     """
     raise NotImplementedError('pylgr has not yet implemented finite horizon')
 
@@ -91,16 +104,16 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     Parameters
     ----------
-    ocp : OptimalControlProblem
+    ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
-    t : (n_points,) array
+    t : `(n_points,)` array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : (n_states, n_points) array
+    x : `(n_states, n_points)` array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    u : (n_controls, n_points) array
+    u : `(n_controls, n_points)` array
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=32
         Number of nodes to use in the pseudospectral discretization.
@@ -115,22 +128,24 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Maximum number of pseudospectral collocation nodes.
     tol_scale : float, default=1
         If the running cost does not converge and the solution is attempted
-        again, multiplies `tol` by this amount.
+        again, multiplies `tol` by this amount. Starting with a smaller number
+        of nodes and a more relaxed tolerance can help generate a good starting
+        point from which the solution can be more easily improved.
     t1_tol : float, default=1e-10
         Tolerance for the running cost when determining convergence of the
         finite horizon approximation.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
+
             * 0 (default) : work silently.
             * 1 : display a termination report.
             * 2 : display progress during iterations.
 
     Returns
     -------
-    sol : OpenLoopSolution
-        Bunch object containing the solution of the open-loop optimal control
-        problem for the initial condition `x[:, 0]`. Solution should only be
-        trusted if `sol.status == 0`.
+    sol : `OpenLoopSolution`
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status == 0`.
     """
     t1_tol = float(t1_tol)
 
@@ -144,8 +159,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     ps_sol = pylgr.solve_ocp(ocp.dynamics, ocp.running_cost, t, x, u,
                              U_lb=getattr(ocp.parameters, 'u_lb', None),
                              U_ub=getattr(ocp.parameters, 'u_ub', None),
-                             dynamics_jac=ocp.jacobians,
-                             cost_grad=ocp.running_cost_gradients, tol=tol,
+                             dynamics_jac=ocp.jac,
+                             cost_grad=ocp.running_cost_grad, tol=tol,
                              n_nodes=n_nodes, maxiter=max_iter, verbose=verbose)
 
     t = ps_sol.t.flatten()

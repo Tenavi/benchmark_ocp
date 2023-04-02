@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..example_config import Config
-from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.problem.problem import OptimalControlProblem
 from optimalcontrol.utilities import saturate
 from optimalcontrol.sampling import UniformSampler
 
@@ -113,8 +113,8 @@ class VanDerPol(OptimalControlProblem):
 
         return L[0]
 
-    def running_cost_gradients(self, x, u, return_dLdx=True, return_dLdu=True,
-                               L0=None):
+    def running_cost_grad(self, x, u, return_dLdx=True, return_dLdu=True,
+                          L0=None):
         if np.ndim(x) < 2:
             x_err = x - self.xf.flatten()
         else:
@@ -137,8 +137,8 @@ class VanDerPol(OptimalControlProblem):
 
         return dLdx, dLdu
 
-    def running_cost_hessians(self, x, u, return_dLdx=True, return_dLdu=True,
-                              L0=None):
+    def running_cost_hess(self, x, u, return_dLdx=True, return_dLdu=True,
+                          L0=None):
         if return_dLdx:
             Q = np.diag([self._params.Wx, self._params.Wy])
             if np.ndim(x) >= 2:
@@ -168,7 +168,7 @@ class VanDerPol(OptimalControlProblem):
 
         return np.concatenate((dx1dt, dx2dt), axis=0)
 
-    def jacobians(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
+    def jac(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
         if return_dfdx:
             dfdx = np.zeros((self.n_states,) + np.shape(x))
             dfdx[0,1] = 1.
@@ -193,7 +193,7 @@ class VanDerPol(OptimalControlProblem):
         u = self.uf - self._params.b / self._params.Wu * p[1:]
         return self._saturate(u)
 
-    def optimal_control_jacobian(self, x, p, u0=None):
+    def optimal_control_jac(self, x, p, u0=None):
         return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
 
     def bvp_dynamics(self, t, xp):

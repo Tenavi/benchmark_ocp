@@ -2,129 +2,125 @@ import numpy as np
 from scipy.optimize import _numdiff
 
 
-def saturate(u, min=None, max=None):
+def saturate(u, lb=None, ub=None):
     """
     Hard saturation of controls between given bounds.
 
     Parameters
     ----------
-    u : (n_controls, n_data) or (n_controls,) array
+    u : `(n_controls, n_data)` or `(n_controls,)` array
         Control(s) to saturate.
-    min : (n_controls, 1) or (n_controls,) array, optional
+    lb : `(n_controls, 1)` or `(n_controls,)` array, optional
         Lower control bounds.
-    max : (n_controls, 1) or (n_controls,) array, optional
+    ub : `(n_controls, 1)` or `(n_controls,)` array, optional
         Upper control bounds.
 
     Returns
     -------
-    u : array with same shape as input
-        Control(s) `u` saturated between `min` and `max`.
+    u : array with same shape as `u`
+        Control(s) `u` saturated between `lb` and `ub`.
     """
-    if min is None and max is None:
+    if lb is None and ub is None:
         return u
 
     if np.ndim(u) < 2:
-        if min is not None and np.ndim(min) > 1:
-            min = np.reshape(min, -1)
-        if max is not None and np.ndim(max) > 1:
-            max = np.reshape(max, -1)
+        if lb is not None and np.ndim(lb) > 1:
+            lb = np.reshape(lb, -1)
+        if ub is not None and np.ndim(ub) > 1:
+            ub = np.reshape(ub, -1)
 
-    return np.clip(u, min, max)
+    return np.clip(u, lb, ub)
 
-def find_saturated(u, min=None, max=None):
+
+def find_saturated(u, lb=None, ub=None):
     """
     Find indices where controls are saturated between given bounds.
 
     Parameters
     ----------
-    u : (n_controls, n_data) or (n_controls,) array
+    u : `(n_controls, n_data)` or `(n_controls,)` array
         Control(s) arranged by dimension, time.
-    min : (n_controls, 1) or (n_controls,) array, optional
+    lb : `(n_controls, 1)` or `(n_controls,)` array, optional
         Lower control bounds.
-    max : (n_controls, 1) or (n_controls,) array, optional
+    ub : `(n_controls, 1)` or `(n_controls,)` array, optional
         Upper control bounds.
 
     Returns
     -------
-    sat_idx : boolean array with same shape as input
-        `sat_idx[i,j] = True` if `u[i,j] >= max[i]` or `u[i,j] <= min[i]`. If
-        `max` or `min` is `None` then these are ignored.
+    sat_idx : boolean array with same shape as `u`
+        `sat_idx[i,j] = True` if `u[i,j] <= lb[i]` or `u[i,j] >= ub[i]`. If
+        `lb` or `ub` is `None` then these are ignored.
     """
-    if min is None and max is None:
+    if lb is None and ub is None:
         return np.full(np.shape(u), False)
 
-    if min is not None and max is not None:
-        return np.any([max <= u, u <= min], axis=0)
-    elif max is not None:
-        return max <= u
+    if lb is not None and ub is not None:
+        return np.any([ub <= u, u <= lb], axis=0)
+    elif ub is not None:
+        return ub <= u
     else:
-        return u <= min
+        return u <= lb
 
-# ------------------------------------------------------------------------------
 
-def check_int_input(n, argname, min=None):
+def check_int_input(n, argname, low=None):
     """
     Convert an input to an int, raising errors if this is not possible without
     likely loss of information or if the int is less than a specified minimum.
 
     Parameters
     ----------
-    n : array-like
-        Input to check. Raises `TypeError` if `n` is not an `int` or `ndarray`.
+    n : array_like, size 1
+        Input to check.
     argname : str
         How to refer to the argument `n` in error messages.
-    min : int, optional
-        Minimum value which `n` should take. Raises `ValueError` if `n < min`.
+    low : int, optional
+        Minimum value which `n` should take.
+
+    Raises
+    ------
+    TypeError
+        If `n` is not an int or array_like of size 1.
+    ValueError
+        If `n < low`.
 
     Returns
     -------
     n : int
-        Input `n` converted to an `int`, if possible.
+        Input `n` converted to an int, if possible.
     """
     if not isinstance(argname, str):
         raise TypeError("argname must be a str")
-    if min is not None:
-        min = check_int_input(min, "min")
+    if low is not None:
+        low = check_int_input(low, "low")
 
-    bad_type = False
+    try:
+        n = np.asarray(n).astype(int, casting='safe')
+        n = int(n)
+    except:
+        raise TypeError(f"{argname} must be an int")
 
-    if np.size(n) != 1:
-        bad_type = True
-    else:
-        if isinstance(n, list):
-            n = np.asarray(n)
-
-        if hasattr(n, "dtype") and "int" in str(n.dtype):
-            n = int(n)
-        elif not isinstance(n, int):
-            bad_type = True
-
-    if bad_type:
-        raise TypeError("%s must be an int" % argname)
-
-    if min is not None and n < min:
-        raise ValueError(
-            "%s must be greater than or equal to %d" % (argname, min)
-        )
+    if low is not None and n < low:
+        raise ValueError(f"{argname} must be greater than or equal to {low:d}")
 
     return n
 
+
 def resize_vector(array, n_rows):
     """
-    Reshapes or resizes an array-like to a 2d array with one column and a
+    Reshapes or resizes an array_like to a 2d array with one column and a
     specified number of rows.
 
     Parameters
     ----------
-    array : array-like
-        Array to reshape or resize into shape `(n_rows,1)`.
-    n_rows : {int >= 1, -1}
+    array : array_like
+        Array to reshape or resize into shape `(n_rows, 1)`.
+    n_rows : {`int >= 1`, -1}
         Number of rows desired in `x`. If `n_rows == -1` then uses
         `n_rows = np.size(x)`.
     Returns
     -------
-    reshaped_array : (n_rows, 1) array
-        If `array.shape == (n_rows,1)` then returns the original `array`,
+    reshaped_array : `(n_rows, 1)` array
+        If `array.shape == (n_rows, 1)` then returns the original `array`,
         otherwise a copy is returned.
     """
     n_rows = check_int_input(n_rows, "n_rows")
@@ -133,89 +129,89 @@ def resize_vector(array, n_rows):
     elif n_rows <= 0:
         raise ValueError("n_rows must be a positive int or -1")
 
-    if hasattr(array,"shape") and array.shape == (n_rows,1):
+    if hasattr(array,"shape") and array.shape == (n_rows, 1):
         return array
 
-    array = np.reshape(array, (-1,1))
+    array = np.reshape(array, (-1, 1))
     if array.shape[0] == n_rows:
         return array
     elif array.shape[0] == 1:
-        return np.tile(array, (n_rows,1))
+        return np.tile(array, (n_rows, 1))
     else:
-        raise ValueError("The size of array is not compatible with the desired shape (n_rows,1)")
+        raise ValueError("The size of array is not compatible with the desired "
+                         "shape (n_rows,1)")
 
-# ------------------------------------------------------------------------------
 
-def approx_derivative(
-        fun, x0, method="3-point", rel_step=None, abs_step=None, f0=None,
-        args=(), kwargs={}
-    ):
+def approx_derivative(fun, x0, method="3-point", rel_step=None, abs_step=None,
+                      f0=None, args=(), kwargs={}):
     """
     Compute (batched) finite difference approximation of the derivatives of an
     array-valued function. Modified from
     `scipy.optimize._numdiff.approx_derivative` to allow for array-valued
     functions evaluated at multiple inputs.
 
-    If a function maps from R^n to R^m, its derivatives form m-by-n matrix
-    called the Jacobian, where an element (i, j) is a partial derivative of
-    f[i] with respect to x[j].
+    If a function maps from $R^n$ to $R^m$, its derivatives form m-by-n matrix
+    called the Jacobian, where an element `[i, j]` is a partial derivative of
+    `f[i]` with respect to `x[j]`.
 
     Parameters
     ----------
     fun : callable
-        Function of which to estimate the derivatives. The argument x
-        passed to this function is an ndarray of shape (n,) or (n, n_points). It
-        must return a float or an n-D array_like of shape (n_points,),
-        (m_1, ..., m_l), or (m_1, ..., m_l, n_points), depending on the shape of
-        the input.
-    x0 : array_like of shape (n,) or (n, n_points)
+        Function of which to estimate the derivatives. The argument `x`
+        passed to this function is an ndarray of shape `(n,)` or
+        `(n, n_points)`. It must return a float or an nd array_like of shape
+        `(n_points,)`, `(m_1, ..., m_l)`, or `(m_1, ..., m_l, n_points)`,
+        depending on the shape of the input.
+    x0 : `(n,)` or `(n, n_points)` array_like
         Point(s) at which to estimate the derivatives.
     method : {"3-point", "2-point", "cs"}, optional
         Finite difference method to use:
-            - "2-point" - use the first order accuracy forward or backward
+
+            * "2-point" - use the first order accuracy forward or backward
                           difference.
-            - "3-point" - use central difference
-            - "cs" - use a complex-step finite difference scheme. This assumes
+            * "3-point" - use central difference
+            * "cs" - use a complex-step finite difference scheme. This assumes
                      that the user function is real-valued and can be
                      analytically continued to the complex plane. Otherwise,
                      produces bogus results.
-    rel_step : None or array_like, optional
-        Relative step size to use. If None (default) the absolute step size is
-        computed as ``h = rel_step * sign(x0) * max(1, abs(x0))``, with
+    rel_step : array_like, optional
+        Relative step size to use. If `None` (default) the absolute step size is
+        computed as `h = rel_step * sign(x0) * max(1, abs(x0))`, with
         `rel_step` being selected automatically, see Notes. Otherwise
-        ``h = rel_step * sign(x0) * abs(x0)``. For ``method="3-point"`` the
-        sign of `h` is ignored.
+        `h = rel_step * sign(x0) * abs(x0)`. For `method="3-point"` the sign of
+        `h` is ignored.
     abs_step : array_like, optional
-        Absolute step size to use. For ``method="3-point"`` the sign of
-        `abs_step` is ignored. By default relative steps are used, only if
-        ``abs_step is not None`` are absolute steps used.
-    f0 : None or array_like, optional
-        If not None it is assumed to be equal to ``fun(x0)``, in this case
-        the ``fun(x0)`` is not called. Default is None.
+        Absolute step size to use. For `method="3-point"` the sign of `abs_step`
+        is ignored. By default relative steps are used; only if
+        `abs_step is not None` are absolute steps used.
+    f0 : array_like, optional
+        If not `None` it is assumed to be equal to `fun(x0)`, in this case
+        `fun(x0)` is not called.
     args, kwargs : tuple and dict, optional
         Additional arguments passed to `fun`. Both empty by default.
-        The calling signature is ``fun(x, *args, **kwargs)``.
+        The calling signature is `fun(x, *args, **kwargs)`.
 
     Returns
     -------
-    dfdx : (n,), (n_points,), (m_1, ..., m_l, n) or (m_1, ..., m_l, n, n_points)
-        array, depending on the sizes of x0 and fun(x0)
-        Finite difference approximation of the Jacobian matrix or matrices.
+    dfdx : `(n,)`, `(n_points,)`, `(m_1, ..., m_l, n)`, or\
+            `(m_1, ..., m_l, n, n_points)` array
+        Finite difference approximation of the Jacobian matrix or matrices. The
+        shape of `dfdx` depends on the sizes of `x0` and `fun(x0)`.
 
     Notes
     -----
     If `rel_step` is not provided, it assigned as ``EPS**(1/s)``, where EPS is
-    determined from the smallest floating point dtype of `x0` or `fun(x0)`,
-    ``np.finfo(x0.dtype).eps``, s=2 for "2-point" method and s=3 for "3-point"
+    determined from the smallest floating point `dtype` of `x0` or `fun(x0)`,
+    `np.finfo(x0.dtype).eps`, s=2 for "2-point" method and s=3 for "3-point"
     method. Such relative step approximately minimizes a sum of truncation and
     round-off errors. Relative steps are used by default. However, absolute
-    steps are used when ``abs_step is not None``. If any of the absolute or
+    steps are used when `abs_step is not None`. If any of the absolute or
     relative steps produces an indistinguishable difference from the original
-    `x0`, ``(x0 + dx) - x0 == 0``, then an automatic step size is substituted
-    for that particular entry.
+    `x0`, `(x0 + dx) - x0 == 0`, then an automatic step size is substituted for
+    that particular entry.
     """
     if method not in ["2-point", "3-point", "cs"]:
-        raise ValueError("Unknown method '%s'. " % method)
+        raise ValueError(f"Unknown method '{method}'. ")
 
     x0 = np.atleast_1d(x0)
 
@@ -243,10 +239,8 @@ def approx_derivative(
         # cannot have a zero step. This might happen if x0 is very large
         # or small. In which case fall back to relative step.
         dx = ((x0 + h) - x0)
-        h_alt = (
-            _numdiff._eps_for_method(x0.dtype, f0.dtype, method)
-            * sign_x0 * np.maximum(1.0, np.abs(x0))
-        )
+        h_alt = (_numdiff._eps_for_method(x0.dtype, f0.dtype, method)
+                 * sign_x0 * np.maximum(1.0, np.abs(x0)))
         h = np.where(dx == 0, h_alt, h)
 
     dfdx = _dense_difference(fun_wrapped, x0, f0, h, method)
@@ -255,6 +249,7 @@ def approx_derivative(
         return dfdx[0]
     else:
         return dfdx
+
 
 def _dense_difference(fun, x0, f0, h, method):
     dfdx_T = np.empty(x0.shape[:1] + f0.shape)
@@ -276,6 +271,8 @@ def _dense_difference(fun, x0, f0, h, method):
             x[i] += h[i] * 1.j
             df = fun(x).imag
             dx = h[i]
+        else:
+            raise ValueError(f"Unknown method '{method}'. ")
 
         dfdx_T[i] = df / dx
 
@@ -284,35 +281,33 @@ def _dense_difference(fun, x0, f0, h, method):
 
     return np.moveaxis(dfdx_T, 0, -2)
 
-# ------------------------------------------------------------------------------
 
 def closed_loop_jacobian(x, open_loop_jac, controller):
-    """
+    r"""
     Evaluate the Jacobian of closed-loop dynamics,
-    Df/Dx = df/dx + df/du @ du/dx, where f = f(x,u(x)) is a vector field with
-    partial derivatives df/dx and df/du.
+    $Df/Dx = df/dx + df/du \cdot du/dx$, where $f = f(x,u(x))$ is a vector field
+    with partial derivatives $df/dx$ and $df/du$.
 
     Parameters
     ----------
-    x : (n_states,) or (n_states, n_points) array
+    x : `(n_states,)` or `(n_states, n_points)` array
         State(s) arranged by (dimension, time).
     open_loop_jac : callable
-        Function defining the open-loop partial derivatives df/dx and df/du. See
-        `OptimalControlProblem.jacobians`.
+        Function defining the open-loop partial derivatives $df/dx$ and $df/du$.
+        See `OptimalControlProblem.jacobians`.
     controller : Controller
-        `Controller` instance implementing `__call__` and `jacobian`.
+        `Controller` instance implementing `__call__` and `jac`.
 
     Returns
     -------
-    DfDx : (n_states, n_states) or (n_states, n_states, n_points) array
-        Closed-loop Jacobian(s), with DfDx[i,j] = Df[i]/Dx[j].
+    DfDx : `(n_states, n_states)` or `(n_states, n_states, n_points)` array
+        Closed-loop Jacobian(s), with `DfDx[i, j] = Df[i]/Dx[j]`.
     """
     u = controller(x)
     dfdx, dfdu = open_loop_jac(x, u)
-    dudx = controller.jacobian(x, u0=u)
+    dudx = controller.jac(x, u0=u)
 
-    dfdx += np.einsum("ij...,jk...->ik...", dfdu, dudx)
-
+    dfdx += np.einsum('ij...,jk...->ik...', dfdu, dudx)
     return dfdx
 
 # ------------------------------------------------------------------------------

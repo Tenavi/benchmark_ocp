@@ -1,5 +1,3 @@
-# benchmark_ocp
-
 This software repository contains a collection of benchmark optimal feedback control problems. Some of these problems are described in
 
   * [Neural Network Optimal Feedback Control with Guaranteed Local Stability](https://doi.org/10.1109/OJCSYS.2022.3205863)
@@ -18,20 +16,21 @@ following software dependencies:
     scipy>=1.7.3
     pandas>=1.3.5
     tqdm>=4.65.0
-    pytest>=7.2.2
     matplotlib>=3.5.3
     pylgr
 
-The `pylgr` package can be downloaded at [https://github.com/Tenavi/PyLGR](https://github.com/Tenavi/PyLGR).
+The `pylgr` package can be downloaded at https://github.com/Tenavi/PyLGR.
+
+### Testing
+
+Install `pytest>=7.2.2` and run `pytest tests -s -v`.
 
 ## To-do list
 
-  * Open loop BVP solver
+  * other examples
   * Time-dependent problems
   * `run` folder
-  * other examples
   * update and publish `pylgr` package
-  * Open loop direct solver
   * Open loop solvers for time-dependent problems
   * Constraints and integration events
   * RK4 batch integrator

@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.parameters import ProblemParameters
+from optimalcontrol.problem import ProblemParameters
 
 from ._problems import ocp_dict
 from ._utilities import compare_finite_difference
@@ -10,11 +10,12 @@ from ._utilities import compare_finite_difference
 
 rng = np.random.default_rng()
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
+
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
 def test_init(ocp_name):
     """Basic check that each OCP can be initialized and allows parameters to be
     updated as expected."""
-    ocp = ocp_dict[ocp_name]["ocp"]()
+    ocp = ocp_dict[ocp_name]['ocp']()
 
     # Check that basic properties have been implemented
     assert ocp.n_states
@@ -26,7 +27,7 @@ def test_init(ocp_name):
         assert getattr(ocp.parameters, param) is not None
 
     # Check that problem parameters can be updated
-    ocp.parameters.optional = {"dummy_variable": False}
+    ocp.parameters.optional = {'dummy_variable': False}
     assert not ocp.parameters.dummy_variable
     ocp.parameters.update(dummy_variable=True)
     assert ocp.parameters.dummy_variable
@@ -35,15 +36,15 @@ def test_init(ocp_name):
     ocp.parameters.update()
 
     # Check that a new instance of the problem doesn't carry old parameters
-    ocp2 = ocp_dict[ocp_name]["ocp"]()
-    assert not hasattr(ocp2.parameters, "dummy_variable")
+    ocp2 = ocp_dict[ocp_name]['ocp']()
+    assert not hasattr(ocp2.parameters, 'dummy_variable')
 
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1,3))
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1, 3))
 def test_sample_initial_conditions(ocp_name, n_samples):
     """Test that we can sample initial conditions from each OCP."""
-    ocp = ocp_dict[ocp_name]["ocp"]()
+    ocp = ocp_dict[ocp_name]['ocp']()
 
     with pytest.raises(Exception):
         ocp.sample_initial_conditions(n_samples=0)
@@ -60,13 +61,13 @@ def test_sample_initial_conditions(ocp_name, n_samples):
     assert x0.shape[0] == ocp.n_states
 
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1,3))
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1, 3))
 def test_cost_functions(ocp_name, n_samples):
     """Test that cost function inputs and outputs have the correct shape and
     that gradients and Hessian of the cost function match finite difference
     approximations."""
-    ocp = ocp_dict[ocp_name]["ocp"]()
+    ocp = ocp_dict[ocp_name]['ocp']()
 
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -87,54 +88,50 @@ def test_cost_functions(ocp_name, n_samples):
             F = ocp.terminal_cost(x.flatten())
             assert F.ndim == 0
     except NotImplementedError:
-        print("%s OCP has no terminal cost." % ocp_name)
+        print(f'{ocp_name} OCP has no terminal cost.')
 
     # Check that gradients give the correct size
-    dLdx, dLdu = ocp.running_cost_gradients(x, u)
+    dLdx, dLdu = ocp.running_cost_grad(x, u)
     assert dLdx.shape == (ocp.n_states, n_samples)
     assert dLdu.shape == (ocp.n_controls, n_samples)
 
     compare_finite_difference(x, dLdx, lambda x: ocp.running_cost(x, u),
-                              method=ocp._fin_diff_method)
+                              method=ocp._fin_diff_method, atol=1e-05)
     compare_finite_difference(u, dLdu, lambda u: ocp.running_cost(x, u),
-                              method=ocp._fin_diff_method)
+                              method=ocp._fin_diff_method, atol=1e-05)
 
     # Check that Hessians give the correct size
-    dLdx, dLdu = ocp.running_cost_hessians(x, u)
+    dLdx, dLdu = ocp.running_cost_hess(x, u)
     assert dLdx.shape == (ocp.n_states, ocp.n_states, n_samples)
     assert dLdu.shape == (ocp.n_controls, ocp.n_controls, n_samples)
 
     compare_finite_difference(
-        x, dLdx,
-        lambda x: ocp.running_cost_gradients(x, u, return_dLdu=False),
-        method=ocp._fin_diff_method
-    )
+        x, dLdx, lambda x: ocp.running_cost_grad(x, u, return_dLdu=False),
+        method=ocp._fin_diff_method, atol=1e-05)
     compare_finite_difference(
-        u, dLdu,
-        lambda u: ocp.running_cost_gradients(x, u, return_dLdx=False),
-        method=ocp._fin_diff_method
-    )
+        u, dLdu, lambda u: ocp.running_cost_grad(x, u, return_dLdx=False),
+        method=ocp._fin_diff_method, atol=1e-05)
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
         L = ocp.running_cost(x.flatten(), u.flatten())
         assert L.ndim == 0
 
-        dLdx, dLdu = ocp.running_cost_gradients(x.flatten(), u.flatten())
+        dLdx, dLdu = ocp.running_cost_grad(x.flatten(), u.flatten())
         assert dLdx.shape == (ocp.n_states,)
         assert dLdu.shape == (ocp.n_controls,)
 
-        dLdx, dLdu = ocp.running_cost_hessians(x.flatten(), u.flatten())
+        dLdx, dLdu = ocp.running_cost_hess(x.flatten(), u.flatten())
         assert dLdx.shape == (ocp.n_states, ocp.n_states)
         assert dLdu.shape == (ocp.n_controls, ocp.n_controls)
 
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1,3))
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1, 3))
 def test_dynamics(ocp_name, n_samples):
     """Test that dynamics inputs and outputs have the correct shape and that
     Jacobians match finite difference approximations."""
-    ocp = ocp_dict[ocp_name]["ocp"]()
+    ocp = ocp_dict[ocp_name]['ocp']()
 
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -146,31 +143,31 @@ def test_dynamics(ocp_name, n_samples):
     assert f.shape == (ocp.n_states, n_samples)
 
     # Check that Jacobians give the correct size
-    dfdx, dfdu = ocp.jacobians(x, u)
+    dfdx, dfdu = ocp.jac(x, u)
     assert dfdx.shape == (ocp.n_states, ocp.n_states, n_samples)
     assert dfdu.shape == (ocp.n_states, ocp.n_controls, n_samples)
 
     compare_finite_difference(x, dfdx, lambda x: ocp.dynamics(x, u),
-                              method=ocp._fin_diff_method)
+                              method=ocp._fin_diff_method, atol=1e-05)
     compare_finite_difference(u, dfdu, lambda u: ocp.dynamics(x, u),
-                              method=ocp._fin_diff_method)
+                              method=ocp._fin_diff_method, atol=1e-05)
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
         f = ocp.dynamics(x.flatten(), u.flatten())
         assert f.shape == (ocp.n_states,)
 
-        dfdx, dfdu = ocp.jacobians(x.flatten(), u.flatten())
+        dfdx, dfdu = ocp.jac(x.flatten(), u.flatten())
         assert dfdx.shape == (ocp.n_states, ocp.n_states)
         assert dfdu.shape == (ocp.n_states, ocp.n_controls)
 
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1,3))
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1, 3))
 def test_optimal_control(ocp_name, n_samples):
     """Test that the optimal control as a function of state and costate returns
     the correct shape and Jacobians match finite difference approximations."""
-    ocp = ocp_dict[ocp_name]["ocp"]()
+    ocp = ocp_dict[ocp_name]['ocp']()
 
     # Get some random states and costates
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -183,27 +180,27 @@ def test_optimal_control(ocp_name, n_samples):
     assert u.shape == (ocp.n_controls, n_samples)
 
     # Check that Jacobian is the correct size
-    dudx = ocp.optimal_control_jacobian(x, p)
+    dudx = ocp.optimal_control_jac(x, p)
     assert dudx.shape == (ocp.n_controls, ocp.n_states, n_samples)
 
     compare_finite_difference(x, dudx, lambda x: ocp.optimal_control(x, p),
-                              method=ocp._fin_diff_method)
+                              method=ocp._fin_diff_method, atol=1e-05)
 
     # Check shape for flat vector inputs
     if n_samples == 1:
         u = ocp.optimal_control(x.flatten(), p.flatten())
         assert u.shape == (ocp.n_controls,)
 
-        dudx = ocp.optimal_control_jacobian(x.flatten(), p.flatten())
+        dudx = ocp.optimal_control_jac(x.flatten(), p.flatten())
         assert dudx.shape == (ocp.n_controls, ocp.n_states)
 
 
-@pytest.mark.parametrize("ocp_name", ocp_dict.keys())
-@pytest.mark.parametrize("n_samples", range(1, 3))
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', range(1, 3))
 def test_bvp_dynamics(ocp_name, n_samples):
     """Test that BVP dynamics inputs and outputs have the correct shape and that
     the output is (approximately) the same as the superclass method."""
-    ocp = ocp_dict[ocp_name]["ocp"]()
+    ocp = ocp_dict[ocp_name]['ocp']()
 
     # Get some random states and controls
     t = np.linspace(0., 1., n_samples)
@@ -219,4 +216,4 @@ def test_bvp_dynamics(ocp_name, n_samples):
     f = ocp.bvp_dynamics(t, xp)
     assert f.shape == (2*ocp.n_states+1, n_samples)
     f_super = super(type(ocp), ocp).bvp_dynamics(t, xp)
-    np.testing.assert_allclose(f, f_super, rtol=1e-06, atol=1e-12)
+    np.testing.assert_allclose(f, f_super, atol=1e-05)

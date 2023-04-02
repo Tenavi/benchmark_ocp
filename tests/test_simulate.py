@@ -9,7 +9,7 @@ from optimalcontrol.controls import LinearQuadraticRegulator
 from ._utilities import make_LQ_params
 
 
-@pytest.mark.parametrize("method", ["RK45", "BDF"])
+@pytest.mark.parametrize('method', ['RK45', 'BDF'])
 def test_integrate_closed_loop_LQR(method):
     """
     Basic test of an LQR-controlled linear system integrated over a fixed time
@@ -50,8 +50,8 @@ def test_integrate_closed_loop_LQR(method):
     np.testing.assert_allclose(xPx, J, atol=1e-02, rtol=1e-02)
 
 
-@pytest.mark.parametrize("norm", [1, 2, np.inf])
-@pytest.mark.parametrize("method", ["RK45", "BDF"])
+@pytest.mark.parametrize('norm', [1, 2, np.inf])
+@pytest.mark.parametrize('method', ['RK45', 'BDF'])
 def test_integrate_to_converge_LQR(norm, method):
     """
     Basic test of an LQR-controlled linear system integrated over an infinite
@@ -96,25 +96,40 @@ def test_integrate_to_converge_LQR(norm, method):
     np.testing.assert_allclose(x, x[:, idx])
 
 
-@pytest.mark.parametrize("method", ["RK45", "BDF"])
+@pytest.mark.parametrize('method', ['RK45', 'BDF'])
 def test_integrate_to_converge_ftol_array(method):
-    """
+    r"""
     Test that `integrate_to_converge` with a vector `ftol` converges differently
     for each state. Consider a closed loop system
-        dx1/dt = - k1 * x1
-        dx2/dt = - k2 * x2
-    where k1, k2 > 0. The analytical solution is
-        x1(t) = x1(0) * exp(-k1 * t)
-        x2(t) = x2(0) * exp(-k2 * t)
-    This means that at any time t,
-        dx1/dt (t) = - k1 * x1(0) * exp(-k1 * t)
-        dx2/dt (t) = - k2 * x2(0) * exp(-k2 * t)
-    For tolerances ftol1 and ftol2,
-        |dx1/dt (t)| < ftol1    for    t > t1 = - log(ftol1 / |k1 * x1(0)|) / k1
-        |dx2/dt (t)| < ftol2    for    t > t2 = - log(ftol2 / |k2 * x2(0)|) / k2
-    Suppose k1 = 1, k2 = 0.1, x1(0) = 100, x2(0) = 1, ftol1 = 1e-08, and
-    ftol2 = 1e-02. Then t1 = t2 = 10 * log(10) = 23.0259. We test that
-    `integrate_to_converge` completes integration of this system at this time.
+
+    $dx_1/dt = - k_1 x_1$
+
+    $dx_2/dt = - k_2 x_2$
+
+    where $k_1, k_2 > 0$. The analytical solution is
+
+    $x_1(t) = x_1(0) \exp(-k_1 * t)$
+
+    $x_2(t) = x_2(0) \exp(-k_2 * t)$
+
+    This means that at any time $t$,
+
+    $dx_1/dt (t) = - k_1 x_1(0) * \exp(-k_1 t)$
+
+    $dx_2/dt (t) = - k_2 x_2(0) * \exp(-k_2 t)$
+
+    For tolerances $\epsilon_1$ and $\epsilon_2$, we have
+    $|dx_1/dt (t)| < \epsilon_1$ for
+    $t > t_1 = - \log(\epsilon_1 / |k_1 * x_1(0)|) / k_1$
+
+    and $|dx_2/dt (t)| < \epsilon_2$ for
+
+    $t > t_2 = - \log(\epsilon_2 / |k_2 * x_2(0)|) / k_2$.
+
+    Now suppose $k_1 = 1, k2 = 0.1, x_1(0) = 100, x_2(0) = 1,$
+    $\epsilon_1 = 10^{-08}$, and $\epsilon_w = 10^{-02}$. Then
+    $t_1 = t_2 = 10 log(10) = 23.0259$. We test that `integrate_to_converge`
+    completes integration of this system at this time.
     """
     ftol = [1e-08, 1e-02]
     x0 = np.array([100., 1.])
