@@ -38,11 +38,11 @@ jobs:
 
       # For now, just verify that the documentation successfully compiles
       - name: Document
-        run: pdoc optimalcontrol -o .docs/ --d numpy --math -t .docs/.template/
+        run: pdoc optimalcontrol --d numpy --math -t documentation/.template/ -o documentation/
 
       - uses: actions/upload-pages-artifact@v1
         with:
-          path: .docs/
+          path: documentation/
 
   test:
 
@@ -66,7 +66,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install .
-          pip install pytest
 
       - name: Test
         run: pytest tests/

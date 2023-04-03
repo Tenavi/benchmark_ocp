@@ -116,8 +116,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
         for key in ('u_lb', 'u_ub'):
             if key in new_params or not hasattr(self, key):
                 if getattr(obj, key, None) is not None:
-                    u_bound = resize_vector(new_params[key],
-                                                  self.n_controls)
+                    u_bound = resize_vector(new_params[key], self.n_controls)
                     setattr(obj, key, u_bound)
                 setattr(self, key, getattr(obj, key))
 

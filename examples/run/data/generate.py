@@ -5,7 +5,7 @@ import scipy.io
 from qrnet.generate import generate
 from qrnet.controllers import load_NN
 
-from run.utilities import make_parser, yn_input
+from examples.run.utilities import make_parser, yn_input
 
 from problem import OCP, config, model_dir, data_dir
 

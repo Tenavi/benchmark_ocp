@@ -1,32 +1,19 @@
 import numpy as np
 
-from ..example_config import Config
-from optimalcontrol.problem.problem import OptimalControlProblem
-from optimalcontrol.utilities import saturate
+from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.utilities import saturate, resize_vector
 from optimalcontrol.sampling import UniformSampler
 
 
-config = Config(
-    ode_solver="RK23",
-    atol=1e-08,
-    rtol=1e-04,
-    t1_sim=20.,
-    t1_max=120.,
-    n_trajectories_train=50,
-    n_trajectories_test=50
-)
-
-
 class VanDerPol(OptimalControlProblem):
-    _required_parameters = {
-        "Wx": .5, "Wy": 1., "Wu": 4., "xf": 0.,
-        "mu": 2., "b": 1.5,
-        "x0_ub": np.array([[3.],[4.]]), "x0_lb": -np.array([[3.],[4.]])
-    }
-    _optional_parameters = {"u_max": 1.}
+    _required_parameters = {'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
+                            'mu': 2., 'b': 1.5,
+                            'x0_ub': np.array([[3.], [4.]]),
+                            'x0_lb': -np.array([[3.], [4.]])}
+    _optional_parameters = {'u_lb': -1., 'u_ub': 1.}
 
     def _saturate(self, u):
-        return saturate(u, -self.u_max, self.u_max)
+        return saturate(u, self._params.u_lb, self._params.u_ub)
 
     @property
     def n_states(self):
@@ -41,40 +28,34 @@ class VanDerPol(OptimalControlProblem):
         return np.inf
 
     def _update_params(self, obj, **new_params):
-        if "xf" in new_params:
+        if 'xf' in new_params:
             self.xf = np.zeros((2,1))
             self.xf[0] = obj.xf
 
-        if "b" in new_params:
+        if 'b' in new_params:
             self.B = np.zeros((2,1))
             self.B[1] = obj.b
 
-        if "b" in new_params or "xf" in new_params:
+        if 'b' in new_params or 'xf' in new_params:
             self.uf = self.xf[0] / obj.b
 
-        if "u_max" in new_params or not hasattr(self, "u_max"):
-            if obj.u_max is not None:
-                obj.u_max = np.abs(obj.u_max)
-            self.u_max = obj.u_max
+        for key in ('u_lb', 'u_ub'):
+            if key in new_params:
+                u_bound = resize_vector(new_params[key], self.n_controls)
+            else:
+                u_bound = getattr(obj, key, None)
+            setattr(obj, key, u_bound)
 
-        if not hasattr(self, "_x0_sampler"):
+        if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
-                norm=getattr(obj, "x0_sample_norm", 1),
-                seed=getattr(obj, "x0_sample_seed", None)
-            )
-        elif any([
-                "x0_lb" in new_params,
-                "x0_ub" in new_params,
-                "x0_sample_seed" in new_params,
-                "xf" in new_params
-            ]):
+                norm=getattr(obj, 'x0_sample_norm', 1),
+                seed=getattr(obj, 'x0_sample_seed', None))
+        elif any(['x0_lb' in new_params, 'x0_ub' in new_params,
+                  'x0_sample_seed' in new_params, 'xf' in new_params]):
             self._x0_sampler.update(
-                lb=new_params.get("x0_lb"),
-                ub=new_params.get("x0_ub"),
-                xf=self.xf,
-                seed=new_params.get("x0_sample_seed")
-            )
+                lb=new_params.get('x0_lb'), ub=new_params.get('x0_ub'),
+                xf=self.xf, seed=new_params.get('x0_sample_seed'))
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
         """
@@ -91,25 +72,24 @@ class VanDerPol(OptimalControlProblem):
 
         Returns
         -------
-        x0 : (n_states, n_samples) or (n_states,) array
+        x0 : `(2, n_samples)` or `(2,)` array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+            sample. If `n_samples=1` then `x0` will be a 1d array.
         """
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 
     def running_cost(self, x, u):
-        if x.ndim < 2:
+        if np.ndim(x) < 2:
             x_err = x - self.xf.flatten()
         else:
             x_err = x - self.xf
+        x_err = x_err ** 2
 
-        u_err = self._saturate(u) - self.uf
-
-        x_err = x_err**2
+        u_err = (self._saturate(u) - self.uf) ** 2
 
         L = (self._params.Wx/2.) * x_err[:1]
         L += (self._params.Wy/2.) * x_err[1:]
-        L += (self._params.Wu/2.) * u_err**2
+        L += (self._params.Wu/2.) * u_err
 
         return L[0]
 
@@ -142,14 +122,14 @@ class VanDerPol(OptimalControlProblem):
         if return_dLdx:
             Q = np.diag([self._params.Wx, self._params.Wy])
             if np.ndim(x) >= 2:
-                Q = np.tile(Q[...,None], (1,1,np.shape(x)[1]))
+                Q = np.tile(Q[..., None], (1, 1, np.shape(x)[1]))
             if not return_dLdu:
                 return Q
 
         if return_dLdu:
-            R = np.reshape(self._params.Wu, (1,1))
-            if np.ndim(u) >=2:
-                R = np.tile(R[...,None], (1,1,np.shape(u)[1]))
+            R = np.reshape(self._params.Wu, (1, 1))
+            if np.ndim(u) >= 2:
+                R = np.tile(R[...,None], (1, 1, np.shape(u)[1]))
             if not return_dLdx:
                 return R
 
@@ -170,17 +150,17 @@ class VanDerPol(OptimalControlProblem):
 
     def jac(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
         if return_dfdx:
-            dfdx = np.zeros((self.n_states,) + np.shape(x))
-            dfdx[0,1] = 1.
-            dfdx[1,0] = -1. - 2.*self._params.mu*x[0]*x[1]
-            dfdx[1,1] = self._params.mu*(1. - x[0]**2)
+            dfdx = np.zeros((self.n_states, * np.shape(x)))
+            dfdx[0, 1] = 1.
+            dfdx[1, 0] = -1. - 2.*self._params.mu*x[0]*x[1]
+            dfdx[1, 1] = self._params.mu*(1. - x[0]**2)
 
             if not return_dfdu:
                 return dfdx
 
         if return_dfdu:
-            if x.ndim > 1:
-                dfdu = np.tile(self.B[...,None], (1,1,np.shape(x)[-1]))
+            if np.ndim(u) > 1:
+                dfdu = np.tile(self.B[..., None], (1, 1, np.shape(u)[-1]))
             else:
                 dfdu = np.copy(self.B)
 

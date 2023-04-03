@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 from qrnet import simulate
 from qrnet.controllers import load_NN
 
-from run.utilities import make_parser
+from examples.run.utilities import make_parser
 
 from problem import OCP, config, model_dir, results_dir, data_dir
 

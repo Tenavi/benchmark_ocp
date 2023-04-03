@@ -4,7 +4,7 @@ import scipy.io
 
 from qrnet import simulate
 
-from run.utilities import make_parser
+from examples.run.utilities import make_parser
 
 from problem import OCP, config, results_dir
 

@@ -163,7 +163,7 @@ def test_sample(n_states):
 
 @pytest.mark.parametrize('n_states', [1, 2])
 @pytest.mark.parametrize('n_controls', [1, 2])
-@pytest.mark.parametrize('n_samples', [1, 10])
+@pytest.mark.parametrize('n_samples', [1, 50])
 def test_cost_functions(n_states, n_controls, n_samples):
     """Test that cost function inputs and outputs have the correct shape and
     that gradients and Hessians of return the expected Q and R matrices (except
@@ -171,7 +171,7 @@ def test_cost_functions(n_states, n_controls, n_samples):
     should be zero)."""
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.,
-                                 xf=xf, uf=uf, u_lb=-0.5, u_ub=0.5)
+                                 xf=xf, uf=uf, u_lb=-0.5)
 
     # Get some random states and controls. Some controls will be saturated.
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -260,7 +260,7 @@ def test_dynamics(n_states, n_controls, n_samples):
 
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
-        xi = x[:,i] - xf.flatten()
+        xi = x[:, i] - xf.flatten()
         ui = ocp._saturate(u[:,i]) - uf.flatten()
 
         np.testing.assert_allclose(f[:, i], A @ xi + B @ ui)
