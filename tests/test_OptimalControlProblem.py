@@ -15,7 +15,7 @@ rng = np.random.default_rng()
 def test_init(ocp_name):
     """Basic check that each OCP can be initialized and allows parameters to be
     updated as expected."""
-    ocp = ocp_dict[ocp_name]['ocp']()
+    ocp = ocp_dict[ocp_name]()
 
     # Check that basic properties have been implemented
     assert ocp.n_states
@@ -36,7 +36,7 @@ def test_init(ocp_name):
     ocp.parameters.update()
 
     # Check that a new instance of the problem doesn't carry old parameters
-    ocp2 = ocp_dict[ocp_name]['ocp']()
+    ocp2 = ocp_dict[ocp_name]()
     assert not hasattr(ocp2.parameters, 'dummy_variable')
 
 
@@ -44,7 +44,7 @@ def test_init(ocp_name):
 @pytest.mark.parametrize('n_samples', range(1, 3))
 def test_sample_initial_conditions(ocp_name, n_samples):
     """Test that we can sample initial conditions from each OCP."""
-    ocp = ocp_dict[ocp_name]['ocp']()
+    ocp = ocp_dict[ocp_name]()
 
     with pytest.raises(Exception):
         ocp.sample_initial_conditions(n_samples=0)
@@ -67,7 +67,7 @@ def test_cost_functions(ocp_name, n_samples):
     """Test that cost function inputs and outputs have the correct shape and
     that gradients and Hessian of the cost function match finite difference
     approximations."""
-    ocp = ocp_dict[ocp_name]['ocp']()
+    ocp = ocp_dict[ocp_name]()
 
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -131,7 +131,7 @@ def test_cost_functions(ocp_name, n_samples):
 def test_dynamics(ocp_name, n_samples):
     """Test that dynamics inputs and outputs have the correct shape and that
     Jacobians match finite difference approximations."""
-    ocp = ocp_dict[ocp_name]['ocp']()
+    ocp = ocp_dict[ocp_name]()
 
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -167,7 +167,7 @@ def test_dynamics(ocp_name, n_samples):
 def test_optimal_control(ocp_name, n_samples):
     """Test that the optimal control as a function of state and costate returns
     the correct shape and Jacobians match finite difference approximations."""
-    ocp = ocp_dict[ocp_name]['ocp']()
+    ocp = ocp_dict[ocp_name]()
 
     # Get some random states and costates
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -200,7 +200,7 @@ def test_optimal_control(ocp_name, n_samples):
 def test_bvp_dynamics(ocp_name, n_samples):
     """Test that BVP dynamics inputs and outputs have the correct shape and that
     the output is (approximately) the same as the superclass method."""
-    ocp = ocp_dict[ocp_name]['ocp']()
+    ocp = ocp_dict[ocp_name]()
 
     # Get some random states and controls
     t = np.linspace(0., 1., n_samples)

@@ -4,7 +4,7 @@ import scipy.io
 
 from qrnet.generate import refine
 
-from run.utilities import make_parser, yn_input
+from examples.run.utilities import make_parser, yn_input
 
 from problem import OCP, config, data_dir
 

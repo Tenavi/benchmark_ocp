@@ -17,21 +17,26 @@ following software dependencies:
     pandas>=1.3.5
     tqdm>=4.65.0
     matplotlib>=3.5.3
+    jupyter
     pylgr
 
 The `pylgr` package can be downloaded at https://github.com/Tenavi/PyLGR.
 
-### Testing
+### Test
 
-Install `pytest>=7.2.2` and run `pytest tests -s -v`.
+Install `pytest` and run `pytest tests -s -v`.
+
+### Generate documentation
+
+Install `pdoc` and run
+
+    pdoc optimalcontrol --d numpy --math -t documentation/.template/ -o documentation/
 
 ## To-do list
 
-  * other examples
+  * examples
   * Time-dependent problems
-  * `run` folder
-  * update and publish `pylgr` package
-  * Open loop solvers for time-dependent problems
+  * update and publish `pylgr` package for finite horizon and time-dependent problems
   * Constraints and integration events
   * RK4 batch integrator
   * Zero-order hold control wrapper

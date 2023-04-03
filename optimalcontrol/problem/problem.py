@@ -553,7 +553,7 @@ class OptimalControlProblem:
                 x = np.reshape(x, (self.n_states, -1))
             except:
                 raise ValueError('x must be an array of shape (n_states,) or '
-                                 '(n_states,n_points)')
+                                 '(n_states, n_points)')
         elif not isinstance(x, np.ndarray):
             x = np.array(x)
 
@@ -562,7 +562,7 @@ class OptimalControlProblem:
                 u = np.reshape(u, (self.n_controls, -1))
             except:
                 raise ValueError('u must be an array of shape (n_controls,) or '
-                                 '(n_controls,n_points)')
+                                 '(n_controls, n_points)')
         elif not isinstance(u, np.ndarray):
             u = np.array(u)
 

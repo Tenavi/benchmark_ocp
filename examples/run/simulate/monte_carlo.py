@@ -9,7 +9,7 @@ from qrnet.controllers import load_NN
 from qrnet.simulate import monte_carlo
 from qrnet.validate import find_fixed_point
 
-from run.utilities import yn_input, make_parser
+from examples.run.utilities import yn_input, make_parser
 
 from problem import OCP, config, model_dir, data_dir, results_dir
 
