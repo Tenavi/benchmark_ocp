@@ -10,7 +10,7 @@ class VanDerPol(OptimalControlProblem):
                             'mu': 2., 'b': 1.5,
                             'x0_ub': np.array([[3.], [4.]]),
                             'x0_lb': -np.array([[3.], [4.]])}
-    _optional_parameters = {'u_lb': -1., 'u_ub': 1.}
+    _optional_parameters = {'u_lb': -1., 'u_ub': 1., 'x0_sample_seed': None}
 
     def _saturate(self, u):
         return saturate(u, self._params.u_lb, self._params.u_ub)
@@ -29,15 +29,16 @@ class VanDerPol(OptimalControlProblem):
 
     def _update_params(self, obj, **new_params):
         if 'xf' in new_params:
-            self.xf = np.zeros((2,1))
+            self.xf = np.zeros((2, 1))
             self.xf[0] = obj.xf
 
         if 'b' in new_params:
-            self.B = np.zeros((2,1))
+            self.B = np.zeros((2, 1))
             self.B[1] = obj.b
 
         if 'b' in new_params or 'xf' in new_params:
-            self.uf = self.xf[0] / obj.b
+            self._uf = float(self.xf[0] / obj.b)
+            self.uf = np.reshape(self._uf, (1, 1))
 
         for key in ('u_lb', 'u_ub'):
             if key in new_params:
@@ -85,7 +86,7 @@ class VanDerPol(OptimalControlProblem):
             x_err = x - self.xf
         x_err = x_err ** 2
 
-        u_err = (self._saturate(u) - self.uf) ** 2
+        u_err = (self._saturate(u) - self._uf) ** 2
 
         L = (self._params.Wx/2.) * x_err[:1]
         L += (self._params.Wy/2.) * x_err[1:]
@@ -100,7 +101,7 @@ class VanDerPol(OptimalControlProblem):
         else:
             x_err = x - self.xf
 
-        u_err = self._saturate(u) - self.uf
+        u_err = self._saturate(u) - self._uf
 
         x1 = x_err[:1]
         x2 = x_err[1:]
@@ -129,7 +130,7 @@ class VanDerPol(OptimalControlProblem):
         if return_dLdu:
             R = np.reshape(self._params.Wu, (1, 1))
             if np.ndim(u) >= 2:
-                R = np.tile(R[...,None], (1, 1, np.shape(u)[1]))
+                R = np.tile(R[..., None], (1, 1, np.shape(u)[1]))
             if not return_dLdx:
                 return R
 
@@ -170,7 +171,7 @@ class VanDerPol(OptimalControlProblem):
         return dfdx, dfdu
 
     def optimal_control(self, x, p):
-        u = self.uf - self._params.b / self._params.Wu * p[1:]
+        u = self._uf - self._params.b / self._params.Wu * p[1:]
         return self._saturate(u)
 
     def optimal_control_jac(self, x, p, u0=None):
