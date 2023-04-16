@@ -3,7 +3,6 @@ import warnings
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
-from optimalcontrol.sampling import UniformSampler
 from optimalcontrol.utilities import approx_derivative
 from .parameters import ProblemParameters
 
@@ -59,7 +58,7 @@ class OptimalControlProblem:
     @property
     def parameters(self):
         """Returns a `ProblemParameters` instance specifying parameters for the
-        cost function(s) and system dynamics. """
+        cost function(s) and system dynamics."""
         return self._params
 
     def _update_params(self, obj, **new_params):
@@ -92,7 +91,7 @@ class OptimalControlProblem:
         -------
         x0 : `(n_states, n_samples)` or `(n_states,)` array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a 1d array.
+            sample. If `n_samples==1` then `x0` will be a 1d array.
         """
         raise NotImplementedError
 
@@ -116,7 +115,7 @@ class OptimalControlProblem:
         """
         xa = np.reshape(xa, (self.n_states, -1)).T
         xb = np.reshape(xb, (self.n_states, -1)).T
-        return cdist(xa, xb, metric="euclidean")
+        return cdist(xa, xb, metric='euclidean')
 
     def running_cost(self, x, u):
         """

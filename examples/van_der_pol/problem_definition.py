@@ -10,7 +10,8 @@ class VanDerPol(OptimalControlProblem):
                             'mu': 2., 'b': 1.5,
                             'x0_ub': np.array([[3.], [4.]]),
                             'x0_lb': -np.array([[3.], [4.]])}
-    _optional_parameters = {'u_lb': -1., 'u_ub': 1., 'x0_sample_seed': None}
+    _optional_parameters = {'u_lb': -1., 'u_ub': 1., 'x0_sample_seed': None,
+                            'x0_sample_norm': np.inf}
 
     def _saturate(self, u):
         return saturate(u, self._params.u_lb, self._params.u_ub)
@@ -60,22 +61,24 @@ class VanDerPol(OptimalControlProblem):
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
         """
-        Generate initial conditions uniformly from a hypercube.
+        Generate initial conditions uniformly from a rectangle, or optionally
+        with a specified distance from equilibrium.
 
         Parameters
         ----------
         n_samples : int, default=1
             Number of sample points to generate.
         distance : positive float, optional
-            Desired distance (in l1 or l2 norm) of samples from `self.xf`. The
-            type of norm is determined by `self.norm`. Note that depending on
-            how `distance` is specified, samples may be outside the hypercube.
+            Desired distance of samples from `self.xf`. The type of norm is
+            determined by `self.parameters.x0_sample_norm`. Note that depending
+            on how `distance` is specified, samples may be outside the rectangle
+            defined by `self.parameters.x0_lb` and `self.parameters.x0_ub`.
 
         Returns
         -------
         x0 : `(2, n_samples)` or `(2,)` array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a 1d array.
+            sample. If `n_samples==1` then `x0` will be a 1d array.
         """
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 

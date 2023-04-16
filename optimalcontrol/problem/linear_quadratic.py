@@ -130,7 +130,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
         if 'Q' in new_params or not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
-                norm=1 if obj.singular_Q else self.Q,
+                norm=2 if obj.singular_Q else self.Q,
                 seed=getattr(obj, 'x0_sample_seed', None))
         elif any(['x0_lb' in new_params, 'x0_ub' in new_params,
                   'x0_sample_seed' in new_params, 'xf' in new_params]):
@@ -150,13 +150,13 @@ class LinearQuadraticProblem(OptimalControlProblem):
         distance : positive float, optional
             Desired distance of samples from `self.xf`. If `self.Q` is positive
             definite, the distance is defined by the norm
-            `norm(x) = sqrt(x.T @ self.Q @ x)`, otherwise the l1 norm is used.
+            `norm(x) = sqrt(x.T @ self.Q @ x)`, otherwise the l2 norm is used.
 
         Returns
         -------
         x0 : `(n_states, n_samples)` or `(n_states,)` array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+            sample. If `n_samples==1` then `x0` will be a one-dimensional array.
         """
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 

@@ -27,4 +27,15 @@ lqr = oc.controls.LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
                                            xf=xf, uf=uf)
 
 # Generate some training and test data
+
+# First sample initial conditions
+x0_train = ocp.sample_initial_conditions(config.n_train,
+                                         distance=config.x0_distance)
+x0_test = ocp.sample_initial_conditions(config.n_test,
+                                        distance=config.x0_distance)
+
+# Lists for storing data
 train_data = []
+test_data = []
+
+
