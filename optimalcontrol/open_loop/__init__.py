@@ -81,4 +81,4 @@ More information and practical considerations are given in refs. [1-3] below.
     a single infinite horizon OCP.
 """
 
-from .solve import *
+from .solve import solve_fixed_time, solve_infinite_horizon

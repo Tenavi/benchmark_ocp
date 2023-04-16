@@ -14,4 +14,4 @@ performance and stability testing of feedback control laws.
     Integrate a closed-loop system until it converges to an equilibrium.
 """
 
-from .simulate import integrate_closed_loop, integrate_to_converge
+from .simulate import integrate_fixed_time, integrate_to_converge

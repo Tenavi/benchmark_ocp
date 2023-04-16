@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from optimalcontrol.sampling import UniformSampler
-from optimalcontrol.utilities import saturate, find_saturated, resize_vector
+from ..sampling import UniformSampler
+from ..utilities import saturate, find_saturated, resize_vector
 from .problem import OptimalControlProblem
 
 

@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.optimize import _numdiff
 
 
@@ -60,6 +61,83 @@ def find_saturated(u, lb=None, ub=None):
         return ub <= u
     else:
         return u <= lb
+
+
+def pack_dataframe(t, x, u, p, v):
+    """
+
+    Parameters
+    ----------
+    t : `(n_data,)` array
+        Time values of each data point.
+    x : `(n_states, n_data)` array
+        States $x(t)$.
+    u : `(n_controls, n_data)` array
+        Controls $u(t)$.
+    p : `(n_states, n_data)` array
+        Costates/value gradients $p(t)$.
+    v : `(n_points,)` array
+        Value function/total cost $v(t,x(t))$.
+
+    Returns
+    -------
+    data : `DataFrame`
+        `DataFrame` with `n_data` rows and columns 't', 'x1', ..., 'xn',
+        'u1', ..., 'um', 'p1', ..., 'pn', and 'v'.
+    """
+    n_states = np.shape(x)[0]
+    n_controls = np.shape(u)[0]
+
+    if np.shape(x) != np.shape(p):
+        raise ValueError('x and p must have the same shape.')
+
+    t = np.reshape(t, (1, -1))
+    x = np.reshape(x, (n_states, -1))
+    u = np.reshape(u, (n_controls, -1))
+    p = np.reshape(x, (n_states, -1))
+    v = np.reshape(v, (1, -1))
+
+    data = np.hstack((t, x, u, p, v))
+
+    columns = (['t']
+               + ['x' + str(i + 1) for i in range(n_states)]
+               + ['u' + str(i + 1) for i in range(n_controls)]
+               + ['p' + str(i + 1) for i in range(n_states)]
+               + ['v'])
+
+    return pd.DataFrame(data, columns=columns)
+
+
+def unpack_dataframe(data):
+    """
+
+    Parameters
+    ----------
+    data : `DataFrame`
+        `DataFrame` with `n_data` rows to be turned into separate arrays.
+        Contains columns
+
+            * 't' : Time values of each data point (row).
+            * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u1', ..., 'um' : Controls $u_1(t,x(t))$, ..., $u_m(t,x(t))$.
+            * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
+            * 'v' : Value function/total cost $v(t,x(t))$.
+
+    Returns
+    -------
+    t : `(n_data,)` array
+    x : `(n_states, n_data)` array
+    u : `(n_controls, n_data)` array
+    p : `(n_states, n_data)` array
+    v : `(n_points,)` array
+    """
+    t = data['t'].to_numpy()
+    x = data[[col for col in data.columns if col[0] == 'x']].to_numpy()
+    u = data[[col for col in data.columns if col[0] == 'u']].to_numpy()
+    p = data[[col for col in data.columns if col[0] == 'p']].to_numpy()
+    v = data['v'].to_numpy()
+
+    return t, x, u, p, v
 
 
 def check_int_input(n, argname, low=None):

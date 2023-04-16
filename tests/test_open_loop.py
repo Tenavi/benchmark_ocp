@@ -4,7 +4,7 @@ import warnings
 import time
 
 from optimalcontrol import open_loop
-from optimalcontrol.simulate import integrate_closed_loop
+from optimalcontrol.simulate import integrate_fixed_time
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator
 
@@ -52,7 +52,7 @@ def test_solve_infinite_horizon(method):
 
     # Integrate over initially short time horizon
     t_span = [0., 10.]
-    t, x, _ = integrate_closed_loop(ocp, LQR, t_span, x0)
+    t, x, _ = integrate_fixed_time(ocp, LQR, x0, t_span)
     p = 2. * LQR.P @ (x - xf)
     u = LQR(x)
     v = np.einsum('ij,ij->j', x - xf, LQR.P @ (x - xf))

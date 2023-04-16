@@ -3,10 +3,7 @@ import numpy as np
 from . import direct, indirect
 
 
-__all__ = ['solve_fixed_time', 'solve_infinite_horizon']
-
-
-def solve_fixed_time(ocp, t, x, p=None, u=None, v=None, method='indirect',
+def solve_fixed_time(ocp, t, x, u=None, p=None, v=None, method='indirect',
                      verbose=0, **kwargs):
     """
     Compute the open-loop optimal solution of a fixed time optimal control
@@ -38,12 +35,12 @@ def solve_fixed_time(ocp, t, x, p=None, u=None, v=None, method='indirect',
     x : `(n_states, n_points)` array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    p : `(n_states, n_points)` array, optional
-        Initial guess for the costate at times `t`. Required if
-        `method=='indirect'`.
     u : `(n_controls, n_points)` array, optional
         Initial guess for the optimal control at times `t`.  Required if
         `method=='direct'`.
+    p : `(n_states, n_points)` array, optional
+        Initial guess for the costate at times `t`. Required if
+        `method=='indirect'`.
     v : `(n_points,)` array, optional
         Initial guess for the value function at states `x`.
     method : {'direct', 'indirect', callable}, default='indirect'
@@ -82,7 +79,7 @@ def solve_fixed_time(ocp, t, x, p=None, u=None, v=None, method='indirect',
                            f" 'direct', 'indirect', or callable")
 
 
-def solve_infinite_horizon(ocp, t, x, p=None, u=None, v=None, method='indirect',
+def solve_infinite_horizon(ocp, t, x, u=None, p=None, v=None, method='indirect',
                            t1_tol=1e-10, verbose=0, **kwargs):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -117,12 +114,12 @@ def solve_infinite_horizon(ocp, t, x, p=None, u=None, v=None, method='indirect',
     x : `(n_states, n_points)` array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
+    u : `(n_controls, n_points)` array, optional
+        Initial guess for the optimal control at times `t`. Required if
+        `method=='direct'`.
     p : `(n_states, n_points)` array, optional
         Initial guess for the costate at times `t`. Required if
         `method=='indirect'`.
-    u : `(n_controls, n_points)` array, optional
-        Initial guess for the optimal control at times `t`.  Required if
-        `method=='direct'`.
     v : `(n_points,)` array, optional
         Initial guess for the value function at states `x`.
     method : {'direct', 'indirect', callable}, default='indirect'

@@ -3,7 +3,7 @@ import warnings
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
-from optimalcontrol.utilities import approx_derivative
+from ..utilities import approx_derivative
 from .parameters import ProblemParameters
 
 

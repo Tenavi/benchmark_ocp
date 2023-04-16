@@ -3,14 +3,13 @@ import warnings
 import numpy as np
 from scipy.interpolate import interp1d
 
-from . import simulate
 
 _headers = (
     '\n attempted |  solved   |  desired  ',
     '-----------------------------------'
 )
 
-def generate(
+def _generate(
         OCP, config, n_trajectories, controller=None, resolve_failed=True,
         verbose=0, suppress_warnings=True
     ):
@@ -183,7 +182,7 @@ def generate(
 
     return data, n_attempt, n_fail, sol_time, fail_time
 
-def refine(OCP, config, data, verbose=0, suppress_warnings=True):
+def _refine(OCP, config, data, verbose=0, suppress_warnings=True):
     '''
     Given an existing open loop data set, resolve the open loop OCP using the
     previously generated data as initial guesses. Used when refining solutions

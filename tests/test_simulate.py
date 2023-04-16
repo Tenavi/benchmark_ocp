@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.simulate import integrate_closed_loop, integrate_to_converge
+from optimalcontrol.simulate import integrate_fixed_time, integrate_to_converge
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator
 
@@ -28,8 +28,7 @@ def test_integrate_closed_loop_LQR(method):
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
-    t, x, status = integrate_closed_loop(ocp, LQR, t_span, x0, t_eval=t_eval,
-                                         method=method, atol=1e-12, rtol=1e-06)
+    t, x, status = integrate_fixed_time(ocp, LQR, x0, t_span, t_eval=t_eval, method=method, atol=1e-12, rtol=1e-06)
     u = LQR(x)
     cost = ocp.running_cost(x, u)
 

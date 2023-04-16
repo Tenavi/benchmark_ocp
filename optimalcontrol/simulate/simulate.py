@@ -4,8 +4,8 @@ from ._ivp import solve_ivp
 from ..utilities import closed_loop_jacobian
 
 
-def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
-                          method='RK45', atol=1e-06, rtol=1e-03):
+def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
+                         method='RK45', atol=1e-06, rtol=1e-03):
     """
     Integrate continuous-time system dynamics with a given feedback controller
     over a fixed time horizon.
@@ -18,11 +18,11 @@ def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
     controller : `Controller`
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
+    x0 : `(ocp.n_states,)` array
+        Initial state.
     t_span : 2-tuple of floats
         Interval of integration `(t0, tf)`. The solver starts with `t[0]=t0` and
         integrates until it reaches `t[-1]=tf`.
-    x0 : `(ocp.n_states,)` array
-        Initial state.
     t_eval : array_like, optional
         Times at which to store the computed solution, must be sorted and lie
         within `t_span`. If `None` (default), use points selected by the solver.
@@ -60,7 +60,7 @@ def integrate_closed_loop(ocp, controller, t_span, x0, t_eval=None,
 
 
 def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
-                          method="RK45", atol=1e-06, rtol=1e-03):
+                          method='RK45', atol=1e-06, rtol=1e-03):
     """
     Integrate continuous-time system dynamics with a given feedback controller
     until a steady state is reached or a specified time horizon is exceeded.
@@ -92,7 +92,7 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
         convergence tolerance for each component of the dynamics. This overrides
         and ignores `norm` so that the convergence criteria becomes
         `all(f(x,u) <= ftol)`.
-    method : string or `OdeSolver`, default="RK45"
+    method : string or `OdeSolver`, default='RK45'
         See `scipy.integrate.solve_ivp`.
     atol : float or array_like, default=1e-06
         See `scipy.integrate.solve_ivp`.
@@ -115,19 +115,19 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     """
     ftol = np.reshape(ftol, -1)
     if np.size(ftol) not in (1, ocp.n_states) or np.any(ftol <= 0.):
-        raise ValueError("ftol must be a positive float or array_like")
+        raise ValueError('ftol must be a positive float or array_like')
 
     if norm not in (1, 2, np.inf):
-        raise ValueError("norm must be one of {1, 2, np.inf}")
+        raise ValueError('norm must be one of {1, 2, np.inf}')
 
     if np.size(t_int) > 1 or t_int <= 0.:
-        raise ValueError("t_int must be a positive float")
+        raise ValueError('t_int must be a positive float')
 
     if np.size(t_max) > 1 or t_max <= 0.:
-        raise ValueError("t_max must be a positive float")
+        raise ValueError('t_max must be a positive float')
 
     if t_int > t_max:
-        raise ValueError("t_int must be less than or equal to t_max")
+        raise ValueError('t_int must be less than or equal to t_max')
 
     t = np.zeros(1)
     x = np.reshape(x0, (-1, 1))
@@ -135,10 +135,9 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     # Solves over an extended time interval if needed to make ||f(x,u)|| -> 0
     while True:
         # Simulate the closed-loop system
-        t_new, x_new, status = integrate_closed_loop(
-            ocp, controller, (t[-1], t[-1] + t_int), x[:, -1],
-            method=method, atol=atol, rtol=rtol
-        )
+        t_new, x_new, status = integrate_fixed_time(
+            ocp, controller, x[:, -1], (t[-1], t[-1] + t_int),
+            method=method, atol=atol, rtol=rtol)
 
         # Add new points to existing saved points. The first index of new points
         # duplicates the last index of existing points.
