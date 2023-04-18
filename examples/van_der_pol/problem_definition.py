@@ -76,7 +76,7 @@ class VanDerPol(OptimalControlProblem):
 
         Returns
         -------
-        x0 : `(2, n_samples)` or `(2,)` array
+        x0 : (2, n_samples) or (2,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples==1` then `x0` will be a 1d array.
         """

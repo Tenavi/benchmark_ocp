@@ -21,12 +21,12 @@ class Controller:
 
         Parameters
         ----------
-        x : `(n_states, n_points)` or `(n_states,)` array
+        x : (n_states, n_points) or (n_states,) array
             State(s) to evaluate the control for.
 
         Returns
         -------
-        u :` (n_controls, n_points)` or `(n_controls,)` array
+        u : (n_controls, n_points) or (n_controls,) array
             Feedback control for each column in `x`.
         """
         raise NotImplementedError
@@ -38,15 +38,14 @@ class Controller:
 
         Parameters
         ----------
-        x : `(n_states, n_points)` or `(n_states,)` array
+        x : (n_states, n_points) or (n_states,) array
             State(s) to evaluate the control for.
-        u0 : `(n_states, n_controls)` or `(n_controls,)` array, optional
+        u0 : (n_states, n_controls) or (n_controls,) array, optional
             `self(x)`, pre-evaluated at the inputs.
 
         Returns
         -------
-        dudx : `(n_controls, n_states, n_points)` or `(n_controls, n_states)`\
-                array
+        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of feedback control for each column in `x`.
         """
         return utilities.approx_derivative(self, x, f0=u0)
@@ -59,34 +58,35 @@ class LinearQuadraticRegulator(Controller):
         """
         Parameters
         ----------
-        A : `(n_states, n_states)` array, optional
-            State Jacobian matrix, $df/dx (x_f, u_f)$. Required if `K` is `None`.
-        B : `(n_states, n_controls)` array, optional
+        A : (n_states, n_states) array, optional
+            State Jacobian matrix, $df/dx (x_f, u_f)$. Required if `K` is
+            `None`.
+        B : (n_states, n_controls) array, optional
             Control Jacobian matrix, $df/du (x_f, u_f)$. Required if `K` is
             `None`.
-        Q : `(n_states, n_states)` array, optional
+        Q : (n_states, n_states) array, optional
             Hessian of running cost with respect to states,
             $d^2L/dx^2 (x_f, u_f)$. Must be positive semi-definite. Required if
             `K` is `None`.
-        R : `(n_controls, n_controls)` array, optional
+        R : (n_controls, n_controls) array, optional
             Hessian of running cost with respect to controls,
             $d^2L/du^2 (x_f, u_f)$. Must be positive definite. Required if `K`
             is `None`.
-        K : `(n_controls, n_states)` array, optional
+        K : (n_controls, n_states) array, optional
             Previously-computed control gain matrix for this problem. The LQR
             control law is `u(x) = sat(uf - K @ (x - xf))`, where
             `K = inv(R) @ B.T @ P` and `sat` is the saturation function.
-        P : `(n_states, n_states)` array, optional
+        P : (n_states, n_states) array, optional
             Previously-computed solution to the continuous algebraic Riccati
             equation.
-        u_lb : `(n_controls, 1)` array, optional
+        u_lb : (n_controls, 1) array, optional
             Lower control saturation bounds.
-        u_ub : `(n_controls, 1)` array, optional
+        u_ub : (n_controls, 1) array, optional
             Upper control saturation bounds.
-        xf : {`(n_states, 1)` array, float}, default=0.
+        xf : {(n_states, 1) array, float}, default=0.
             Goal state, nominal linearization point. If float, will be broadcast
             into an array of shape `(n_states, 1)`.
-        uf : {`(n_controls, 1)` array, float}, default=0.
+        uf : {(n_controls, 1) array, float}, default=0.
             Control values at nominal linearization point. If float, will be
             broadcast into an array of shape `(n_controls, 1)`.
         """
@@ -136,15 +136,14 @@ class LinearQuadraticRegulator(Controller):
 
         Parameters
         ----------
-        x : `(n_states, n_points)` or `(n_states,)` array
+        x : (n_states, n_points) or (n_states,) array
             State(s) to evaluate the control for.
-        u0 : `(n_states, n_controls)` or `(n_controls,)` array, optional
+        u0 : (n_states, n_controls) or (n_controls,) array, optional
             `self(x)`, pre-evaluated at the inputs.
 
         Returns
         -------
-        dudx : `(n_controls, n_states, n_points)` or `(n_controls, n_states)`\
-                array
+        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of feedback control for each column in `x`.
         """
         if u0 is None:

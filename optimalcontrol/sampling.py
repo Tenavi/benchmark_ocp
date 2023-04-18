@@ -25,7 +25,7 @@ class StateSampler:
 
         Returns
         -------
-        x : `(n_states, n_samples)` or `(n_states,)` array
+        x : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples==1` then `x` will be a 1d array.
         """
@@ -38,17 +38,17 @@ class UniformSampler(StateSampler):
         """
         Parameters
         ----------
-        lb : {`(n_states,)` or `(n_states, 1)` array, float}
+        lb : {(n_states,) or (n_states, 1) array, float}
             Lower bounds for each dimension of the hypercube. If float, will be
             broadcast into an array of shape `(n_states, 1)`.
-        ub : {`(n_states,)` or `(n_states, 1)` array, float}
+        ub : {(n_states,) or (n_states, 1) array, float}
             Upper bounds for each dimension of the hypercube. If float, will be
             broadcast into an array of shape `(n_states, 1)`.
-        xf : `(n_states,)` or `(n_states,1)` array
+        xf : (n_states,) or (n_states,1) array
             Nominal state within the hypercube. If `sample` is called with a
             specified `distance` argument, this distance is calculated from `xf`
             with norm specified by `norm`.
-        norm : {1, 2, float, `np.inf`, `(n_states, n_states)` array}, default=2
+        norm : {1, 2, float, `np.inf`, (n_states, n_states) array}, default=2
             The norm (l1, l2, l-infinity, or matrix) with which to calculate
             distances from `xf`. If `norm` is an array then it must be positive
             definite. In this case it is defined as
@@ -94,11 +94,11 @@ class UniformSampler(StateSampler):
 
         Parameters
         ----------
-        lb : `(n_states,)` or `(n_states,1)` array, optional
+        lb : (n_states,) or (n_states,1) array, optional
             Lower bounds for each dimension of the hypercube.
-        ub : `(n_states,)` or `(n_states,1)` array, optional
+        ub : (n_states,) or (n_states,1) array, optional
             Upper bounds for each dimension of the hypercube.
-        xf : `(n_states,)` or `(n_states,1)` array, optional
+        xf : (n_states,) or (n_states,1) array, optional
             Nominal state within the hypercube. If `sample` is called with a
             specified `distance` argument, this distance is calculated from `xf`
             with norm specified by `norm`.
@@ -141,7 +141,7 @@ class UniformSampler(StateSampler):
 
         Returns
         -------
-        x : `(n_states, n_samples)` or `(n_states,)` array
+        x : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples==1` then `x` will be a 1d array.
         """

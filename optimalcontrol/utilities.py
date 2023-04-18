@@ -9,11 +9,11 @@ def saturate(u, lb=None, ub=None):
 
     Parameters
     ----------
-    u : `(n_controls, n_data)` or `(n_controls,)` array
+    u : (n_controls, n_data) or (n_controls,) array
         Control(s) to saturate.
-    lb : `(n_controls, 1)` or `(n_controls,)` array, optional
+    lb : (n_controls, 1) or (n_controls,) array, optional
         Lower control bounds.
-    ub : `(n_controls, 1)` or `(n_controls,)` array, optional
+    ub : (n_controls, 1) or (n_controls,) array, optional
         Upper control bounds.
 
     Returns
@@ -39,11 +39,11 @@ def find_saturated(u, lb=None, ub=None):
 
     Parameters
     ----------
-    u : `(n_controls, n_data)` or `(n_controls,)` array
+    u : (n_controls, n_data) or (n_controls,) array
         Control(s) arranged by dimension, time.
-    lb : `(n_controls, 1)` or `(n_controls,)` array, optional
+    lb : (n_controls, 1) or (n_controls,) array, optional
         Lower control bounds.
-    ub : `(n_controls, 1)` or `(n_controls,)` array, optional
+    ub : (n_controls, 1) or (n_controls,) array, optional
         Upper control bounds.
 
     Returns
@@ -68,15 +68,15 @@ def pack_dataframe(t, x, u, p, v):
 
     Parameters
     ----------
-    t : `(n_data,)` array
+    t : (n_data,) array
         Time values of each data point.
-    x : `(n_states, n_data)` array
+    x : (n_states, n_data) array
         States $x(t)$.
-    u : `(n_controls, n_data)` array
+    u : (n_controls, n_data) array
         Controls $u(t)$.
-    p : `(n_states, n_data)` array
+    p : (n_states, n_data) array
         Costates/value gradients $p(t)$.
-    v : `(n_points,)` array
+    v : (n_points,) array
         Value function/total cost $v(t,x(t))$.
 
     Returns
@@ -125,11 +125,11 @@ def unpack_dataframe(data):
 
     Returns
     -------
-    t : `(n_data,)` array
-    x : `(n_states, n_data)` array
-    u : `(n_controls, n_data)` array
-    p : `(n_states, n_data)` array
-    v : `(n_points,)` array
+    t : (n_data,) array
+    x : (n_states, n_data) array
+    u : (n_controls, n_data) array
+    p : (n_states, n_data) array
+    v : (n_points,) array
     """
     t = data['t'].to_numpy()
     x = data[[col for col in data.columns if col[0] == 'x']].to_numpy()
@@ -192,12 +192,13 @@ def resize_vector(array, n_rows):
     ----------
     array : array_like
         Array to reshape or resize into shape `(n_rows, 1)`.
-    n_rows : {`int >= 1`, -1}
-        Number of rows desired in `x`. If `n_rows == -1` then uses
-        `n_rows = np.size(x)`.
+    n_rows : int
+        Number of rows desired in `x`. Can be any positive int or -`. If
+        `n_rows == -1` then uses `n_rows = np.size(array)`.
+
     Returns
     -------
-    reshaped_array : `(n_rows, 1)` array
+    reshaped_array : (n_rows, 1) array
         If `array.shape == (n_rows, 1)` then returns the original `array`,
         otherwise a copy is returned.
     """
@@ -240,7 +241,7 @@ def approx_derivative(fun, x0, method="3-point", rel_step=None, abs_step=None,
         `(n, n_points)`. It must return a float or an nd array_like of shape
         `(n_points,)`, `(m_1, ..., m_l)`, or `(m_1, ..., m_l, n_points)`,
         depending on the shape of the input.
-    x0 : `(n,)` or `(n, n_points)` array_like
+    x0 : (n,) or (n, n_points) array
         Point(s) at which to estimate the derivatives.
     method : {"3-point", "2-point", "cs"}, optional
         Finite difference method to use:
@@ -271,8 +272,8 @@ def approx_derivative(fun, x0, method="3-point", rel_step=None, abs_step=None,
 
     Returns
     -------
-    dfdx : `(n,)`, `(n_points,)`, `(m_1, ..., m_l, n)`, or\
-            `(m_1, ..., m_l, n, n_points)` array
+    dfdx : (n,), (n_points,), (m_1, ..., m_l, n), or \
+            (m_1, ..., m_l, n, n_points) array
         Finite difference approximation of the Jacobian matrix or matrices. The
         shape of `dfdx` depends on the sizes of `x0` and `fun(x0)`.
 
@@ -368,18 +369,19 @@ def closed_loop_jacobian(x, open_loop_jac, controller):
 
     Parameters
     ----------
-    x : `(n_states,)` or `(n_states, n_points)` array
+    x : (n_states,) or (n_states, n_points) array
         State(s) arranged by (dimension, time).
     open_loop_jac : callable
         Function defining the open-loop partial derivatives $df/dx$ and $df/du$.
         See `OptimalControlProblem.jacobians`.
-    controller : Controller
+    controller : `Controller`
         `Controller` instance implementing `__call__` and `jac`.
 
     Returns
     -------
-    DfDx : `(n_states, n_states)` or `(n_states, n_states, n_points)` array
-        Closed-loop Jacobian(s), with `DfDx[i, j] = Df[i]/Dx[j]`.
+    DfDx : (n_states, n_states) or (n_states, n_states, n_points) array
+        Closed-loop Jacobian(s), with `DfDx[i, j]` equal to the partial
+        derivative of `f[i]` with respect to `x[j]`.
     """
     u = controller(x)
     dfdx, dfdu = open_loop_jac(x, u)

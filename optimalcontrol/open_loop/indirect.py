@@ -43,17 +43,17 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    t : `(n_points,)` array
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : `(n_states, n_points)` array
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    p : `(n_states, n_points)` array
+    p : (n_states, n_points) array
         Initial guess for the costate at times `t`.
-    u : `(n_controls, n_points)` array, optional
+    u : (n_controls, n_points) array, optional
         Initial guess for the optimal control at times `t`.
-    v : `(n_points,)` array, optional
+    v : (n_points,) array, optional
         Initial guess for the value function at states `x`.
     max_nodes : int, default=1000
         Maximum number of collocation points to use when solving the BVP.
@@ -70,7 +70,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     -------
     sol : `OpenLoopSolution`
         Solution of the open-loop OCP. Should only be trusted if
-        `sol.status == 0`.
+        `sol.status==0`.
     """
     t = np.reshape(t, -1)
     x = np.reshape(x, (ocp.n_states, -1))
@@ -114,17 +114,17 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    t : `(n_points,)` array
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : `(n_states, n_points)` array
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    p : `(n_states, n_points)` array
+    p : (n_states, n_points) array
         Initial guess for the costate at times `t`.
-    u : `(n_controls, n_points)` array, optional
+    u : (n_controls, n_points) array, optional
         Initial guess for the optimal control at times `t`.
-    v : `(n_points,)` array, optional
+    v : (n_points,) array, optional
         Initial guess for the value function at states `x`.
     max_nodes : int, default=1000
         Maximum number of collocation points to use when solving the BVP.
@@ -148,7 +148,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     -------
     sol : `OpenLoopSolution`
         Solution of the open-loop OCP. Should only be trusted if
-        `sol.status == 0`.
+        `sol.status==0`.
     """
     t1_tol = float(t1_tol)
 
@@ -189,7 +189,7 @@ def _make_pontryagin_boundary(x0):
 
     Parameters
     ----------
-    x0 : `(n_states,)` array
+    x0 : (n_states,) array
         Initial condition.
 
     Returns

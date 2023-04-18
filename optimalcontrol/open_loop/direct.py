@@ -82,7 +82,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     -------
     sol : OpenLoopSolution
         Solution of the open-loop OCP. Should only be trusted if
-        `sol.status == 0`.
+        `sol.status==0`.
     """
     raise NotImplementedError('pylgr has not yet implemented finite horizon')
 
@@ -107,13 +107,13 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `dynamics`, `jacobians`, and `integration_events` methods.
-    t : `(n_points,)` array
+    t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
-    x : `(n_states, n_points)` array
+    x : (n_states, n_points) array
         Initial guess for the state trajectory at times `t`. The initial
         condition is assumed to be contained in `x[:, 0]`.
-    u : `(n_controls, n_points)` array
+    u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=32
         Number of nodes to use in the pseudospectral discretization.
@@ -145,7 +145,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     -------
     sol : `OpenLoopSolution`
         Solution of the open-loop OCP. Should only be trusted if
-        `sol.status == 0`.
+        `sol.status==0`.
     """
     t1_tol = float(t1_tol)
 

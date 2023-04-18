@@ -1,5 +1,4 @@
 import numpy as np
-import warnings
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
@@ -68,7 +67,7 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        obj : `ProblemParameters` instance
+        obj : `ProblemParameters`
             Pass an instance of `ProblemParameters` to modify its instance
             attributes, if needed.
         **new_params : dict
@@ -89,7 +88,7 @@ class OptimalControlProblem:
 
         Returns
         -------
-        x0 : `(n_states, n_samples)` or `(n_states,)` array
+        x0 : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
             sample. If `n_samples==1` then `x0` will be a 1d array.
         """
@@ -102,14 +101,14 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        xa : `(n_states, n_a)` or `(n_states,)` array
+        xa : (n_states, n_a) or (n_states,) array
             First batch of points.
-        xb : `(n_states, n_b)` or `(n_states,)` array
+        xb : (n_states, n_b) or (n_states,) array
             Second batch of points.
 
         Returns
         -------
-        dist : `(n_a, n_b)` array
+        dist : (n_a, n_b) array
             `norm(xa - xb)` for each point in `xa` and `xb`, where the default
             `norm` function is the Euclidean distance.
         """
@@ -123,14 +122,14 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
 
         Returns
         -------
-        L : `(1,)` or `(n_points,)` array
+        L : (1,) or (n_points,) array
             Running cost $L(x,u)$ evaluated at pairs (`x`, `u`).
         """
         raise NotImplementedError
@@ -144,20 +143,20 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
         return_dLdx : bool, default=True
             If `True`, compute the gradient with respect to states.
         return_dLdu : bool, default=True
             If `True`, compute the gradient with respect to controls.
-        L0 : `(1,)` or `(n_points,)` array, optional
+        L0 : (1,) or (n_points,) array, optional
             Running cost evaluated at state-control pairs (`x`, `u`).
 
         Returns
         -------
-        dLdx : `(n_states,)` or `(n_states, n_points)` array
+        dLdx : (n_states,) or (n_states, n_points) array
             State gradients $dL/dx (x,u)$ evaluated at pairs (`x`, `u`).
         dLdu : (n_controls,) or (n_controls, n_points) array
             Control gradients $dL/du (x,u)$ evaluated at pairs (`x`, `u`).
@@ -188,20 +187,20 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
         return_dLdx : bool, default=True
             If `True`, compute the Hessian with respect to states.
         return_dLdu : bool, default=True
             If `True`, compute the Hessian with respect to controls.
-        L0 : `(1,)` or `(n_points,)` array, optional
+        L0 : (1,) or (n_points,) array, optional
             Running cost evaluated at state-control pairs (`x`, `u`).
 
         Returns
         -------
-        dLdx : `(n_states, n_states)` or `(n_states, n_states, n_points)` array
+        dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
             State Hessians $dL^2/dx^2 (x,u)$ evaluated at pairs (`x`, `u`).
         dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
             Control Hessians $dL^2/du^2 (x,u)$ evaluated at pairs (`x`, `u`).
@@ -233,12 +232,12 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, sample).
 
         Returns
         -------
-        F : `(1,)` or `(n_points,)` array
+        F : (1,) or (n_points,) array
             Terminal cost(s) $F(x)$.
         """
         raise NotImplementedError
@@ -250,16 +249,16 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        t : `(n_points,)` array
+        t : (n_points,) array
             Time values at which state and control vectors are given.
-        x : `(n_states, n_points)` array
+        x : (n_states, n_points) array
             Time series of system states.
-        u : `(n_controls, n_points)` array
+        u : (n_controls, n_points) array
             Time series of control inputs.
 
         Returns
         -------
-        J : `(n_points,)` array
+        J : (n_points,) array
             Integrated cost at each time `t`.
         """
         L = self.running_cost(x, u).reshape(-1)
@@ -272,14 +271,14 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
 
         Returns
         -------
-        dxdt : `(n_states,)` or `(n_states, n_points)` array
+        dxdt : (n_states,) or (n_states, n_points) array
             System dynamics $dx/dt = f(x,u)$ evaluated at pairs (`x`, `u`).
         """
         raise NotImplementedError
@@ -292,23 +291,22 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
         return_dfdx : bool, default=True
             If `True`, compute the Jacobian with respect to states.
         return_dfdu : bool, default=True
             If `True`, compute the Jacobian with respect to controls.
-        f0 : `(n_states,)` or `(n_states, n_points)` array, optional
+        f0 : (n_states,) or (n_states, n_points) array, optional
             Dynamics evaluated at state-control pairs (`x`, `u`).
 
         Returns
         -------
-        dfdx : `(n_states, n_states)` or `(n_states, n_states, n_points)` array
+        dfdx : (n_states, n_states) or (n_states, n_states, n_points) array
             State Jacobians $df/dx (x,u)$ evaluated at pairs (`x`, `u`).
-        dfdu : `(n_states, n_controls)` or `(n_states, n_controls, n_points)`\
-                array
+        dfdu : (n_states, n_controls) or (n_states, n_controls, n_points) array
             Control Jacobians $df/du (x,u)$ evaluated at pairs (`x`, `u`).
         """
         if f0 is None:
@@ -337,14 +335,14 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        p : `(n_states,)` or `(n_states, n_points)` array
+        p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
 
         Returns
         -------
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
         """
         raise NotImplementedError
@@ -357,17 +355,16 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        p : `(n_states,)` or `(n_states, n_points)` array
+        p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
-        u0 : `(n_controls,)` or `(n_controls, n_points)` array, optional
+        u0 : (n_controls,) or (n_controls, n_points) array, optional
             `self.optimal_control(x, p)`, pre-evaluated at `x` and `p`.
 
         Returns
         -------
-        dudx : `(n_controls, n_states, n_points)` or `(n_controls, n_states)`\
-                array
+        dudx : (n_controls, n_states, n_points) or (n_controls, n_states) array
             Jacobian of the optimal control with respect to states leaving
             costates fixed, $du/dx (x; p=p)$.
         """
@@ -385,18 +382,18 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        t : `(n_points,)` array
+        t : (n_points,) array
             Time collocation points for each state.
-        xp : `(2*n_states + 1, n_points)` array
+        xp : (2*n_states + 1, n_points) array
             Current state, costate, and value function, vertically stacked in
             that order.
 
         Returns
         -------
-        dxpdt : `(2*n_states + 1, n_points)` array
-            Vertical concatenation of dynamics $dx/dt = f(x,u^*)$, costate
-            dynamics $dp/dt = -dH/dx(x,u^*,p)$, and running cost $L(x,u^*)$,
-            where $u^* = u^*(x,p)$ is the optimal control and $H(x,u,p)$ is the
+        dxpdt : (2*n_states + 1, n_points) array
+            Vertical concatenation of dynamics $dx/dt = f(x,u)$, costate
+            dynamics $dp/dt = -dH/dx(x,u,p)$, and running cost $L(x,u)$,
+            where $u = u(x,p)$ is the optimal control and $H(x,u,p)$ is the
             Hamiltonian.
         """
         x = xp[:self.n_states]
@@ -430,22 +427,23 @@ class OptimalControlProblem:
     def hamiltonian(self, x, u, p):
         """
         Evaluate the Pontryagin Hamiltonian, `H(x,u,p) = L(x,u) + p.T @ f(x,u)`
-        where `L(x,u)` is the running cost, `p` is the costate or value
-        gradient, and `f(x,u)` is the dynamics. A necessary condition for
-        optimality is that `H(x,u,p) = 0` for the whole trajectory.
+        where `x` is the state, `u` is the control, `p` is the costate or value
+        gradient, `L(x,u)` is the running cost, and `f(x,u)` is the dynamics. A
+        necessary condition for optimality is that `hamiltonian(x,u,p) == 0` for
+        the whole trajectory.
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
-        p : `(n_states,)` or `(n_states, n_points)` array
+        p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
 
         Returns
         -------
-        H : `(1,)` or `(n_points,)` array
+        H : (1,) or (n_points,) array
             Pontryagin Hamiltonian evaluated at each triplet (`x`, `u`, `p`).
         """
         L = self.running_cost(x, u)
@@ -463,12 +461,12 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states, n_points)` or `(n_states,)` array
+        x : (n_states, n_points) or (n_states,) array
             State(s) arranged by (dimension, time).
 
         Returns
         -------
-        c : `(n_constraints,)` or `(n_constraints, n_points)` array or None
+        c : (n_constraints,) or (n_constraints, n_points) array or None
             Algebraic equation such that `c(x)==0` means that `x` satisfies the
             state constraints.
         """
@@ -481,15 +479,15 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states, n_points)` or `(n_states,)` array
+        x : (n_states, n_points) or (n_states,) array
             State(s) arranged by (dimension, time).
-        c0 : `(n_constraints,)` or `(n_constraints, n_points)` array, optional
+        c0 : (n_constraints,) or (n_constraints, n_points) array, optional
             `self.constraint_fun(x)`, pre-evaluated at `x`.
 
         Returns
         -------
-        dcdx : `(n_constraints, n_states)` or\
-                `(n_constraints, n_points, n_points)` array or None
+        dcdx : (n_constraints, n_states) or (n_constraints, n_points, n_points)\
+                 array or None
             $dc/dx (x)$ evaluated at the point `x`, where $c(x)$ denotes
             `self.constraint_fun(x)`.
         """
@@ -523,17 +521,17 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
 
         Returns
         -------
-        x : `(n_states, n_points)` array
+        x : (n_states, n_points) array
             State(s) arranged by (dimension, time). If the input was flat,
             `n_points = 1`.
-        u : `(n_controls, n_points)` array
+        u : (n_controls, n_points) array
             Control(s) arranged by (dimension, time). If the input was flat,
             `n_points = 1`.
         squeeze: bool

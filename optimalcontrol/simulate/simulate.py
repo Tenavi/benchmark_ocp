@@ -18,7 +18,7 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
     controller : `Controller`
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
-    x0 : `(ocp.n_states,)` array
+    x0 : (`ocp.n_states`,) array
         Initial state.
     t_span : 2-tuple of floats
         Interval of integration `(t0, tf)`. The solver starts with `t[0]=t0` and
@@ -35,9 +35,9 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
 
     Returns
     -------
-    t : `(n_points,)` array
+    t : (n_points,) array
         Time points.
-    x : `(ocp.n_states, n_points)` array
+    x : (`ocp.n_states`, n_points) array
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
@@ -64,8 +64,8 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     """
     Integrate continuous-time system dynamics with a given feedback controller
     until a steady state is reached or a specified time horizon is exceeded.
-    Integration starts at `t=0` and continues over intervals of length `t_int`
-    until a steady state is reached or `t>=t_max`.
+    Integration starts at `t[0]=0` and continues over intervals of length
+    `t_int` until a steady state is reached or `t[-1]>=t_max`.
 
     Parameters
     ----------
@@ -75,7 +75,7 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     controller : `Controller`
         An instance of a `Controller` subclass implementing `__call__` and
         `jacobian` methods.
-    x0 : `(ocp.n_states,)` array
+    x0 : (`ocp.n_states`,) array
         Initial state.
     t_int : float
         Time interval to step integration over. This function internally calls
@@ -85,7 +85,7 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     norm : {1, 2, `np.inf`}, default=2
             Integration continues until `norm(f(x,u)) <= ftol`, where `f`
             denotes `ocp.dynamics` and `norm` specifies the norm used for
-            this condition (l1, l2, or infinity).
+            this condition (l1, l2, or l-infinity).
     ftol : float or array_like, default=1e-03
         Tolerance for detecting system steady states. If `ftol` is array_like,
         then it must have shape `(ocp.n_states,)` and specifies a different
@@ -101,9 +101,9 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
 
     Returns
     -------
-    t : `(n_points,)` array
+    t : (n_points,) array
         Time points.
-    x : `(ocp.n_states, n_points)` array
+    x : (`ocp.n_states`, n_points) array
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
