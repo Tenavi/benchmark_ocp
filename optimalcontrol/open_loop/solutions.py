@@ -78,18 +78,18 @@ class OpenLoopSolution:
         converged = self.status == 0
         if not converged:
             if verbose:
-                print(f'Solution failed to converge: status = {self.status:d}: '
-                      f'{self.message}')
+                print(f"Solution failed to converge: status = {self.status:d}: "
+                      f"{self.message}")
             return converged
 
         L = float(fun(self.x[:, -1], self.u[:, -1]))
         converged = converged and L <= tol
         if verbose:
             if converged:
-                print(f'Solution converged: running cost = {L:1.2e} <= '
-                      f'tolerance {tol:1.2e}')
+                print(f"Solution converged: running cost = {L:1.2e} <= "
+                      f"tolerance {tol:1.2e}")
             else:
-                print(f'Solution failed to converge: running cost = {L:1.2e} > '
-                      f'tolerance {tol:1.2e}')
+                print(f"Solution failed to converge: running cost = {L:1.2e} > "
+                      f"tolerance {tol:1.2e}")
 
         return converged

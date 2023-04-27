@@ -6,7 +6,7 @@ from optimalcontrol.sampling import UniformSampler
 
 
 class VanDerPol(OptimalControlProblem):
-    _required_parameters = {'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
+    _required_parameters = {'Wx': 1/2, 'Wy': 1., 'Wu': 4., 'xf': 0.,
                             'mu': 2., 'b': 1.5,
                             'x0_ub': np.array([[3.], [4.]]),
                             'x0_lb': -np.array([[3.], [4.]])}
@@ -124,14 +124,14 @@ class VanDerPol(OptimalControlProblem):
     def running_cost_hess(self, x, u, return_dLdx=True, return_dLdu=True,
                           L0=None):
         if return_dLdx:
-            Q = np.diag([self._params.Wx, self._params.Wy])
+            Q = np.diag([self._params.Wx / 2., self._params.Wy / 2.])
             if np.ndim(x) >= 2:
                 Q = np.tile(Q[..., None], (1, 1, np.shape(x)[1]))
             if not return_dLdu:
                 return Q
 
         if return_dLdu:
-            R = np.reshape(self._params.Wu, (1, 1))
+            R = np.reshape(self._params.Wu / 2., (1, 1))
             if np.ndim(u) >= 2:
                 R = np.tile(R[..., None], (1, 1, np.shape(u)[1]))
             if not return_dLdx:
@@ -181,15 +181,14 @@ class VanDerPol(OptimalControlProblem):
         return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
 
     def bvp_dynamics(self, t, xp):
-        u = self.optimal_control(xp[:2], xp[2:-1])
+        u = self.optimal_control(xp[:2], xp[2:4])
         L = self.running_cost(xp[:2], u)
 
+        # Get states and costates
         x1 = xp[:1]
         x2 = xp[1:2]
-
         x1_err = x1 - self.xf[:1]
 
-        # Costate
         p1 = xp[2:3]
         p2 = xp[3:4]
 

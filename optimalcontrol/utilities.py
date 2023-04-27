@@ -135,9 +135,9 @@ def unpack_dataframe(data):
     """
     if isinstance(data, pd.DataFrame):
         t = data['t'].to_numpy()
-        x = data[[c for c in data.columns if c.startswith('x')]].to_numpy()
-        u = data[[c for c in data.columns if c.startswith('u')]].to_numpy()
-        p = data[[c for c in data.columns if c.startswith('p')]].to_numpy()
+        x = data[[c for c in data.columns if c.startswith('x')]].to_numpy().T
+        u = data[[c for c in data.columns if c.startswith('u')]].to_numpy().T
+        p = data[[c for c in data.columns if c.startswith('p')]].to_numpy().T
         v = data['v'].to_numpy()
     elif isinstance(data, dict):
         t = data['t']
@@ -154,7 +154,7 @@ def unpack_dataframe(data):
 def _stack_columns(*x):
     if len(x) == 1:
         return x[0]
-    elif x[0].ndim == 1:
+    elif np.ndim(x[0]) == 1:
         return np.stack(x, axis=1)
     else:
         return np.stack(x, axis=-1)

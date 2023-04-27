@@ -10,7 +10,7 @@ from ._utilities import make_LQ_params
 
 
 @pytest.mark.parametrize('method', ['RK45', 'BDF'])
-def test_integrate_closed_loop_LQR(method):
+def test_integrate_closed_loop_lqr(method):
     """
     Basic test of an LQR-controlled linear system integrated over a fixed time
     horizon. Since the closed-loop system should be stable, checks that the
@@ -24,12 +24,13 @@ def test_integrate_closed_loop_LQR(method):
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                                  x0_lb=-1., x0_ub=1., x0_sample_seed=456)
-    LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
-    t, x, status = integrate_fixed_time(ocp, LQR, x0, t_span, t_eval=t_eval, method=method, atol=1e-12, rtol=1e-06)
-    u = LQR(x)
+    t, x, status = integrate_fixed_time(ocp, lqr, x0, t_span, t_eval=t_eval,
+                                        method=method, atol=1e-12, rtol=1e-06)
+    u = lqr(x)
     cost = ocp.running_cost(x, u)
 
     assert status == 0
@@ -44,14 +45,14 @@ def test_integrate_closed_loop_LQR(method):
     np.testing.assert_array_less(cost[-1], 1e-06)
 
     # Expect integrated cost to be close to LQR value function
-    xPx = (x[:, :1] - xf).T @ LQR.P @ (x[:, :1] - xf)
+    xPx = (x[:, :1] - xf).T @ lqr.P @ (x[:, :1] - xf)
     J = ocp.total_cost(t, x, u)[-1]
     np.testing.assert_allclose(xPx, J, atol=1e-02, rtol=1e-02)
 
 
 @pytest.mark.parametrize('norm', [1, 2, np.inf])
 @pytest.mark.parametrize('method', ['RK45', 'BDF'])
-def test_integrate_to_converge_LQR(norm, method):
+def test_integrate_to_converge_lqr(norm, method):
     """
     Basic test of an LQR-controlled linear system integrated over an infinite
     (i.e. very long) time horizon. Since the closed-loop system should be
@@ -63,14 +64,14 @@ def test_integrate_to_converge_LQR(norm, method):
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                                  x0_lb=-1., x0_ub=1., x0_sample_seed=456)
-    LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
     # Check that integration over a very short time horizon doesn't converge
     t_int = .5
     t_max = .75
-    t, x, status = integrate_to_converge(ocp, LQR, x0, t_int, t_max,
+    t, x, status = integrate_to_converge(ocp, lqr, x0, t_int, t_max,
                                          norm=norm, method=method)
 
     assert t[-1] >= t_max
@@ -80,13 +81,13 @@ def test_integrate_to_converge_LQR(norm, method):
     t_int = 1.
     t_max = 300.
     ftol = 1e-03
-    t, x, status = integrate_to_converge(ocp, LQR, x0, t_int, t_max, norm=norm,
+    t, x, status = integrate_to_converge(ocp, lqr, x0, t_int, t_max, norm=norm,
                                          ftol=ftol, method=method,
                                          atol=ftol*1e-06, rtol=ftol*1e-03)
 
     assert t[-1] < t_max
     assert status == 0
-    f_tf = ocp.dynamics(x[:, -1], LQR(x[:, -1]))
+    f_tf = ocp.dynamics(x[:, -1], lqr(x[:, -1]))
     assert np.linalg.norm(f_tf, ord=norm) < ftol
 
     # Check that times and states are in correct order
@@ -139,11 +140,11 @@ def test_integrate_to_converge_ftol_array(method):
     Q = np.eye(2)
     R = np.eye(1)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
-    LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
 
     t_int = 0.1
     t_max = 30.
-    t, x, status = integrate_to_converge(ocp, LQR, x0, t_int, t_max, ftol=ftol,
+    t, x, status = integrate_to_converge(ocp, lqr, x0, t_int, t_max, ftol=ftol,
                                          method=method, atol=1e-12, rtol=1e-06)
 
     assert status == 0

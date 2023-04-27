@@ -1,15 +1,15 @@
 # Number of training and test trajectories
-n_train = 10
-n_test = 10
+n_train = 100
+n_test = 100
 
 # Distance (by default in l-infinity norm) of initial condition samples from xf
-x0_distance = 1.0
+x0_distance = 3.0
 
 # Integration time horizon guess for infinite horizon problems
-t_int = 10.
+t_int = 10. * x0_distance
 
 # Maximum integration time allowed
-t_max = 100.
+t_max = 5. * t_int
 
 # Changes to default problem parameters
 params = {}
@@ -18,4 +18,4 @@ params = {}
 sim_kwargs = {}
 
 # Keyword arguments for open-loop data generation
-open_loop_kwargs = {'verbose': 0}
+open_loop_kwargs = {}

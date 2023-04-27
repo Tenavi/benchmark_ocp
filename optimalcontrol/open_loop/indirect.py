@@ -2,6 +2,7 @@ import warnings
 
 import numpy as np
 from scipy.integrate import solve_bvp
+from scipy.interpolate import interp1d
 
 from .solutions import OpenLoopSolution
 
@@ -12,9 +13,10 @@ __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 class IndirectSolution(OpenLoopSolution):
     def __init__(self, t, x, u, p, v, status, message, cont_sol=None,
                  u_fun=None):
-        if not callable(cont_sol) or not callable(u_fun):
-            raise RuntimeError(
-                'cont_sol and u_fun must be provided at initialization')
+        if not callable(u_fun) or not callable(cont_sol):
+            raise RuntimeError("u_fun and cont_sol must be provided at "
+                               "initialization")
+
         self._cont_sol = cont_sol
         self._u_fun = u_fun
         self._n_states = np.shape(x)[0]
@@ -106,14 +108,15 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
         except RuntimeWarning as w:
             status = 3
             message = str(w)
-            sol = False
+            sol = interp1d(t, xp, bounds_error=True)
 
     return IndirectSolution(t, x, u, p, v, status, message, cont_sol=sol,
                             u_fun=ocp.optimal_control)
 
 
 def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
-                           tol=1e-05, t1_add=None, t1_tol=1e-10, verbose=0):
+                           tol=1e-05, t1_add=None, t1_max=None, t1_tol=1e-10,
+                           verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
     an infinite horizon optimal control problem for a single initial condition.
@@ -144,10 +147,11 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         Maximum number of collocation points to use when solving the BVP.
     tol : float, default=1e-05
         Convergence tolerance for the BVP solver.
-    t1_add : float, optional
+    t1_add : float, default=`t[-1]`
         Amount to increase the final time of the solution if the running cost
-        does not converge on the current time horizon. If not specified, the
-        default is `t1_add = t[-1]`, where `t` is the original guess for time.
+        does not converge on the current time horizon.
+    t1_max : float, default=`t[-1] + 10 * t1_add`
+        Maximum time horizon to try to integrate for before declaring failure.
     t1_tol : float, default=1e-10
         Tolerance for the running cost when determining convergence of the
         finite horizon approximation.
@@ -165,34 +169,53 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         `sol.status==0`.
     """
     t1_tol = float(t1_tol)
+    _max_t = np.max(t)
 
     if t1_add is None:
-        t1_add = np.max(t)
+        t1_add = _max_t
     elif np.size(t1_add) != 1 or t1_add <= 0.:
-        raise ValueError('t1_add must be a positive float')
+        raise ValueError("t1_add must be a positive float")
+
+    if t1_max is None:
+        t1_max = _max_t + 10. * t1_add
+    elif np.size(t1_max) != 1 or t1_max <= _max_t:
+        raise ValueError("t1_max must be a float greater than max(t)")
 
     while True:
         ocp_sol = solve_fixed_time(ocp, t, x, p, u=u, v=v, max_nodes=max_nodes,
                                    tol=tol, verbose=verbose)
-
-        # Stop if maximum nodes is reached
-        if ocp_sol.status == 1:
-            return ocp_sol
 
         # Stop if algorithm succeeded and running cost is small enough
         if ocp_sol.check_convergence(ocp.running_cost, t1_tol,
                                      verbose=verbose > 0):
             return ocp_sol
 
+        # Stop if maximum nodes or time horizon is reached
+        if ocp_sol.status == 1:
+            return ocp_sol
+
+        if ocp_sol.t[-1] >= t1_max:
+            ocp_sol.status = 4
+            ocp_sol.message = f"Maximum time horizon {t1_max} exceeded."
+            return ocp_sol
+
+        # If encountered numerical error (hard to recover from), try changing
+        # the guess for the costate to all zeros
+        if ocp_sol.status == 3:
+            if verbose > 0:
+                print(f"Resetting costates to zeros and trying again...")
+            ocp_sol.p = np.zeros_like(ocp_sol.p)
+            ocp_sol.v = np.zeros_like(ocp_sol.v)
+
         # Otherwise, increase final time and continue
         t = np.concatenate([ocp_sol.t, ocp_sol.t[-1:] + t1_add])
         x = np.hstack([ocp_sol.x, ocp_sol.x[:, -1:]])
-        p = np.hstack([ocp_sol.p, np.zeros((ocp.n_states, 1))])
+        p = np.hstack([ocp_sol.p, ocp_sol.p[:, -1:]])
         u = np.hstack([ocp_sol.u, ocp_sol.u[:, -1:]])
         v = np.concatenate([ocp_sol.v, ocp_sol.v[-1:]])
 
         if verbose > 0:
-            print(f'\nIncreasing time horizon to {t[-1]}')
+            print(f"Increasing time horizon to {t[-1]}")
 
 
 def _make_pontryagin_boundary(x0):

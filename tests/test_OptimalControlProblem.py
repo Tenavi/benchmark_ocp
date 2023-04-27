@@ -106,10 +106,10 @@ def test_cost_functions(ocp_name, n_samples):
     assert dLdu.shape == (ocp.n_controls, ocp.n_controls, n_samples)
 
     compare_finite_difference(
-        x, dLdx, lambda x: ocp.running_cost_grad(x, u, return_dLdu=False),
+        x, 2. * dLdx, lambda x: ocp.running_cost_grad(x, u, return_dLdu=False),
         method=ocp._fin_diff_method, atol=1e-05)
     compare_finite_difference(
-        u, dLdu, lambda u: ocp.running_cost_grad(x, u, return_dLdx=False),
+        u, 2. * dLdu, lambda u: ocp.running_cost_grad(x, u, return_dLdx=False),
         method=ocp._fin_diff_method, atol=1e-05)
 
     # Check shapes for flat vector inputs

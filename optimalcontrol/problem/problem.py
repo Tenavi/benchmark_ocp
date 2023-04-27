@@ -181,9 +181,10 @@ class OptimalControlProblem:
     def running_cost_hess(self, x, u, return_dLdx=True, return_dLdu=True,
                           L0=None):
         """
-        Evaluate the Hessians of the running cost, $d^2L/dx^2 (x,u)$ and
-        $d^2L/du^2 (x,u)$, at one or multiple state-control pairs. Default
-        implementation approximates this with finite differences.
+        Evaluate the 1/2 times the Hessians of the running cost,
+        $1/2 d^2L/dx^2 (x,u)$ and $1/2 d^2L/du^2 (x,u)$, at one or multiple
+        state-control pairs. Default implementation approximates this with
+        finite differences.
 
         Parameters
         ----------
@@ -201,9 +202,11 @@ class OptimalControlProblem:
         Returns
         -------
         dLdx : (n_states, n_states) or (n_states, n_states, n_points) array
-            State Hessians $dL^2/dx^2 (x,u)$ evaluated at pairs (`x`, `u`).
+            1/2 times the state Hessians $1/2 dL^2/dx^2 (x,u)$ evaluated at
+            pairs (`x`, `u`).
         dLdu : (n_controls,) or (n_controls, n_controls, n_points) array
-            Control Hessians $dL^2/du^2 (x,u)$ evaluated at pairs (`x`, `u`).
+            1/2 times the control Hessians $1/2 dL^2/du^2 (x,u)$ evaluated at
+            pairs (`x`, `u`).
         """
         if L0 is None:
             L0 = self.running_cost(x, u)
@@ -212,15 +215,15 @@ class OptimalControlProblem:
 
         if return_dLdx:
             g = lambda x: self.running_cost_grad(x, u, return_dLdu=False, L0=L0)
-            dLdx = approx_derivative(g, x, f0=dLdx,
-                                     method=self._fin_diff_method)
+            dLdx = 0.5 * approx_derivative(g, x, f0=dLdx,
+                                           method=self._fin_diff_method)
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
             g = lambda u: self.running_cost_grad(x, u, return_dLdx=False, L0=L0)
-            dLdu = approx_derivative(g, u, f0=dLdu,
-                                     method=self._fin_diff_method)
+            dLdu = 0.5 * approx_derivative(g, u, f0=dLdu,
+                                           method=self._fin_diff_method)
             if not return_dLdx:
                 return dLdu
 

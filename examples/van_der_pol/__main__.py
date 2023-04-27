@@ -18,8 +18,10 @@ ocp = VanDerPol(x0_sample_seed=random_seed, **config.params)
 xf = ocp.xf.flatten()
 uf = ocp.uf.flatten()
 
-# Create an LQR controller as a baseline)
+# Create an LQR controller as a baseline
+# System matrices (vector field Jacobians)
 A, B = ocp.jac(xf, uf)
+# Cost matrices (1/2 Running cost Hessians)
 Q, R = ocp.running_cost_hess(xf, uf)
 lqr = oc.controls.LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
                                            u_lb=ocp.parameters.u_lb,
@@ -49,3 +51,4 @@ for sim in train_data + test_data:
 
 train_data, unsolved, success = generate_from_guess(ocp, train_data,
                                                     **config.open_loop_kwargs)
+

@@ -223,15 +223,14 @@ class LinearQuadraticProblem(OptimalControlProblem):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
-            dLdx = 2. * self.Q
+            dLdx = np.copy(self.Q)
             if not squeeze:
                 dLdx = np.tile(dLdx[..., None], (1, 1, x.shape[1]))
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
-            dLdu = 2. * self.R
-            dLdu = np.tile(dLdu[..., None], (1, 1, u.shape[1]))
+            dLdu = np.tile(self.R[..., None], (1, 1, u.shape[1]))
 
             # Where the control is saturated, the gradient is constant so the
             # Hessian is zero

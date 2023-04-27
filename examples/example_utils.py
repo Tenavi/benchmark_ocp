@@ -124,7 +124,7 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
 
     success = np.zeros(len(guesses), dtype=bool)
 
-    print('\nSolving open loop optimal control problems...')
+    print("\nSolving open loop optimal control problems...")
     w = str(len('attempted') + 2)
     row = '{:^' + w + '}|{:^' + w + '}|{:^' + w + '}'
     h1 = row.format('solved', 'attempted', 'desired')
@@ -159,8 +159,8 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
         print(row.format(len(data), i+1, len(guesses)),
               end='\r' if overwrite else None)
 
-    print("Total solution time:")
-    print(f"Successes: {sol_time:.1f} seconds")
-    print(f"Failures: {fail_time:.1f} seconds")
+    print("\nTotal solution time:")
+    print(f"    Successes: {sol_time:.1f} seconds")
+    print(f"    Failures : {fail_time:.1f} seconds")
 
     return data, unsolved, success
