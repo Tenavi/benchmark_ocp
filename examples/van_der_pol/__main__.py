@@ -34,6 +34,18 @@ x0_train = ocp.sample_initial_conditions(config.n_train,
 x0_test = ocp.sample_initial_conditions(config.n_test,
                                         distance=config.x0_distance)
 
-args = (config.t_int, config.t_max)
-train_data, train_success = monte_carlo(ocp, lqr, x0_train, *args)
-test_data, test_success = monte_carlo(ocp, lqr, x0_train, *args)
+# Warm start the optimal control solver by integrating the system with LQR
+args = (oc.simulate.integrate_to_converge, config.t_int, config.t_max)
+train_data, train_success = monte_carlo(ocp, lqr, x0_train, *args,
+                                        **config.sim_kwargs)
+test_data, test_success = monte_carlo(ocp, lqr, x0_test, *args,
+                                      **config.sim_kwargs)
+
+for sim in train_data + test_data:
+    # Use LQR to generate a guess for the costates
+    sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.xf)
+    # Use the closed-loop cost-to-go as a guess for the value function
+    sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
+
+train_data, unsolved, success = generate_from_guess(ocp, train_data,
+                                                    **config.open_loop_kwargs)

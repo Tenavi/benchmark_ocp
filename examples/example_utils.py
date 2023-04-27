@@ -1,22 +1,62 @@
-import numpy as np
 import time
+
+import numpy as np
 from tqdm import tqdm
 
 import optimalcontrol as oc
 
 
-def monte_carlo(ocp, controller, x0_pool, *args, **kwargs):
+def monte_carlo(ocp, controller, x0_pool, fun, *args, **kwargs):
+    """
+    Wrapper of `optimalcontrol.simulate` for integrating closed-loop dynamics
+    with multiple initial conditions.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `dynamics`, `jacobians`, and `integration_events` methods.
+    controller : `Controller`
+        An instance of a `Controller` subclass implementing `__call__` and
+        `jacobian` methods.
+    x0_pool : (`ocp.n_states`, n_initial_conditions) array
+        Set of initial states.
+    fun : callable
+        Function for integrating the closed-loop system. Usually
+        `optimalcontrol.simulate.integrate_fixed_time` or
+        `optimalcontrol.simulate.integrate_to_converge`, but may be any
+        function with call signature
+        ```
+        t, x, status = fun(ocp, controller, x0, *args, **kwargs)
+        ```
+    *args : iterable
+        Positional arguments to pass to `fun`.
+    **kwargs : dict
+        Keyword arguments to pass to `fun`.
+
+    Returns
+    -------
+    sims : list of dicts
+        The results of the closed loop simulations for each initial condition
+        `x0_pool[:, i]`. Each list element is a dict containing
+
+        * t : (n_points,) array
+            Time points.
+        * x : (`ocp.n_states`, n_points) array
+            System states at times `t`.
+        * u : (`ocp.n_controls`, n_data) array
+            Control inputs at times `t`.
+    success : list of bools
+        Each element `success[i]` is `True` if the simulation for the initial
+        conditions `x0_pool[:, i]` succeeded.
+    """
     sims = []
     success = []
 
-    if np.isinf(ocp.final_time):
-        int_fun = oc.simulate.integrate_to_converge
-    else:
-        int_fun = oc.simulate.integrate_fixed_time
-        args = ([0., ocp.final_time],) + args
+    x0_pool = np.reshape(x0_pool, (ocp.n_states, -1))
 
     for x0 in tqdm(x0_pool.T):
-        t, x, status = int_fun(ocp, controller, x0, *args, **kwargs)
+        t, x, status = fun(ocp, controller, x0, *args, **kwargs)
         sims.append({'t': t, 'x': x, 'u': controller(x)})
         success.append(status == 0)
 
@@ -34,7 +74,7 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
         `bvp_dynamics` and `optimal_control` methods.
-    guesses : list of `DataFrame`s
+    guesses : list of DataFrames
         list of initial guesses for each open-loop problem to be solved. Each
         element of `guesses` should be a `DataFrame` with columns
 
@@ -42,7 +82,7 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
             * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
             * 'u1', ..., 'um' : Controls $u_1(t,x(t))$, ..., $u_m(t,x(t))$.
             * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
-            * 'v' : Value function/total cost $v(t,x(t))$.
+            * 'v' : Value function/cost-to-go $v(t,x(t))$.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
 
@@ -56,10 +96,10 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
 
     Returns
     -------
-    data : list of `DataFrame`s
+    data : list of DataFrames
         Subset of `guesses` for which an acceptable solution was found. Each
         element is a `DataFrame` with the same structure as `guesses`.
-    unsolved : list of `DataFrame`s
+    unsolved : list of DataFrames
         Subset of `guesses` for which no acceptable solution was found. Each
         element is a `DataFrame` with the same structure as `guesses`,
         containing the solver's best attempt at a solution upon failure.
@@ -67,10 +107,6 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
         List of same length as `guesses`. If `success[i] is True` then an
         acceptable solution based on `guesses[i]` was found and appended to
         `data`.
-    sol_time : float
-        Total time of successful solution attempts in seconds
-    fail_time : float
-        Total time of failed solution attempts in seconds
     """
     if np.isinf(ocp.final_time):
         sol_fun = oc.open_loop.solve_infinite_horizon
@@ -83,8 +119,8 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
     data = []
     unsolved = []
 
-    sol_time = []
-    fail_time = []
+    sol_time = 0.
+    fail_time = 0.
 
     success = np.zeros(len(guesses), dtype=bool)
 
@@ -110,18 +146,21 @@ def generate_from_guess(ocp, guesses, verbose=0, **kwargs):
         sol = oc.utilities.pack_dataframe(sol.t, sol.x, sol.u, sol.p, sol.v)
 
         if success[i]:
-            sol_time.append(end_time - start_time)
+            sol_time += end_time - start_time
             data.append(sol)
         else:
-            fail_time.append(end_time - start_time)
+            fail_time += end_time - start_time
             unsolved.append(sol)
 
         if verbose:
             for header in headers:
                 print(header)
+        overwrite = not verbose and i+1 < len(guesses)
         print(row.format(len(data), i+1, len(guesses)),
-              end='\r' if not verbose else None)
+              end='\r' if overwrite else None)
 
-    sol_time, fail_time = np.sum(sol_time), np.sum(fail_time)
+    print("Total solution time:")
+    print(f"Successes: {sol_time:.1f} seconds")
+    print(f"Failures: {fail_time:.1f} seconds")
 
-    return data, unsolved, success, sol_time, fail_time
+    return data, unsolved, success

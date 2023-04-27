@@ -65,23 +65,25 @@ def find_saturated(u, lb=None, ub=None):
 
 def pack_dataframe(t, x, u, p, v):
     """
+    Collect `numpy` arrays into a `DataFrame` which is convenient for saving as
+    a .csv file.
 
     Parameters
     ----------
     t : (n_data,) array
         Time values of each data point.
     x : (n_states, n_data) array
-        States $x(t)$.
+        System states at times `t`.
     u : (n_controls, n_data) array
-        Controls $u(t)$.
+        Control inputs at times `t`.
     p : (n_states, n_data) array
-        Costates/value gradients $p(t)$.
+        Costates/value at times `t`.
     v : (n_points,) array
-        Value function/total cost $v(t,x(t))$.
+        Value function/cost-to-go at times `t`.
 
     Returns
     -------
-    data : `DataFrame`
+    data : DataFrame
         `DataFrame` with `n_data` rows and columns 't', 'x1', ..., 'xn',
         'u1', ..., 'um', 'p1', ..., 'pn', and 'v'.
     """
@@ -97,7 +99,7 @@ def pack_dataframe(t, x, u, p, v):
     p = np.reshape(x, (n_states, -1))
     v = np.reshape(v, (1, -1))
 
-    data = np.hstack((t, x, u, p, v))
+    data = np.vstack((t, x, u, p, v)).T
 
     columns = (['t']
                + ['x' + str(i + 1) for i in range(n_states)]
@@ -110,18 +112,18 @@ def pack_dataframe(t, x, u, p, v):
 
 def unpack_dataframe(data):
     """
+    Extract `numpy` arrays from a `DataFrame` formatted by `pack_dataframe`.
 
     Parameters
     ----------
-    data : `DataFrame`
-        `DataFrame` with `n_data` rows to be turned into separate arrays.
-        Contains columns
+    data : DataFrame or dict
+        `DataFrame` with `n_data` rows. Contains columns (keys)
 
             * 't' : Time values of each data point (row).
             * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
             * 'u1', ..., 'um' : Controls $u_1(t,x(t))$, ..., $u_m(t,x(t))$.
             * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
-            * 'v' : Value function/total cost $v(t,x(t))$.
+            * 'v' : Value function/cost-to-go $v(t,x(t))$.
 
     Returns
     -------
@@ -131,13 +133,31 @@ def unpack_dataframe(data):
     p : (n_states, n_data) array
     v : (n_points,) array
     """
-    t = data['t'].to_numpy()
-    x = data[[col for col in data.columns if col[0] == 'x']].to_numpy()
-    u = data[[col for col in data.columns if col[0] == 'u']].to_numpy()
-    p = data[[col for col in data.columns if col[0] == 'p']].to_numpy()
-    v = data['v'].to_numpy()
+    if isinstance(data, pd.DataFrame):
+        t = data['t'].to_numpy()
+        x = data[[c for c in data.columns if c.startswith('x')]].to_numpy()
+        u = data[[c for c in data.columns if c.startswith('u')]].to_numpy()
+        p = data[[c for c in data.columns if c.startswith('p')]].to_numpy()
+        v = data['v'].to_numpy()
+    elif isinstance(data, dict):
+        t = data['t']
+        x = _stack_columns(*[data[c] for c in data.keys() if c.startswith('x')])
+        u = _stack_columns(*[data[c] for c in data.keys() if c.startswith('u')])
+        p = _stack_columns(*[data[c] for c in data.keys() if c.startswith('p')])
+        v = data['v']
+    else:
+        raise TypeError('data must be a DataFrame or dict')
 
     return t, x, u, p, v
+
+
+def _stack_columns(*x):
+    if len(x) == 1:
+        return x[0]
+    elif x[0].ndim == 1:
+        return np.stack(x, axis=1)
+    else:
+        return np.stack(x, axis=-1)
 
 
 def check_int_input(n, argname, low=None):

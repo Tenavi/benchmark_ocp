@@ -38,7 +38,7 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
     t : (n_points,) array
         Time points.
     x : (`ocp.n_states`, n_points) array
-        Values of the state at times `t`.
+        System states at times `t`.
     status : int
         Reason for algorithm termination:
 

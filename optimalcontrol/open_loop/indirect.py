@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from scipy.integrate import solve_bvp
 
@@ -76,26 +78,38 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     x = np.reshape(x, (ocp.n_states, -1))
     p = np.reshape(p, (ocp.n_states, -1))
 
+    if u is None:
+        u = ocp.optimal_control(x, p)
+
     if v is None:
-        if u is None:
-            u = ocp.optimal_control(x, p)
         v = ocp.total_cost(t, x, u)[::-1]
 
     xp = np.vstack((x, p, np.reshape(v, (1, -1))))
 
     bc = _make_pontryagin_boundary(x[:, 0])
 
-    bvp_sol = solve_bvp(ocp.bvp_dynamics, bc, t, xp, tol=tol,
-                        max_nodes=max_nodes, verbose=verbose)
+    with warnings.catch_warnings():
+        np.seterr(over='warn', divide='warn', invalid='warn')
+        warnings.filterwarnings('error', category=RuntimeWarning)
 
-    t = bvp_sol.x
-    x = bvp_sol.y[:ocp.n_states]
-    p = bvp_sol.y[ocp.n_states:-1]
-    v = bvp_sol.y[-1]
-    u = ocp.optimal_control(x, p)
+        try:
+            bvp_sol = solve_bvp(ocp.bvp_dynamics, bc, t, xp, tol=tol,
+                                max_nodes=max_nodes, verbose=verbose)
 
-    return IndirectSolution(t, x, u, p, v, bvp_sol.status, bvp_sol.message,
-                            cont_sol=bvp_sol.sol, u_fun=ocp.optimal_control)
+            t = bvp_sol.x
+            x = bvp_sol.y[:ocp.n_states]
+            p = bvp_sol.y[ocp.n_states:-1]
+            v = bvp_sol.y[-1]
+            u = ocp.optimal_control(x, p)
+
+            status, message, sol = bvp_sol.status, bvp_sol.message, bvp_sol.sol
+        except RuntimeWarning as w:
+            status = 3
+            message = str(w)
+            sol = False
+
+    return IndirectSolution(t, x, u, p, v, status, message, cont_sol=sol,
+                            u_fun=ocp.optimal_control)
 
 
 def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
