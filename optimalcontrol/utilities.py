@@ -151,6 +151,58 @@ def unpack_dataframe(data):
     return t, x, u, p, v
 
 
+def stack_dataframes(*data_list):
+    """
+    Extract `numpy` arrays from a list of `DataFrame`s formatted by
+    `pack_dataframe`, and concatenate these into a single set of arrays.
+
+    Parameters
+    ----------
+    *data_list : list of DataFrames or dicts
+        Each element of `data_list` is a `DataFrame` with columns (keys)
+
+            * 't' : Time values of each data point (row).
+            * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u1', ..., 'um' : Controls $u_1(t,x(t))$, ..., $u_m(t,x(t))$.
+            * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
+            * 'v' : Value function/cost-to-go $v(t,x(t))$.
+
+    Returns
+    -------
+    t : (n_data,) array
+        The concatenation of all 't' columns in `data_list`.
+    x : (n_states, n_data) array
+        The concatenation of all 'xi' columns in `data_list`.
+    u : (n_controls, n_data) array
+        The concatenation of all 'ui' columns in `data_list`.
+    p : (n_states, n_data) array
+        The concatenation of all 'pi' columns in `data_list`.
+    v : (n_points,) array
+        The concatenation of all 'v' columns in `data_list`.
+    """
+    t = []
+    x = []
+    u = []
+    p = []
+    v = []
+
+    for data in data_list:
+        _t, _x, _u, _p, _v = unpack_dataframe(data)
+        t.append(_t)
+        x.append(_x)
+        u.append(_u)
+        p.append(_p)
+        v.append(_v)
+
+    t = np.concatenate(t)
+    x = np.hstack(x)
+    u = np.hstack(u)
+    p = np.hstack(p)
+    v = np.concatenate(v)
+
+    return t, x, u, p, v
+
+
 def _stack_columns(*x):
     if len(x) == 1:
         return x[0]

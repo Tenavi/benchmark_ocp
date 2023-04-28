@@ -203,7 +203,8 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         # the guess for the costate to all zeros
         if ocp_sol.status == 3:
             if verbose > 0:
-                print(f"Resetting costates to zeros and trying again...")
+                print(f"Encountered numerical error. Resetting costates to "
+                      f"zeros and trying again...")
             ocp_sol.p = np.zeros_like(ocp_sol.p)
             ocp_sol.v = np.zeros_like(ocp_sol.v)
 
