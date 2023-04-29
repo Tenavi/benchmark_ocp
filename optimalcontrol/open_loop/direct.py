@@ -57,7 +57,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     ocp : OptimalControlProblem
         An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics`, `jacobians`, and `integration_events` methods.
+        `dynamics`, `jac`, and `integration_events` methods.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
@@ -106,7 +106,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     ----------
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics`, `jacobians`, and `integration_events` methods.
+        `dynamics`, `jac`, and `integration_events` methods.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.

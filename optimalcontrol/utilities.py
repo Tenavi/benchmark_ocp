@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.optimize import _numdiff
+from scipy.optimize import root, _numdiff
 
 
 def saturate(u, lb=None, ub=None):
@@ -451,116 +451,93 @@ def closed_loop_jacobian(x, open_loop_jac, controller):
 
     Returns
     -------
-    DfDx : (n_states, n_states) or (n_states, n_states, n_points) array
-        Closed-loop Jacobian(s), with `DfDx[i, j]` equal to the partial
+    jac : (n_states, n_states) or (n_states, n_states, n_points) array
+        Closed-loop Jacobian(s), with `jac[i, j]` equal to the partial
         derivative of `f[i]` with respect to `x[j]`.
     """
     u = controller(x)
     dfdx, dfdu = open_loop_jac(x, u)
     dudx = controller.jac(x, u0=u)
+    return dfdx + np.einsum('ij...,jk...->ik...', dfdu, dudx)
 
-    dfdx += np.einsum('ij...,jk...->ik...', dfdu, dudx)
-    return dfdx
 
-# ------------------------------------------------------------------------------
-
-def find_fixed_point(OCP, controller, tol, X0=None, verbose=True):
-    """
-    Use root-finding to find a fixed point (equilibrium) of the closed-loop
-    dynamics near the desired goal state OCP.X_bar. ALso computes the
-    closed-loop Jacobian and its eigenvalues.
+def find_equilibrium(ocp, controller, x0, **root_opts):
+    r"""
+    Uses root-finding (`scipy.optimize.root`) to find an equilibrium of the
+    closed-loop dynamics, $dx/dt = f(x,u(x))$, near a given point `x0`. In
+    addition, computes the closed-loop Jacobian
+    $Df/Dx = df/dx + df/du \cdot du/dx$ and its eigenvalues for linear stability
+    analysis.
 
     Parameters
     ----------
-    OCP : instance of QRnet.problem_template.TemplateOCP
-    config : instance of QRnet.problem_template.MakeConfig
-    tol : float
-        Maximum value of the vector field allowed for a trajectory to be
-        considered as convergence to an equilibrium
-    X0 : array, optional
-        Initial guess for the fixed point. If X0=None, use OCP.X_bar
-    verbose : bool, default=True
-        Set to True to print out the deviation of the fixed point from OCP.X_bar
-        and the Jacobian eigenvalue
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `dynamics` and `jac` methods.
+    controller : `Controller`
+        An instance of a `Controller` subclass implementing `__call__` and `jac`
+        methods.
+    x0 : (`ocp.n_states`,) array
+        Initial guess for the equilibrium point.
+    **root_opts : dict
+        Keyword arguments to pass to `scipy.optimize.root`.
 
     Returns
     -------
-    X_star : (n_states, 1) array
-        Closed-loop equilibrium
-    X_star_err : float
-        ||X_star - OCP.X_bar||
-    F_star : (n_states, 1) array
-        Vector field evaluated at X_star. If successful should have F_star ~ 0
-    Jac : (n_states, n_states) array
-        Close-loop Jacobian at X_star
-    eigs : (n_states, 1) complex array
-        Eigenvalues of the closed-loop Jacobian
+    x : (`ocp.n_states`,) array
+        Closed-loop equilibrium.
+    f : (`ocp.n_states`, 1) array
+        Vector field evaluated at `x, controller(x)`. If root-finding was
+        successful should have `f` approximately zero.
+    jac : (`ocp.n_states`, `ocp.n_states`) array
+        Closed-loop Jacobian, with `jac[i, j]` equal to the partial
+        derivative of `f[i]` with respect to `x[j]`.
+    eigs : (`ocp.n_states`,) complex array
+        Eigenvalues of the closed-loop Jacobian.
     max_eig : complex scalar
-        Largest eigenvalue of the closed-loop Jacobian
+        Largest eigenvalue of the closed-loop Jacobian, unless this is zero in
+        which case the next largest is returned.
     """
-    raise NotImplementedError
+    x0 = np.reshape(x0, (ocp.n_states,))
 
-    if X0 is None:
-        X0 = OCP.X_bar
-    X0 = np.reshape(X0, (OCP.n_states,))
+    c0 = ocp.constraint_fun(x0)
+    if c0 is not None:
+        raise NotImplementedError("find_equilibrium cannot yet handle state "
+                                  "constraints")
 
-    def dynamics_wrapper(X):
-        U = controller.eval_U(X)
-        F = OCP.dynamics(X, U)
-        C = OCP.constraint_fun(X)
-        if C is not None:
-            F = np.concatenate((F.flatten(), C.flatten()))
-        return F
+    jac = closed_loop_jacobian(x0, ocp.jac, controller)
+    print(np.linalg.eigvals(jac))
 
-    def Jacobian_wrapper(X):
-        J = OCP.closed_loop_jacobian(X, controller)
-        JC = OCP.constraint_jacobian(X)
-        if JC is not None:
-            J = np.vstack((
-                J.reshape(-1,X.shape[0]), JC.reshape(-1,X.shape[0])
-            ))
-        return J
+    def dynamics_wrapper(x):
+        u = controller(x)
+        return ocp.dynamics(x, u)
 
-    sol = root(dynamics_wrapper, X0, jac=Jacobian_wrapper, method="lm")
+    def jac_wrapper(x):
+        return closed_loop_jacobian(x, ocp.jac, controller)
 
-    X_star = sol.x.reshape(-1,1)
-    U_star = controller(X_star)
-    F_star = OCP.dynamics(X_star, U_star).reshape(-1,1)
-    Jac = OCP.closed_loop_jacobian(sol.x, controller)
+    sol = root(dynamics_wrapper, x0, jac=jac_wrapper, **root_opts)
 
-    X_star_err = OCP.norm(X_star)[0]
-
-    eigs = np.linalg.eigvals(Jac)
-    idx = np.argsort(eigs.real)
-    eigs = eigs[idx].reshape(-1,1)
-    max_eig = np.squeeze(eigs[-1])
+    u = controller(sol.x)
+    f = ocp.dynamics(sol.x, u)
+    jac = closed_loop_jacobian(sol.x, ocp.jac, controller)
+    eigs = np.linalg.eigvals(jac)
+    eigs = eigs[np.argsort(eigs.real)]
+    i = eigs.shape[0] - 1
+    max_eig = eigs[i]
 
     # Some linearized systems always have one or more zero eigenvalues.
     # Handle this situation by taking the next largest.
-    if np.abs(max_eig.real) < tol**2:
-        Jac0 = np.squeeze(OCP.closed_loop_jacobian(OCP.X_bar, OCP.LQR))
-        eigs0 = np.linalg.eigvals(Jac0)
-        idx = np.argsort(eigs0.real)
-        eigs0 = eigs0[idx].reshape(-1,1)
-        max_eig0 = np.squeeze(eigs0[-1])
+    while np.isclose(max_eig.real, 0., atol=1e-12) and i >= 1:
+        i -= 1
+        max_eig = eigs[i]
 
-        i = 2
-        while all([
-                i <= OCP.n_states,
-                np.abs(max_eig.real) < tol**2,
-                np.abs(max_eig0.real) < tol**2
-            ]):
-            max_eig = np.squeeze(eigs[OCP.n_states - i])
-            max_eig0 = np.squeeze(eigs0[OCP.n_states - i])
-            i += 1
+    print("Equilibrium point x:")
+    print(sol.x.reshape(-1, 1))
+    print(f"Largest non-zero Jacobian eigenvalue = "
+          f"{max_eig.real:1.2e} + j{np.abs(max_eig.imag):1.2e}")
 
-    if verbose:
-        s = "||actual - desired_equilibrium|| = {norm:1.2e}"
-        print(s.format(norm=X_star_err))
-        if np.max(np.abs(F_star)) > tol:
-            print("Dynamics f(X_star):")
-            print(F_star)
-        s = "Largest Jacobian eigenvalue = {real:1.2e} + j{imag:1.2e} \n"
-        print(s.format(real=max_eig.real, imag=np.abs(max_eig.imag)))
+    if max_eig > 0:
+        print("A stable equilibrium might be found after integrating the system"
+              " starting at x")
 
-    return X_star, X_star_err, F_star, Jac, eigs, max_eig
+    return sol.x, f, jac, eigs, max_eig

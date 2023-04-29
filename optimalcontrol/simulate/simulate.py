@@ -14,10 +14,10 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
     ----------
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics`, `jacobians`, and `integration_events` methods.
+        `dynamics`, `jac`, and `integration_events` methods.
     controller : `Controller`
-        An instance of a `Controller` subclass implementing `__call__` and
-        `jacobian` methods.
+        An instance of a `Controller` subclass implementing `__call__` and `jac`
+        methods.
     x0 : (`ocp.n_states`,) array
         Initial state.
     t_span : 2-tuple of floats
@@ -71,10 +71,10 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     ----------
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics`, `jacobians`, and `integration_events` methods.
+        `dynamics`, `jac`, and `integration_events` methods.
     controller : `Controller`
-        An instance of a `Controller` subclass implementing `__call__` and
-        `jacobian` methods.
+        An instance of a `Controller` subclass implementing `__call__` and `jac`
+        methods.
     x0 : (`ocp.n_states`,) array
         Initial state.
     t_int : float
