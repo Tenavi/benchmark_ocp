@@ -6,11 +6,12 @@ from optimalcontrol.sampling import UniformSampler
 
 
 class VanDerPol(OptimalControlProblem):
-    _required_parameters = {'Wx': .5, 'Wy': 1., 'Wu': 4., 'xf': 0.,
-                            'mu': 2., 'b': 1.5,
-                            'x0_ub': np.array([[3.], [4.]]),
-                            'x0_lb': -np.array([[3.], [4.]])}
-    _optional_parameters = {'u_lb': -1., 'u_ub': 1.}
+    _required_parameters = {'Wx': 1, 'Wy': 1., 'Wu': 4., 'xf': 0.,
+                            'mu': 2., 'b': 1.,
+                            'x0_ub': np.array([[3.], [3.]]),
+                            'x0_lb': -np.array([[3.], [3.]])}
+    _optional_parameters = {'u_lb': -1., 'u_ub': 1., 'x0_sample_seed': None,
+                            'x0_sample_norm': np.inf}
 
     def _saturate(self, u):
         return saturate(u, self._params.u_lb, self._params.u_ub)
@@ -29,15 +30,16 @@ class VanDerPol(OptimalControlProblem):
 
     def _update_params(self, obj, **new_params):
         if 'xf' in new_params:
-            self.xf = np.zeros((2,1))
+            self.xf = np.zeros((2, 1))
             self.xf[0] = obj.xf
 
         if 'b' in new_params:
-            self.B = np.zeros((2,1))
+            self.B = np.zeros((2, 1))
             self.B[1] = obj.b
 
         if 'b' in new_params or 'xf' in new_params:
-            self.uf = self.xf[0] / obj.b
+            self._uf = float(self.xf[0] / obj.b)
+            self.uf = np.reshape(self._uf, (1, 1))
 
         for key in ('u_lb', 'u_ub'):
             if key in new_params:
@@ -59,22 +61,24 @@ class VanDerPol(OptimalControlProblem):
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
         """
-        Generate initial conditions uniformly from a hypercube.
+        Generate initial conditions uniformly from a rectangle, or optionally
+        with a specified distance from equilibrium.
 
         Parameters
         ----------
         n_samples : int, default=1
             Number of sample points to generate.
         distance : positive float, optional
-            Desired distance (in l1 or l2 norm) of samples from `self.xf`. The
-            type of norm is determined by `self.norm`. Note that depending on
-            how `distance` is specified, samples may be outside the hypercube.
+            Desired distance of samples from `self.xf`. The type of norm is
+            determined by `self.parameters.x0_sample_norm`. Note that depending
+            on how `distance` is specified, samples may be outside the rectangle
+            defined by `self.parameters.x0_lb` and `self.parameters.x0_ub`.
 
         Returns
         -------
-        x0 : `(2, n_samples)` or `(2,)` array
+        x0 : (2, n_samples) or (2,) array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a 1d array.
+            sample. If `n_samples==1` then `x0` will be a 1d array.
         """
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 
@@ -85,7 +89,7 @@ class VanDerPol(OptimalControlProblem):
             x_err = x - self.xf
         x_err = x_err ** 2
 
-        u_err = (self._saturate(u) - self.uf) ** 2
+        u_err = (self._saturate(u) - self._uf) ** 2
 
         L = (self._params.Wx/2.) * x_err[:1]
         L += (self._params.Wy/2.) * x_err[1:]
@@ -100,7 +104,7 @@ class VanDerPol(OptimalControlProblem):
         else:
             x_err = x - self.xf
 
-        u_err = self._saturate(u) - self.uf
+        u_err = self._saturate(u) - self._uf
 
         x1 = x_err[:1]
         x2 = x_err[1:]
@@ -120,16 +124,16 @@ class VanDerPol(OptimalControlProblem):
     def running_cost_hess(self, x, u, return_dLdx=True, return_dLdu=True,
                           L0=None):
         if return_dLdx:
-            Q = np.diag([self._params.Wx, self._params.Wy])
+            Q = np.diag([self._params.Wx / 2., self._params.Wy / 2.])
             if np.ndim(x) >= 2:
                 Q = np.tile(Q[..., None], (1, 1, np.shape(x)[1]))
             if not return_dLdu:
                 return Q
 
         if return_dLdu:
-            R = np.reshape(self._params.Wu, (1, 1))
+            R = np.reshape(self._params.Wu / 2., (1, 1))
             if np.ndim(u) >= 2:
-                R = np.tile(R[...,None], (1, 1, np.shape(u)[1]))
+                R = np.tile(R[..., None], (1, 1, np.shape(u)[1]))
             if not return_dLdx:
                 return R
 
@@ -170,22 +174,21 @@ class VanDerPol(OptimalControlProblem):
         return dfdx, dfdu
 
     def optimal_control(self, x, p):
-        u = self.uf - self._params.b / self._params.Wu * p[1:]
+        u = self._uf - self._params.b / self._params.Wu * p[1:]
         return self._saturate(u)
 
     def optimal_control_jac(self, x, p, u0=None):
         return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
 
     def bvp_dynamics(self, t, xp):
-        u = self.optimal_control(xp[:2], xp[2:-1])
+        u = self.optimal_control(xp[:2], xp[2:4])
         L = self.running_cost(xp[:2], u)
 
+        # Get states and costates
         x1 = xp[:1]
         x2 = xp[1:2]
-
         x1_err = x1 - self.xf[:1]
 
-        # Costate
         p1 = xp[2:3]
         p2 = xp[3:4]
 

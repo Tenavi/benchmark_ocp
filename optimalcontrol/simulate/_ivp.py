@@ -5,6 +5,7 @@ from scipy.integrate._ivp.ivp import METHODS, MESSAGES
 from scipy.integrate._ivp.ivp import OdeResult, OdeSolution
 from scipy.integrate._ivp.ivp import prepare_events, find_active_events
 
+
 def solve_ivp(
         fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
         events=None, vectorized=False, args=None, **options

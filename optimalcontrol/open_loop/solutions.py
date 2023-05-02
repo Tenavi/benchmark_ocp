@@ -6,15 +6,15 @@ class OpenLoopSolution:
 
     Attributes
     ----------
-    t : `(n_points,)` array
+    t : (n_points,) array
         Time points returned by the open loop solver.
-    x : `(n_states, n_points)` array
+    x : (n_states, n_points) array
         Values of the optimal state trajectory at times `t`.
-    u : `(n_controls, n_points)` array
+    u : (n_controls, n_points) array
         Values of the optimal control at times `t`.
-    p : `(n_states, n_points)` array
+    p : (n_states, n_points) array
         Values of the costate at times `t`.
-    v : `(n_points,)` array
+    v : (n_points,) array
         The value function evaluated at the points `x`.
     status : int
         Reason for solver termination. `status==0` indicates success, other
@@ -37,18 +37,18 @@ class OpenLoopSolution:
 
         Parameters
         ----------
-        t : `(n_points,)` array
+        t : (n_points,) array
             Time points at which to evaluate the continuous solution.
 
         Returns
         -------
-        x : `(n_states, n_points)` array
+        x : (n_states, n_points) array
             Values of the optimal state trajectory at times `t`.
-        u : `(n_controls, n_points)` array
+        u : (n_controls, n_points) array
             Values of the optimal control at times `t`.
-        p : `(n_states, n_points)` array
+        p : (n_states, n_points) array
             Values of the costate at times `t`.
-        v : `(n_points,)` array
+        v : (n_points,) array
             The value function evaluated at the points `x`.
         """
         raise NotImplementedError
@@ -56,7 +56,8 @@ class OpenLoopSolution:
     def check_convergence(self, fun, tol, verbose=False):
         """
         Compare the running cost of the solution at final time to a specified
-        tolerance.
+        tolerance. Relevant for finite horizon approximations of infinite
+        horizon problems to determine if the solution has converged.
 
         Parameters
         ----------
@@ -71,24 +72,24 @@ class OpenLoopSolution:
         Returns
         -------
         converged : bool
-            `True` if `self.status == 0` and
+            `True` if `self.status==0` and
             `fun(self.x[:, -1], self.u[:, -1]) <= tol`.
         """
         converged = self.status == 0
         if not converged:
             if verbose:
-                print(f'Solution failed to converge: status = {self.status:d}: '
-                      f'{self.message}')
+                print(f"Solution failed to converge: status = {self.status:d}: "
+                      f"{self.message}")
             return converged
 
         L = float(fun(self.x[:, -1], self.u[:, -1]))
         converged = converged and L <= tol
         if verbose:
             if converged:
-                print(f'Solution converged: running cost = {L:1.2e} <= '
-                      f'tolerance {tol:1.2e}')
+                print(f"Solution converged: running cost = {L:1.2e} <= "
+                      f"tolerance {tol:1.2e}")
             else:
-                print(f'Solution failed to converge: running cost = {L:1.2e} > '
-                      f'tolerance {tol:1.2e}')
+                print(f"Solution failed to converge: running cost = {L:1.2e} > "
+                      f"tolerance {tol:1.2e}")
 
         return converged

@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from optimalcontrol.sampling import UniformSampler
-from optimalcontrol.utilities import saturate, find_saturated, resize_vector
+from ..sampling import UniformSampler
+from ..utilities import saturate, find_saturated, resize_vector
 from .problem import OptimalControlProblem
 
 
@@ -13,32 +13,32 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     Parameters
     ----------
-    A : `(n_states, n_states)` array
+    A : (n_states, n_states) array
         State Jacobian matrix, $df/dx (x_f, u_f)$.
-    B : `(n_states, n_controls)` array
+    B : (n_states, n_controls) array
         Control Jacobian matrix, $df/du (x_f, u_f)$.
-    Q : `(n_states, n_states)` array
+    Q : (n_states, n_states) array
         Hessian of running cost with respect to states,
         $d^2L/dx^2 (x_f, u_f)$. Must be positive semi-definite.
-    R : `(n_controls, n_controls)` array
+    R : (n_controls, n_controls) array
         Hessian of running cost with respect to controls,
         $d^2L/du^2 (x_f, u_f)$. Must be positive definite.
-    xf : {`(n_states, 1)` array, float}, default=0.
+    xf : {(n_states, 1) array, float}, default=0.
         Goal state, nominal linearization point. If float, will be broadcast
         into an array of shape `(n_states, 1)`.
-    uf : {`(n_controls, 1)` array, float}, default=0.
+    uf : {(n_controls, 1) array, float}, default=0.
         Control values at nominal linearization point. If float, will be
         broadcast into an array of shape `(n_controls, 1)`.
-    x0_lb : {`(n_states, 1)` array, float}
+    x0_lb : {(n_states, 1) array, float}
         Lower bounds for hypercube from which to sample initial conditions `x0`.
         If float, will be broadcast into an array of shape `(n_states, 1)`.
-    x0_ub : {`(n_states, 1)` array, float}
+    x0_ub : {(n_states, 1) array, float}
         Upper bounds for hypercube from which to sample initial conditions `x0`.
         If float, will be broadcast into an array of shape `(n_states, 1)`.
-    u_lb : {`(n_controls, 1)` array, float}, optional
+    u_lb : {(n_controls, 1) array, float}, optional
         Lower control bounds. If float, will be broadcast into an array of shape
         `(n_controls, 1)`.
-    u_ub : {`(n_controls, 1)` array, float}, optional
+    u_ub : {(n_controls, 1) array, float}, optional
         Upper control bounds. If float, will be broadcast into an array of shape
         `(n_controls, 1)`.
     x0_sample_seed : int, optional
@@ -130,7 +130,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
         if 'Q' in new_params or not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
-                norm=1 if obj.singular_Q else self.Q,
+                norm=2 if obj.singular_Q else self.Q,
                 seed=getattr(obj, 'x0_sample_seed', None))
         elif any(['x0_lb' in new_params, 'x0_ub' in new_params,
                   'x0_sample_seed' in new_params, 'xf' in new_params]):
@@ -150,13 +150,13 @@ class LinearQuadraticProblem(OptimalControlProblem):
         distance : positive float, optional
             Desired distance of samples from `self.xf`. If `self.Q` is positive
             definite, the distance is defined by the norm
-            `norm(x) = sqrt(x.T @ self.Q @ x)`, otherwise the l1 norm is used.
+            `norm(x) = sqrt(x.T @ self.Q @ x)`, otherwise the l2 norm is used.
 
         Returns
         -------
-        x0 : `(n_states, n_samples)` or `(n_states,)` array
+        x0 : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
-            sample. If `n_samples=1` then `x0` will be a one-dimensional array.
+            sample. If `n_samples==1` then `x0` will be a one-dimensional array.
         """
         return self._x0_sampler(n_samples=n_samples, distance=distance)
 
@@ -168,14 +168,14 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         Parameters
         ----------
-        xa : `(n_states, n_a)` or `(n_states,)` array
+        xa : (n_states, n_a) or (n_states,) array
             First batch of points.
-        xb : `(n_states, n_b)` or `(n_states,)` array
+        xb : (n_states, n_b) or (n_states,) array
             Second batch of points.
 
         Returns
         -------
-        dist : `(n_a, n_b)` array
+        dist : (n_a, n_b) array
             `sqrt((xa - xb).T @ self.Q @ (xa - xb))` for each point (column) in
             `xa` and `xb`.
         """
@@ -223,15 +223,14 @@ class LinearQuadraticProblem(OptimalControlProblem):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
-            dLdx = 2. * self.Q
+            dLdx = np.copy(self.Q)
             if not squeeze:
                 dLdx = np.tile(dLdx[..., None], (1, 1, x.shape[1]))
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
-            dLdu = 2. * self.R
-            dLdu = np.tile(dLdu[..., None], (1, 1, u.shape[1]))
+            dLdu = np.tile(self.R[..., None], (1, 1, u.shape[1]))
 
             # Where the control is saturated, the gradient is constant so the
             # Hessian is zero
@@ -292,23 +291,23 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     def _center_inputs(self, x, u):
         """
-        Wrapper of `_reshape_inputs` that reshapes 1d array state and controls
-        into 2d arrays, saturates the controls, and subtracts nominal states and
-        controls.
+        Wrapper of `self._reshape_inputs` that reshapes 1d array state and
+        controls into 2d arrays, saturates the controls, and subtracts nominal
+        states and controls.
 
         Parameters
         ----------
-        x : `(n_states,)` or `(n_states, n_points)` array
+        x : (n_states,) or (n_states, n_points) array
             State(s) arranged by (dimension, time).
-        u : `(n_controls,)` or `(n_controls, n_points)` array
+        u : (n_controls,) or (n_controls, n_points) array
             Control(s) arranged by (dimension, time).
 
         Returns
         -------
-        x - xf : `(n_states, n_points)` array
+        x - xf : (n_states, n_points) array
             State(s) arranged by (dimension, time). If the input was flat,
             `n_points = 1`.
-        u - uf : `(n_controls, n_points)` array
+        u - uf : (n_controls, n_points) array
             Control(s) arranged by (dimension, time). If the input was flat,
             `n_points = 1`.
         squeeze: bool

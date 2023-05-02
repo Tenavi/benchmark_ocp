@@ -14,17 +14,19 @@ following software dependencies:
     python>=3.7
     numpy>=1.21.6
     scipy>=1.7.3
-    pandas>=1.3.5
-    tqdm>=4.65.0
-    matplotlib>=3.5.3
+    pytest
     jupyter
+    tqdm>=4.65.0
+    pandas>=1.3.5
+    scikit-learn
+    matplotlib>=3.5.3
     pylgr
 
 The `pylgr` package can be downloaded at https://github.com/Tenavi/PyLGR.
 
 ### Test
 
-Install `pytest` and run `pytest tests -s -v`.
+Run `pytest tests -s -v` from the root directory.
 
 ### Generate documentation
 

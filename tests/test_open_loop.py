@@ -4,7 +4,7 @@ import warnings
 import time
 
 from optimalcontrol import open_loop
-from optimalcontrol.simulate import integrate_closed_loop
+from optimalcontrol.simulate import integrate_fixed_time
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator
 
@@ -46,16 +46,16 @@ def test_solve_infinite_horizon(method):
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                                  x0_lb=-1., x0_ub=1., u_lb=-1., u_ub=1.,
                                  x0_sample_seed=456)
-    LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                                    u_lb=-1., u_ub=1.)
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
     # Integrate over initially short time horizon
     t_span = [0., 10.]
-    t, x, _ = integrate_closed_loop(ocp, LQR, t_span, x0)
-    p = 2. * LQR.P @ (x - xf)
-    u = LQR(x)
-    v = np.einsum('ij,ij->j', x - xf, LQR.P @ (x - xf))
+    t, x, _ = integrate_fixed_time(ocp, lqr, x0, t_span)
+    p = 2. * lqr.P @ (x - xf)
+    u = lqr(x)
+    v = np.einsum('ij,ij->j', x - xf, lqr.P @ (x - xf))
 
     start_time = time.time()
 
@@ -71,11 +71,11 @@ def test_solve_infinite_horizon(method):
     assert L[-1] <= t1_tol
 
     # Verify that BVP solution matches LQR solution, which is optimal
-    u_expect = LQR(ocp_sol.x)
+    u_expect = lqr(ocp_sol.x)
     np.testing.assert_allclose(ocp_sol.u, u_expect, atol=tol, rtol=tol)
-    p_expect = 2. * LQR.P @ (ocp_sol.x - xf)
+    p_expect = 2. * lqr.P @ (ocp_sol.x - xf)
     np.testing.assert_allclose(ocp_sol.p, p_expect, atol=tol, rtol=tol)
-    v_expect = np.einsum('ij,ij->j', ocp_sol.x - xf, LQR.P @ (ocp_sol.x - xf))
+    v_expect = np.einsum('ij,ij->j', ocp_sol.x - xf, lqr.P @ (ocp_sol.x - xf))
     np.testing.assert_allclose(ocp_sol.v, v_expect, atol=tol, rtol=tol)
 
     # Verify that interpolation of solution is close to original guess, which

@@ -193,9 +193,7 @@ def test_cost_functions(n_states, n_controls, n_samples):
     assert dLdx2.shape == (n_states, n_states, n_samples)
     assert dLdu2.shape == (n_controls, n_controls, n_samples)
 
-    # Check that control Hessians match with finite difference approximation,
-    # which is equal to 2 * R when the control is unsaturated and zero when
-    # saturated.
+    # Check that control Hessians match with finite difference approximation
     fin_diff_dLdu2 = (super(LinearQuadraticProblem, ocp)
                       .running_cost_hess(x, u, return_dLdx=False))
     np.testing.assert_allclose(dLdu2, fin_diff_dLdu2)
@@ -210,7 +208,7 @@ def test_cost_functions(n_states, n_controls, n_samples):
         np.testing.assert_allclose(dLdx[..., i], 2. * Q @ xi)
         np.testing.assert_allclose(dLdu[..., i], 2. * R @ ui)
 
-        np.testing.assert_allclose(dLdx2[..., i], 2. * Q)
+        np.testing.assert_allclose(dLdx2[..., i], Q)
 
     # Check shapes for flat vector inputs
     if n_samples == 1:

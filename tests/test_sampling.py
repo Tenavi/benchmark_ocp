@@ -8,34 +8,38 @@ from optimalcontrol.sampling import UniformSampler
 rng = np.random.default_rng()
 
 
-@pytest.mark.parametrize('lb_shape', [1, None])
-@pytest.mark.parametrize('n_states', [1, 4])
-def test_UniformSampler_init(lb_shape, n_states):
+@pytest.mark.parametrize('n_states', (1, 4))
+@pytest.mark.parametrize('norm', (1, 2, np.inf, 'matrix'))
+def test_UniformSampler_init(n_states, norm):
     ub = np.arange(1., 1. + n_states)
-    lb = - ub - 1.
-    if lb_shape == 1:
-        lb = lb[:1]
+    lb = - (10 * ub)
     xf = rng.uniform(low=-1., high=1., size=n_states)
 
-    sampler = UniformSampler(lb, ub, xf)
+    if norm == 'matrix':
+        norm = rng.normal(size=(n_states,n_states))
+        norm = norm.T @ norm
 
-    if lb_shape == 1:
-        lb = np.resize(lb, ub.shape)
+    samplers = (
+        UniformSampler(lb, ub, xf, norm=norm),
+        UniformSampler(lb.reshape(-1, 1), list(ub), xf, norm=norm),
+        UniformSampler(lb, ub.reshape(-1, 1), list(xf), norm=norm),
+        UniformSampler(list(lb), ub, xf.reshape(-1, 1), norm=norm))
 
-    # Make sure parameters are initialized correctly and with correct shapes
-    for key, var in zip(('lb', 'ub', 'xf'), (lb, ub, xf)):
-        assert sampler.__dict__[key].ndim == 2
-        assert sampler.__dict__[key].shape == (n_states,1)
-        np.testing.assert_allclose(sampler.__dict__[key].flatten(), var)
+    for sampler in samplers:
+        # Make sure parameters are initialized correctly and with correct shapes
+        for key, var in zip(('lb', 'ub', 'xf'), (lb, ub, xf)):
+            assert sampler.__dict__[key].ndim == 2
+            assert sampler.__dict__[key].shape == (n_states,1)
+            np.testing.assert_allclose(sampler.__dict__[key].flatten(), var)
 
-    _ = UniformSampler(lb.reshape(-1, 1), list(ub), xf, norm=np.array(1))
-    _ = UniformSampler(lb, ub.reshape(-1, 1), list(xf), norm=np.array([2]))
-    _ = UniformSampler(list(lb), ub, xf.reshape(-1, 1), norm=np.array([[1]]))
-    norm = rng.normal(size=(n_states, n_states))
-    norm = norm.T @ norm
-    _ = UniformSampler(lb, ub, xf, norm=norm)
-    if n_states == 1:
-        _ = UniformSampler(lb, ub, xf, norm=float(norm))
+        if np.shape(norm) == (n_states, n_states):
+            np.testing.assert_allclose(sampler.norm.T @ sampler.norm, norm)
+        elif np.isinf(norm):
+            assert np.isinf(sampler.norm)
+        elif isinstance(norm, float):
+            np.testing.assert_allclose(np.diag(sampler.norm), np.sqrt(norm))
+        else:
+            assert sampler.norm == norm
 
 
 def test_UniformSampler_bad_init():
@@ -63,15 +67,16 @@ def test_UniformSampler_bad_init():
 
     bad_mat_1 = rng.normal(size=(n_states, n_states+1))
     bad_mat_2 = rng.normal(size=(n_states, n_states))
-    for bad_norm in [0, 1.5, 'xyz', bad_mat_1, bad_mat_2]:
+    for bad_norm in [0, 0., 'xyz', bad_mat_1, bad_mat_2]:
         with pytest.raises(ValueError):
             _ = UniformSampler(lb, ub, xf, norm=bad_norm)
 
 
-@pytest.mark.parametrize('norm', [1, 2, 'matrix'])
-@pytest.mark.parametrize('distance', [-.5, None, 1, 1.5])
-def test_UniformSampler_sample(norm, distance):
-    n_states, seed = 4, 123
+@pytest.mark.parametrize('norm', (1, 2, np.inf, 'matrix'))
+@pytest.mark.parametrize('distance', (-.5, None, 1, 1.5))
+@pytest.mark.parametrize('n_states', (1, 4))
+def test_UniformSampler_sample(norm, distance, n_states):
+    seed = 123
     ub = np.arange(1., 1. + n_states).reshape(n_states,1)
     lb = - ub - 1.
     xf = rng.uniform(low=-1., high=1., size=(n_states,1))
@@ -98,16 +103,11 @@ def test_UniformSampler_sample(norm, distance):
             assert x0.shape[1] == n_samples
         assert x0.shape[0] == n_states
 
-        # Check that samples are consistent if the seed is reset
-        sampler.update(seed=seed)
-        x1 = sampler(n_samples=n_samples, distance=distance)
-        np.testing.assert_allclose(x0, x1.reshape(x0.shape))
-
         # Check that either bounds are satisfied or desired distance reached
         if distance is None:
             assert np.all(x0 <= ub)
             assert np.all(lb <= x0)
-        elif isinstance(norm, int):
+        elif isinstance(norm, int) or np.size(norm) == 1 and np.isinf(norm):
             np.testing.assert_allclose(
                 np.abs(distance), np.linalg.norm(x0 - xf, ord=norm, axis=0))
         else:
@@ -117,3 +117,8 @@ def test_UniformSampler_sample(norm, distance):
                 x0_norm[:, i] = x0_norm[:, i] @ norm @ x0_norm[:, i]
             x0_norm = np.sqrt(x0_norm)
             np.testing.assert_allclose(np.abs(distance), x0_norm)
+
+        # Check that samples are consistent if the seed is reset
+        sampler.update(seed=seed)
+        x1 = sampler(n_samples=n_samples, distance=distance)
+        np.testing.assert_allclose(x0, x1.reshape(x0.shape))

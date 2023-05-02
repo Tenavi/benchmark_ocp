@@ -1,7 +1,8 @@
 numpy
 scipy
-pandas
-tqdm
-matplotlib
 pytest
 jupyter
+tqdm
+pandas
+scikit-learn
+matplotlib
