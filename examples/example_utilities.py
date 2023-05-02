@@ -266,7 +266,7 @@ def make_legend(ax, **opts):
 
 
 def plot_total_cost(optimal_costs, controller_costs=dict(),
-                    title='Closed-loop cost evaluation'):
+                    title='Closed-loop cost evaluation', fig_kwargs=dict()):
     """
     Plot the total accumulated cost for a set of closed-loop simulations with
     one or more feedback controls against the optimal value function. For an
@@ -286,13 +286,16 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
         as in `optimal_costs`.
     title : str, default='Closed-loop cost evaluation'
         Title for the figure.
+    fig_kwargs : dict, optional
+        Keyword arguments to pass during figure creation. See
+        `matplotlib.pyplot.figure`.
 
     Returns
     -------
-    fig : `matplotlib.pyplot.Figure`
+    fig : `matplotlib.figure.Figure`
         Figure instance with a scatterplot of closed-loop vs. optimal costs.
     """
-    fig = plt.figure()
+    fig = plt.figure(**fig_kwargs)
 
     ax = plt.axes()
 
@@ -315,7 +318,8 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
 
 def plot_closed_loop_3d(sims, open_loop_sols, z='u',
                         controller_name='learning-based control',
-                        title='Closed-loop trajectories and controls'):
+                        title='Closed-loop trajectories and controls',
+                        fig_kwargs=dict()):
     """
     Plot closed-loop simulations and open-loop solutions together on a single 3d
     plot. This produces one figure for each pairwise combination of system
@@ -345,10 +349,13 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
         How the feedback controller should be referred to in plots.
     title : str, default='Closed-loop trajectories and controls'
         The title for each figure.
+    fig_kwargs : dict, optional
+        Keyword arguments to pass during figure creation. See
+        `matplotlib.pyplot.figure`.
 
     Returns
     -------
-    figs : (list of) `matplotlib.pyplot.Figure`(s)
+    figs : (list of) `matplotlib.figure.Figure`(s)
         Each list element contains a figure instance which plots a combination
         of states and `z`.
     """
@@ -366,7 +373,7 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
 
     for i, j in combinations(range(n_states), 2):
         for k in range(n_other):
-            figs.append(plt.figure())
+            figs.append(plt.figure(**fig_kwargs))
 
             ax = plt.axes(projection='3d')
 
@@ -387,7 +394,7 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     return figs
 
 
-def plot_closed_loop(ocp, sims, data_name=None):
+def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
     """
     Plot the states, controls, and running cost vs. time for a set of
     trajectories.
@@ -411,10 +418,14 @@ def plot_closed_loop(ocp, sims, data_name=None):
     data_name : str, optional
         If provided, this string appears in parentheses after the first plot
         title.
+    fig_kwargs : dict, optional
+        fig_kwargs : dict, optional
+        Keyword arguments to pass during figure creation. See
+        `matplotlib.pyplot.figure`.
 
     Returns
     -------
-    fig : `matplotlib.pyplot.Figure`
+    fig : `matplotlib.figure.Figure`
         Figure instance with a set of plots of each state, control, and the
         running cost vs. time for all trajectories.
     """
@@ -422,9 +433,10 @@ def plot_closed_loop(ocp, sims, data_name=None):
 
     n_plots = ocp.n_states + ocp.n_controls + 1
 
-    fig = plt.figure(figsize=(n_plots + 2, 6))
+    fig_kwargs = {'figsize': (6.4, n_plots * 1.5), **fig_kwargs}
+    fig = plt.figure(**fig_kwargs)
 
-    plt.subplots_adjust(hspace=0.65)
+    plt.subplots_adjust(hspace=0.5)
 
     for i in range(ocp.n_states):
         ax = plt.subplot(n_plots, 1, i + 1)
