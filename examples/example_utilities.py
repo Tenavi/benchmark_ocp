@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import RobustScaler
 
-import optimalcontrol as oc
+from optimalcontrol import open_loop, controls, utilities
 
 
 # Allow matplotlib to interpret LaTeX plot labels
@@ -69,9 +69,9 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
         `messages[i]` contains a human-readable message describing `status[i]`.
     """
     if np.isinf(ocp.final_time):
-        sol_fun = oc.open_loop.solve_infinite_horizon
+        sol_fun = open_loop.solve_infinite_horizon
     else:
-        sol_fun = oc.open_loop.solve_fixed_time
+        sol_fun = open_loop.solve_fixed_time
 
     if type(guesses) not in (list, np.ndarray):
         guesses = [guesses]
@@ -95,7 +95,7 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
         print(header)
 
     for i, guess in enumerate(guesses):
-        t, x, u, p, v = oc.utilities.unpack_dataframe(guess)
+        t, x, u, p, v = utilities.unpack_dataframe(guess)
 
         start_time = time.time()
 
@@ -160,12 +160,12 @@ def save_data(data, filepath):
     filepath : path-like
         Where the csv file should be saved.
     """
-    t, x, u, p, v = oc.utilities.stack_dataframes(*data)
-    data = oc.utilities.pack_dataframe(t, x, u, p, v)
+    t, x, u, p, v = utilities.stack_dataframes(*data)
+    data = utilities.pack_dataframe(t, x, u, p, v)
     data.to_csv(filepath)
 
 
-class NNController(oc.controls.Controller):
+class NNController(controls.Controller):
     """
     A simple example of how one might implement a neural network controller
     trained by supervised learning. To do this, we generate a dataset of
@@ -220,9 +220,9 @@ class NNController(oc.controls.Controller):
         self.u_lb, self.u_ub = u_lb, u_ub
 
         if self.u_lb is not None:
-            self.u_lb = oc.utilities.resize_vector(self.u_lb, self.n_controls)
+            self.u_lb = utilities.resize_vector(self.u_lb, self.n_controls)
         if self.u_ub is not None:
-            self.u_ub = oc.utilities.resize_vector(self.u_ub, self.n_controls)
+            self.u_ub = utilities.resize_vector(self.u_ub, self.n_controls)
 
         self._train_time = time.time() - start_time
         print(f"\nTraining time: {self._train_time:.2f} seconds")
@@ -233,7 +233,7 @@ class NNController(oc.controls.Controller):
 
         u = self._regressor.predict(x_T).reshape(-1, self.n_controls)
         u = self._u_scaler.inverse_transform(u).T
-        u = oc.utilities.saturate(u, self.u_lb, self.u_ub)
+        u = utilities.saturate(u, self.u_lb, self.u_ub)
 
         if np.ndim(x) < 2:
             return u.flatten()
@@ -328,9 +328,10 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     Parameters
     ----------
     sims : length n_sims list of dicts
-        Closed loop simulations output by `oc.simulate.monte_carlo_fixed_time`
-        or `oc.simulate.monte_carlo_to_converge`. Each element of `sims` should
-        be a dict with keys
+        Closed loop simulations output by
+        `optimalcontrol.simulate.monte_carlo_fixed_time` or
+        `optimalcontrol.simulate.monte_carlo_to_converge`. Each element of
+        `sims` should be a dict with keys
 
             * 't' : (n_points,) array
                 Time points.
@@ -405,9 +406,10 @@ def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
         An instance of an `OptimalControlProblem` subclass implementing a
         `running_cost` method.
     sims : length n_sims list of dicts
-        Closed loop simulations output by `oc.simulate.monte_carlo_fixed_time`
-        or `oc.simulate.monte_carlo_to_converge`. Each element of `sims` should
-        be a dict with keys
+        Closed loop simulations output by
+        `optimalcontrol.simulate.monte_carlo_fixed_time` or
+        `optimalcontrol.simulate.monte_carlo_to_converge`. Each element of
+        `sims` should be a dict with keys
 
             * 't' : (n_points,) array
                 Time points.
