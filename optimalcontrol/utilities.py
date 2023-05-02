@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.optimize import root, _numdiff
+from scipy.optimize import _numdiff
 
 
 def saturate(u, lb=None, ub=None):
@@ -63,155 +63,6 @@ def find_saturated(u, lb=None, ub=None):
         return u <= lb
 
 
-def pack_dataframe(t, x, u, p, v):
-    """
-    Collect `numpy` arrays into a `DataFrame` which is convenient for saving as
-    a .csv file.
-
-    Parameters
-    ----------
-    t : (n_data,) array
-        Time values of each data point.
-    x : (n_states, n_data) array
-        System states at times `t`.
-    u : (n_controls, n_data) array
-        Control inputs at times `t`.
-    p : (n_states, n_data) array
-        Costates/value at times `t`.
-    v : (n_points,) array
-        Value function/cost-to-go at times `t`.
-
-    Returns
-    -------
-    data : DataFrame
-        `DataFrame` with `n_data` rows and columns 't', 'x1', ..., 'xn',
-        'u1', ..., 'um', 'p1', ..., 'pn', and 'v'.
-    """
-    n_states = np.shape(x)[0]
-    n_controls = np.shape(u)[0]
-
-    if np.shape(x) != np.shape(p):
-        raise ValueError('x and p must have the same shape.')
-
-    t = np.reshape(t, (1, -1))
-    x = np.reshape(x, (n_states, -1))
-    u = np.reshape(u, (n_controls, -1))
-    p = np.reshape(x, (n_states, -1))
-    v = np.reshape(v, (1, -1))
-
-    data = np.vstack((t, x, u, p, v)).T
-
-    columns = (['t']
-               + ['x' + str(i + 1) for i in range(n_states)]
-               + ['u' + str(i + 1) for i in range(n_controls)]
-               + ['p' + str(i + 1) for i in range(n_states)]
-               + ['v'])
-
-    return pd.DataFrame(data, columns=columns)
-
-
-def unpack_dataframe(data):
-    """
-    Extract `numpy` arrays from a `DataFrame` formatted by `pack_dataframe`.
-
-    Parameters
-    ----------
-    data : DataFrame or dict
-        `DataFrame` with `n_data` rows. Contains columns (keys)
-
-            * 't' : Time values of each data point (row).
-            * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
-            * 'u1', ..., 'um' : Controls $u_1(t,x(t))$, ..., $u_m(t,x(t))$.
-            * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
-            * 'v' : Value function/cost-to-go $v(t,x(t))$.
-
-    Returns
-    -------
-    t : (n_data,) array
-    x : (n_states, n_data) array
-    u : (n_controls, n_data) array
-    p : (n_states, n_data) array
-    v : (n_points,) array
-    """
-    if isinstance(data, pd.DataFrame):
-        t = data['t'].to_numpy()
-        x = data[[c for c in data.columns if c.startswith('x')]].to_numpy().T
-        u = data[[c for c in data.columns if c.startswith('u')]].to_numpy().T
-        p = data[[c for c in data.columns if c.startswith('p')]].to_numpy().T
-        v = data['v'].to_numpy()
-    elif isinstance(data, dict):
-        t = data['t']
-        x = _stack_columns(*[data[c] for c in data.keys() if c.startswith('x')])
-        u = _stack_columns(*[data[c] for c in data.keys() if c.startswith('u')])
-        p = _stack_columns(*[data[c] for c in data.keys() if c.startswith('p')])
-        v = data['v']
-    else:
-        raise TypeError('data must be a DataFrame or dict')
-
-    return t, x, u, p, v
-
-
-def stack_dataframes(*data_list):
-    """
-    Extract `numpy` arrays from a list of `DataFrame`s formatted by
-    `pack_dataframe`, and concatenate these into a single set of arrays.
-
-    Parameters
-    ----------
-    *data_list : list of DataFrames or dicts
-        Each element of `data_list` is a `DataFrame` with columns (keys)
-
-            * 't' : Time values of each data point (row).
-            * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
-            * 'u1', ..., 'um' : Controls $u_1(t,x(t))$, ..., $u_m(t,x(t))$.
-            * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
-            * 'v' : Value function/cost-to-go $v(t,x(t))$.
-
-    Returns
-    -------
-    t : (n_data,) array
-        The concatenation of all 't' columns in `data_list`.
-    x : (n_states, n_data) array
-        The concatenation of all 'xi' columns in `data_list`.
-    u : (n_controls, n_data) array
-        The concatenation of all 'ui' columns in `data_list`.
-    p : (n_states, n_data) array
-        The concatenation of all 'pi' columns in `data_list`.
-    v : (n_points,) array
-        The concatenation of all 'v' columns in `data_list`.
-    """
-    t = []
-    x = []
-    u = []
-    p = []
-    v = []
-
-    for data in data_list:
-        _t, _x, _u, _p, _v = unpack_dataframe(data)
-        t.append(_t)
-        x.append(_x)
-        u.append(_u)
-        p.append(_p)
-        v.append(_v)
-
-    t = np.concatenate(t)
-    x = np.hstack(x)
-    u = np.hstack(u)
-    p = np.hstack(p)
-    v = np.concatenate(v)
-
-    return t, x, u, p, v
-
-
-def _stack_columns(*x):
-    if len(x) == 1:
-        return x[0]
-    elif np.ndim(x[0]) == 1:
-        return np.stack(x, axis=1)
-    else:
-        return np.stack(x, axis=-1)
-
-
 def check_int_input(n, argname, low=None):
     """
     Convert an input to an int, raising errors if this is not possible without
@@ -265,7 +116,7 @@ def resize_vector(array, n_rows):
     array : array_like
         Array to reshape or resize into shape `(n_rows, 1)`.
     n_rows : int
-        Number of rows desired in `x`. Can be any positive int or -`. If
+        Number of rows desired in `x`. Can be any positive int or -1. If
         `n_rows == -1` then uses `n_rows = np.size(array)`.
 
     Returns
@@ -280,7 +131,7 @@ def resize_vector(array, n_rows):
     elif n_rows <= 0:
         raise ValueError("n_rows must be a positive int or -1")
 
-    if hasattr(array,"shape") and array.shape == (n_rows, 1):
+    if hasattr(array, 'shape') and array.shape == (n_rows, 1):
         return array
 
     array = np.reshape(array, (-1, 1))
@@ -290,7 +141,7 @@ def resize_vector(array, n_rows):
         return np.tile(array, (n_rows, 1))
     else:
         raise ValueError("The size of array is not compatible with the desired "
-                         "shape (n_rows,1)")
+                         "shape (n_rows, 1)")
 
 
 def approx_derivative(fun, x0, method="3-point", rel_step=None, abs_step=None,
@@ -445,7 +296,7 @@ def closed_loop_jacobian(x, open_loop_jac, controller):
         State(s) arranged by (dimension, time).
     open_loop_jac : callable
         Function defining the open-loop partial derivatives $df/dx$ and $df/du$.
-        See `OptimalControlProblem.jacobians`.
+        See `OptimalControlProblem.jac`.
     controller : `Controller`
         `Controller` instance implementing `__call__` and `jac`.
 
@@ -461,83 +312,168 @@ def closed_loop_jacobian(x, open_loop_jac, controller):
     return dfdx + np.einsum('ij...,jk...->ik...', dfdu, dudx)
 
 
-def find_equilibrium(ocp, controller, x0, **root_opts):
-    r"""
-    Uses root-finding (`scipy.optimize.root`) to find an equilibrium of the
-    closed-loop dynamics, $dx/dt = f(x,u(x))$, near a given point `x0`. In
-    addition, computes the closed-loop Jacobian
-    $Df/Dx = df/dx + df/du \cdot du/dx$ and its eigenvalues for linear stability
-    analysis.
+def pack_dataframe(t, x, u, p=None, v=None):
+    """
+    Collect `numpy` arrays into a `DataFrame` which is convenient for saving as
+    a .csv file.
 
     Parameters
     ----------
-    ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics` and `jac` methods.
-    controller : `Controller`
-        An instance of a `Controller` subclass implementing `__call__` and `jac`
-        methods.
-    x0 : (`ocp.n_states`,) array
-        Initial guess for the equilibrium point.
-    **root_opts : dict
-        Keyword arguments to pass to `scipy.optimize.root`.
+    t : (n_data,) array
+        Time values of each data point.
+    x : (n_states, n_data) array
+        System states at times `t`.
+    u : (n_controls, n_data) array
+        Control inputs at times `t`.
+    p : (n_states, n_data) array, optional
+        Costates/value at times `t`.
+    v : (n_points,) array, optional
+        Value function/cost-to-go at times `t`.
 
     Returns
     -------
-    x : (`ocp.n_states`,) array
-        Closed-loop equilibrium.
-    f : (`ocp.n_states`, 1) array
-        Vector field evaluated at `x, controller(x)`. If root-finding was
-        successful should have `f` approximately zero.
-    jac : (`ocp.n_states`, `ocp.n_states`) array
-        Closed-loop Jacobian, with `jac[i, j]` equal to the partial
-        derivative of `f[i]` with respect to `x[j]`.
-    eigs : (`ocp.n_states`,) complex array
-        Eigenvalues of the closed-loop Jacobian.
-    max_eig : complex scalar
-        Largest eigenvalue of the closed-loop Jacobian, unless this is zero in
-        which case the next largest is returned.
+    data : DataFrame
+        `DataFrame` with `n_data` rows and columns 't', 'x1', ..., 'xn',
+        'u1', ..., 'um', 'p1', ..., 'pn', and 'v'.
     """
-    x0 = np.reshape(x0, (ocp.n_states,))
+    n_states = np.shape(x)[0]
+    n_controls = np.shape(u)[0]
 
-    c0 = ocp.constraint_fun(x0)
-    if c0 is not None:
-        raise NotImplementedError("find_equilibrium cannot yet handle state "
-                                  "constraints")
+    t = np.reshape(t, (1, -1))
+    x = np.reshape(x, (n_states, -1))
+    u = np.reshape(u, (n_controls, -1))
+    data = (t, x, u)
+    if p is not None:
+        if np.shape(x) != np.shape(p):
+            raise ValueError('x and p must have the same shape.')
+        p = np.reshape(x, (n_states, -1))
+        data = data + (p,)
+    if v is not None:
+        v = np.reshape(v, (1, -1))
+        data = data + (v,)
 
-    jac = closed_loop_jacobian(x0, ocp.jac, controller)
-    print(np.linalg.eigvals(jac))
+    data = np.vstack(data).T
 
-    def dynamics_wrapper(x):
-        u = controller(x)
-        return ocp.dynamics(x, u)
+    columns = (['t'] + ['x' + str(i + 1) for i in range(n_states)]
+               + ['u' + str(i + 1) for i in range(n_controls)])
+    if p is not None:
+        columns += ['p' + str(i + 1) for i in range(n_states)]
+    if v is not None:
+        columns += ['v']
 
-    def jac_wrapper(x):
-        return closed_loop_jacobian(x, ocp.jac, controller)
+    return pd.DataFrame(data, columns=columns)
 
-    sol = root(dynamics_wrapper, x0, jac=jac_wrapper, **root_opts)
 
-    u = controller(sol.x)
-    f = ocp.dynamics(sol.x, u)
-    jac = closed_loop_jacobian(sol.x, ocp.jac, controller)
-    eigs = np.linalg.eigvals(jac)
-    eigs = eigs[np.argsort(eigs.real)]
-    i = eigs.shape[0] - 1
-    max_eig = eigs[i]
+def unpack_dataframe(data):
+    """
+    Extract `numpy` `ndarray`s from a dict or `DataFrame` (formatted by
+    `pack_dataframe`).
 
-    # Some linearized systems always have one or more zero eigenvalues.
-    # Handle this situation by taking the next largest.
-    while np.isclose(max_eig.real, 0., atol=1e-12) and i >= 1:
-        i -= 1
-        max_eig = eigs[i]
+    Parameters
+    ----------
+    data : dict DataFrame
+        dict or `DataFrame` with `n_data` rows and keys/columns
 
-    print("Equilibrium point x:")
-    print(sol.x.reshape(-1, 1))
-    print(f"Largest non-zero Jacobian eigenvalue = "
-          f"{max_eig.real:1.2e} + j{np.abs(max_eig.imag):1.2e}")
+            * 't' : Time values of each data point (row).
+            * 'x1', ..., 'xn' or 'x' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u1', ..., 'um' or 'u' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p1', ..., 'pn' or 'p' : Costates $p_1(t)$, ..., $p_n(t)$,
+                optional
+            * 'v' : Value function/cost-to-go $v(t)$, optional.
 
-    if max_eig > 0:
-        print("A stable equilibrium might be found after integrating the system"
-              " starting at x")
+    Returns
+    -------
+    t : (n_data,) array
+    x : (n_states, n_data) array
+    u : (n_controls, n_data) array
+    p : (n_states, n_data) array or None
+    v : (n_points,) array or None
+    """
+    if isinstance(data, pd.DataFrame):
+        t = data['t'].to_numpy()
+        x = data[[c for c in data.columns if c.startswith('x')]].to_numpy().T
+        u = data[[c for c in data.columns if c.startswith('u')]].to_numpy().T
+        if np.any([c.startswith('p') for c in data.columns]):
+            p = data[[c for c in data.columns if c.startswith('p')]]
+            p = p.to_numpy().T
+        else:
+            p = None
+        if 'v' in data.columns:
+            v = data['v'].to_numpy()
+        else:
+            v = None
+    elif isinstance(data, dict):
+        t = data['t']
+        x = _stack_columns(*[data[c] for c in data.keys() if c.startswith('x')])
+        u = _stack_columns(*[data[c] for c in data.keys() if c.startswith('u')])
+        if np.any([c.startswith('p') for c in data.keys()]):
+            p = [data[c] for c in data.keys() if c.startswith('p')]
+            p = _stack_columns(*p)
+        else:
+            p = None
+        v = data.get('v', None)
+    else:
+        raise TypeError('data must be a DataFrame or dict')
 
-    return sol.x, f, jac, eigs, max_eig
+    return t, x, u, p, v
+
+
+def stack_dataframes(*data_list):
+    """
+    Extract `numpy` arrays from a list of dicts or `DataFrame`s (formatted by
+    `pack_dataframe`), and concatenate these into a single set of arrays.
+
+    Parameters
+    ----------
+    *data_list : list of dicts or DataFrames
+        Each element of `data_list` is a dict or `DataFrame` with keys/columns
+
+            * 't' : Time values of each data point (row).
+            * 'x1', ..., 'xn' or 'x' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u1', ..., 'um' or 'u' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p1', ..., 'pn' or 'p' : Costates $p_1(t)$, ..., $p_n(t)$.
+            * 'v' : Value function/cost-to-go $v(t)$.
+
+    Returns
+    -------
+    t : (n_data,) array
+        The concatenation of all 't' columns in `data_list`.
+    x : (n_states, n_data) array
+        The concatenation of all 'x' or 'xi' columns in `data_list`.
+    u : (n_controls, n_data) array
+        The concatenation of all 'u' or 'ui' columns in `data_list`.
+    p : (n_states, n_data) array
+        The concatenation of all 'p' or 'pi' columns in `data_list`.
+    v : (n_points,) array
+        The concatenation of all 'v' columns in `data_list`.
+    """
+    t = []
+    x = []
+    u = []
+    p = []
+    v = []
+
+    for data in data_list:
+        _t, _x, _u, _p, _v = unpack_dataframe(data)
+        t.append(_t)
+        x.append(_x)
+        u.append(_u)
+        p.append(_p)
+        v.append(_v)
+
+    t = np.concatenate(t)
+    x = np.hstack(x)
+    u = np.hstack(u)
+    p = np.hstack(p)
+    v = np.concatenate(v)
+
+    return t, x, u, p, v
+
+
+def _stack_columns(*x):
+    if len(x) == 1:
+        return x[0]
+    elif np.ndim(x[0]) == 1:
+        return np.stack(x, axis=1)
+    else:
+        return np.stack(x, axis=-1)

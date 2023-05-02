@@ -2,4 +2,5 @@
 .. include:: ../README.md
 """
 
-from . import open_loop, problem, simulate, controls, sampling, utilities
+from . import (open_loop, problem, simulate, analysis, controls, sampling,
+               utilities)

@@ -6,10 +6,10 @@ from optimalcontrol.sampling import UniformSampler
 
 
 class VanDerPol(OptimalControlProblem):
-    _required_parameters = {'Wx': 1/2, 'Wy': 1., 'Wu': 4., 'xf': 0.,
-                            'mu': 2., 'b': 1.5,
-                            'x0_ub': np.array([[3.], [4.]]),
-                            'x0_lb': -np.array([[3.], [4.]])}
+    _required_parameters = {'Wx': 1, 'Wy': 1., 'Wu': 4., 'xf': 0.,
+                            'mu': 2., 'b': 1.,
+                            'x0_ub': np.array([[3.], [3.]]),
+                            'x0_lb': -np.array([[3.], [3.]])}
     _optional_parameters = {'u_lb': -1., 'u_ub': 1., 'x0_sample_seed': None,
                             'x0_sample_norm': np.inf}
 

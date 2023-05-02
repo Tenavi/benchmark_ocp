@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 from ._ivp import solve_ivp
 from ..utilities import closed_loop_jacobian
@@ -8,7 +9,7 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
                          method='RK45', atol=1e-06, rtol=1e-03):
     """
     Integrate continuous-time system dynamics with a given feedback controller
-    over a fixed time horizon.
+    over a fixed time horizon for one initial condition.
 
     Parameters
     ----------
@@ -162,3 +163,135 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
             break
 
     return t, x, status
+
+
+def monte_carlo_fixed_time(ocp, controller, x0, t_span, t_eval=None,
+                           method='RK45', atol=1e-06, rtol=1e-03):
+    """
+    Wraps `integrate_fixed_time` to integrate continuous-time system dynamics
+    with a given feedback controller over a fixed time horizon for multiple
+    initial conditions.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `dynamics`, `jac`, and `integration_events` methods.
+    controller : `Controller`
+        An instance of a `Controller` subclass implementing `__call__` and `jac`
+        methods.
+    x0 : (`ocp.n_states`, n_sims) array
+        Initial states.
+    t_span : 2-tuple of floats
+        Interval of integration `(t0, tf)`. The solver starts with `t[0]=t0` and
+        integrates until it reaches `t[-1]=tf`.
+    t_eval : array_like, optional
+        Times at which to store the computed solution, must be sorted and lie
+        within `t_span`. If `None` (default), use points selected by the solver.
+    method : string or `OdeSolver`, default='RK45'
+        See `scipy.integrate.solve_ivp`.
+    atol : float or array_like, default=1e-06
+        See `scipy.integrate.solve_ivp`.
+    rtol : float or array_like, default=1e-03
+        See `scipy.integrate.solve_ivp`.
+
+    Returns
+    -------
+    sims : (n_sims,) object array of dicts
+        The results of the closed loop simulations for each initial condition,
+        `x0[:, i]`. Each list element is a dict containing
+
+            * t : (n_points,) array
+                Time points.
+            * x : (`ocp.n_states`, n_points) array
+                System states at times `t`.
+            * u : (`ocp.n_controls`, n_points) array
+                Feedback control inputs at times `t`.
+    status : (n_sims,) integer array
+        `status[i]` contains the reason for algorithm termination for `sims[i]`:
+
+            * -1: Integration step failed.
+            *  0: The solver successfully reached the end of `t_span`.
+            *  1: A termination event occurred.
+    """
+    return _monte_carlo(ocp, controller, x0, integrate_fixed_time, t_span,
+                        t_eval=t_eval, method=method, atol=atol, rtol=rtol)
+
+
+def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
+                            ftol=1e-03, method='RK45', atol=1e-06, rtol=1e-03):
+    """
+    Wraps `integrate_to_converge` to integrate continuous-time system dynamics
+    with a given feedback controller until a steady state is reached or a
+    specified time horizon is exceeded.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `dynamics`, `jac`, and `integration_events` methods.
+    controller : `Controller`
+        An instance of a `Controller` subclass implementing `__call__` and `jac`
+        methods.
+    x0 : (`ocp.n_states`, n_sims) array
+        Initial states.
+    t_int : float
+        Time interval to step integration over. This function internally calls
+        `integrate_closed_loop` with `t_span=(t[-1], t[-1] + t_int)`.
+    t_max : float
+        Maximum time allowed for integration.
+    norm : {1, 2, `np.inf`}, default=2
+            Integration continues until `norm(f(x,u)) <= ftol`, where `f`
+            denotes `ocp.dynamics` and `norm` specifies the norm used for
+            this condition (l1, l2, or l-infinity).
+    ftol : float or array_like, default=1e-03
+        Tolerance for detecting system steady states. If `ftol` is array_like,
+        then it must have shape `(ocp.n_states,)` and specifies a different
+        convergence tolerance for each component of the dynamics. This overrides
+        and ignores `norm` so that the convergence criteria becomes
+        `all(f(x,u) <= ftol)`.
+    method : string or `OdeSolver`, default='RK45'
+        See `scipy.integrate.solve_ivp`.
+    atol : float or array_like, default=1e-06
+        See `scipy.integrate.solve_ivp`.
+    rtol : float or array_like, default=1e-03
+        See `scipy.integrate.solve_ivp`.
+
+    Returns
+    -------
+    sims : (n_sims,) object array of dicts
+        The results of the closed loop simulations for each initial condition,
+        `x0[:, i]`. Each list element is a dict containing
+
+            * 't' : (n_points,) array
+                Time points.
+            * 'x' : (`ocp.n_states`, n_points) array
+                System states at times 't'.
+            * 'u' : (`ocp.n_controls`, n_points) array
+                Feedback control inputs at times 't'.
+    status : (n_sims,) integer array
+        `status[i]` contains the reason for algorithm termination for `sims[i]`:
+
+            * -1: Integration step failed.
+            *  0: The solver successfully reached the end of `t_span`.
+            *  1: A termination event occurred.
+            *  2: `sims[i]['t'][-1]` exceeded `t_max`.
+    """
+    return _monte_carlo(ocp, controller, x0, integrate_to_converge, t_int,
+                        t_max, norm=norm, ftol=ftol, method=method, atol=atol,
+                        rtol=rtol)
+
+
+def _monte_carlo(ocp, controller, x0_pool, fun, *args, **kwargs):
+    x0_pool = np.reshape(x0_pool, (ocp.n_states, -1)).T
+    n_sims = x0_pool.shape[0]
+
+    sims = []
+    status = np.zeros(n_sims, dtype=int)
+
+    print(f"Simulating closed-loop system for {n_sims:d} initial conditions...")
+    for i in tqdm(range(n_sims)):
+        t, x, status[i] = fun(ocp, controller, x0_pool[i], *args, **kwargs)
+        sims.append({'t': t, 'x': x, 'u': controller(x)})
+
+    return np.asarray(sims, dtype=object), status
