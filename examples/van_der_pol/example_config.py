@@ -1,3 +1,14 @@
+import os
+
+
+# Directories where data, figures, and feedback controllers will be saved
+data_dir = os.path.join('examples', 'van_der_pol', 'data')
+fig_dir = os.path.join('examples', 'van_der_pol', 'figures')
+controller_dir = os.path.join('examples', 'van_der_pol', 'controllers')
+
+for directory in [data_dir, fig_dir, controller_dir]:
+    os.makedirs(directory, exist_ok=True)
+
 # Changes to default problem parameters
 params = {}
 

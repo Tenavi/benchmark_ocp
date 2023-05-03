@@ -5,9 +5,32 @@ controllers be implemented as subclasses of `Controller`. The
 `LinearQuadraticRegulator` is implemented as a simple example of this usage.
 """
 
+import pickle
+
 import numpy as np
 
 from . import utilities
+
+
+def from_pickle(filepath):
+    """
+    WARNING: `pickle` is not secure. Only unpickle files you trust.
+
+    Load a `Controller` object from a pickle file.
+
+    Parameters
+    ----------
+    filepath : path_like
+        Path to where a `Controller` object is saved.
+
+    Returns
+    -------
+    controller : `Controller`
+        Unpickled `Controller` instance.
+    """
+    with open(filepath, 'rb') as file:
+        controller = pickle.load(file)
+    return controller
 
 
 class Controller:
@@ -49,6 +72,18 @@ class Controller:
             Jacobian of feedback control for each column in `x`.
         """
         return utilities.approx_derivative(self, x, f0=u0)
+
+    def pickle(self, filepath):
+        """
+        Save the `Controller` object using `pickle`.
+
+        Parameters
+        ----------
+        filepath : path_like
+            Path to a file where the `Controller` should be saved.
+        """
+        with open(filepath, 'wb') as file:
+            pickle.dump(self, file)
 
 
 class LinearQuadraticRegulator(Controller):

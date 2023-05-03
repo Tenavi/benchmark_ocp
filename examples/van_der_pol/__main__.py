@@ -114,6 +114,7 @@ for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
                     sol[key] = getattr(new_sol, key)
 
 # Evaluate the linear stability of the learned controller
+print("\nLinear stability analysis:")
 x, f = analysis.find_equilibrium(ocp, controller, xf)
 jac = utilities.closed_loop_jacobian(x, ocp.jac, controller)
 eigs, max_eig = analysis.linear_stability(jac)
@@ -150,21 +151,19 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
     figs[data_name]['closed_loop'] = example_utils.plot_closed_loop(
         ocp, sims[data_idx], data_name=data_name)
 
-# Save data and figures
-data_dir = os.path.join('examples', 'van_der_pol', 'data')
-fig_dir = os.path.join('examples', 'van_der_pol', 'figures')
-
-os.makedirs(data_dir, exist_ok=True)
-
-example_utils.save_data(train_data, os.path.join(data_dir, 'train.csv'))
-example_utils.save_data(test_data, os.path.join(data_dir, 'test.csv'))
+# Save data, figures, and trained NN
+example_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
+example_utils.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
 
 for data_name, figs_subset in figs.items():
-    _fig_dir = os.path.join(fig_dir, data_name)
+    _fig_dir = os.path.join(config.fig_dir, data_name)
     os.makedirs(_fig_dir, exist_ok=True)
     for fig_name, fig in figs_subset.items():
         plt.figure(fig)
         plt.savefig(os.path.join(_fig_dir, fig_name + '.pdf'))
+
+lqr.pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
+controller.pickle(os.path.join(config.controller_dir, 'nn.pickle'))
 
 if args.show_plots:
     plt.show()

@@ -418,6 +418,15 @@ def unpack_dataframe(data):
     return t, x, u, p, v
 
 
+def _stack_columns(*x):
+    if len(x) == 1:
+        return x[0]
+    elif np.ndim(x[0]) == 1:
+        return np.stack(x, axis=1)
+    else:
+        return np.stack(x, axis=-1)
+
+
 def stack_dataframes(*data_list):
     """
     Extract `numpy` arrays from a list of dicts or `DataFrame`s (formatted by
@@ -458,22 +467,21 @@ def stack_dataframes(*data_list):
         t.append(_t)
         x.append(_x)
         u.append(_u)
-        p.append(_p)
-        v.append(_v)
+        if _p is not None:
+            p.append(_p)
+        if _v is not None:
+            v.append(_v)
 
     t = np.concatenate(t)
     x = np.hstack(x)
     u = np.hstack(u)
-    p = np.hstack(p)
-    v = np.concatenate(v)
+    if len(p) >= 1:
+        p = np.hstack(p)
+    else:
+        p = None
+    if len(v) >= 1:
+        v = np.concatenate(v)
+    else:
+        v = None
 
     return t, x, u, p, v
-
-
-def _stack_columns(*x):
-    if len(x) == 1:
-        return x[0]
-    elif np.ndim(x[0]) == 1:
-        return np.stack(x, axis=1)
-    else:
-        return np.stack(x, axis=-1)

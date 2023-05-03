@@ -2,6 +2,7 @@ import time
 from itertools import combinations
 
 import numpy as np
+import pandas as pd
 import matplotlib
 from matplotlib import pyplot as plt
 from sklearn.neural_network import MLPRegressor
@@ -142,9 +143,8 @@ def save_data(data, filepath):
     """
     Save a dataset of open-loop optimal control solutions or closed-loop
     simulations to a csv file. The data will be saved as a single csv columns
-    with all trajectories concatenated vertically. Assuming the initial time of
-    each trajectory is 't==0', separate trajectories could later be recovered by
-    searching rows for this condition.
+    with all trajectories concatenated vertically. A dataset saved in this
+    format can be recovered by `load_data`.
 
     Parameters
     ----------
@@ -156,13 +156,48 @@ def save_data(data, filepath):
             * 'u1', ..., 'um' or 'u' : Controls $u_1(t)$, ..., $u_m(t)$.
             * 'p1', ..., 'pn' or 'p' : Costates $p_1(t)$, ..., $p_n(t)$,
                 optional.
-            * 'v' : Value function/cost-to-go $v(t)$, optional
+            * 'v' : Value function/cost-to-go $v(t)$, optional.
     filepath : path-like
         Where the csv file should be saved.
     """
     t, x, u, p, v = utilities.stack_dataframes(*data)
     data = utilities.pack_dataframe(t, x, u, p, v)
-    data.to_csv(filepath)
+    data.to_csv(filepath, index=False)
+
+
+def load_data(filepath):
+    """
+    Load a dataset of open-loop optimal control solutions or closed-loop
+    simulations from a csv file. To break apart the dataset, assumes that the
+    csv file contains vertically concatenated trajectories with initial time
+    `t==0`.
+
+    Parameters
+    ----------
+    filepath : path-like
+        Where the csv file should be saved.
+
+    Returns
+    -------
+    data : list of DataFrames
+        Each element of `data` is a `DataFrame` with columns
+
+            * 't' : Time values of each data point (row).
+            * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u1', ..., 'um' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t).
+            * 'v' : Value function/cost-to-go $v(t)$.
+    """
+    dataframe = pd.read_csv(filepath)
+    # Find where trajectories start
+    t0_idx = np.where(dataframe['t'].to_numpy() == 0.)[0]
+    # Assume trajectories end before the start of the next trajectory
+    # Pandas includes the ends of index slices, so subract 1 from these
+    t1_idx = np.concatenate((t0_idx[1:] - 1, [len(dataframe)]))
+    data = []
+    for i0, i1 in zip(t0_idx, t1_idx):
+        data.append(dataframe.loc[i0:i1].reset_index(drop=True))
+    return data
 
 
 class NNController(controls.Controller):
