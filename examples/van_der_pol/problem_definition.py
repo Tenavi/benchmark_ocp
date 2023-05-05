@@ -51,7 +51,7 @@ class VanDerPol(OptimalControlProblem):
         if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
-                norm=getattr(obj, 'x0_sample_norm', 1),
+                norm=getattr(obj, 'x0_sample_norm', np.inf),
                 seed=getattr(obj, 'x0_sample_seed', None))
         elif any(['x0_lb' in new_params, 'x0_ub' in new_params,
                   'x0_sample_seed' in new_params, 'xf' in new_params]):

@@ -1,86 +1,80 @@
 import numpy as np
 
-from qrnet.problem_template import TemplateOCP, MakeConfig
-from qrnet.utilities import saturate_np, saturate_tf
+from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.utilities import saturate, resize_vector
+from optimalcontrol.sampling import UniformSampler
 
-config = MakeConfig(
-    t1_sim=60.,
-    t1_max=300.,
-    n_trajectories_train=8,
-    n_trajectories_test=8,
-    value_loss_weight=0.1,
-    gradient_loss_weight=0.1,
-)
 
 def cross_product_matrix(w):
     zeros = np.zeros_like(w[0])
-    wx = np.array([
-        [zeros, -w[2], w[1]],
-        [w[2], zeros, -w[0]],
-        [-w[1], w[0], zeros]]
-    )
+    wx = np.array([[zeros, -w[2], w[1]],
+                   [w[2], zeros, -w[0]],
+                   [-w[1], w[0], zeros]])
     return wx
 
-class MakeOCP(TemplateOCP):
-    def __init__(self):
-        n_controls = 3
 
-        # Dynamics parameters
-        self.J = np.array([
-            [59.22, -1.14, -0.8],
-            [-1.14, 40.56, 0.1],
-            [-0.8, 0.1, 57.6]
-        ])
-        self.JT = self.J.T
-        self.Jinv = np.linalg.inv(self.J)
-        self.JinvT = self.Jinv.T
+class AttitudeControl(OptimalControlProblem):
+    _required_parameters = {'J': [[59.22, -1.14, -0.8],
+                                  [-1.14, 40.56, 0.1],
+                                  [-0.8, 0.1, 57.6]],
+                            'Wq': 1., 'Ww': 1., 'Wu': 1.,
+                            'x0_max_rate_deg': 5.}
+    _optional_parameters = {'u_lb': -0.3, 'u_ub': 0.3, 'x0_sample_seed': None,
+                            'x0_sample_norm': 2}
 
-        # Cost parameters
-        self.Wq = 1.
-        self.Ww = 1.
-        self.Wu = 1.
+    def _saturate(self, u):
+        return saturate(u, self._params.u_lb, self._params.u_ub)
 
-        U_max = 0.3
-        if U_max is None:
-            U_lb, U_ub = None, None
-        else:
-            U_lb = np.full((n_controls, 1), -U_max)
-            U_ub = np.full((n_controls, 1), U_max)
+    @property
+    def n_states(self):
+        return 7
 
-        # Initial condition bounds
+    @property
+    def n_controls(self):
+        return 3
 
-        max_rate_deg = 5.
+    @property
+    def final_time(self):
+        return np.inf
 
-        X0_ub = np.ones((7,1))
-        X0_ub[4:7] *= np.deg2rad(np.abs(max_rate_deg))
-        X0_lb = - X0_ub
-        X0_lb[0] = 0.
+    def _update_params(self, obj, **new_params):
+        if 'J' in new_params:
+            try:
+                obj.J = np.reshape(obj.J, (3, 3))
+            except:
+                raise ValueError('Inertia matrix J must be (3, 3)')
+            self._J = obj.J
+            self._JT = self._J.T
+            self._Jinv = np.linalg.inv(self._J)
+            self._JinvT = self._Jinv.T
+            self._B = np.vstack((np.zeros((4, 3)), -self._Jinv))
 
-        ##### Makes LQR controller #####
+        for key in ('Wq', 'Ww', 'Wu'):
+            if key in new_params:
+                try:
+                    val = float(getattr(obj, key))
+                    assert val > 0.
+                    setattr(obj, key, val)
+                except:
+                    raise ValueError(f"{key:s} must be a positive float")
 
-        # Linearization point
-        X_bar = np.zeros((7,1))
-        X_bar[0] = 1.
-        U_bar = np.zeros((n_controls, 1))
+        for key in ('u_lb', 'u_ub'):
+            if key in new_params:
+                u_bound = resize_vector(new_params[key], self.n_controls)
+            else:
+                u_bound = getattr(obj, key, None)
+            setattr(obj, key, u_bound)
 
-        # Dynamics linearized around X_bar (dxdt ~= Ax + Bu)
-        A = np.zeros((7,7))
-        A[1:4,4:] = np.identity(3) / 2.
-        B = np.vstack((np.zeros((4,3)), -self.Jinv))
+        w0_ub = np.deg2rad(np.abs(obj.x0_max_rate_deg))
+        w0_ub = resize_vector(w0_ub, 3)
 
-        # Cost matrices (ignores scalar component of quaternion)
-        Q = np.zeros((7,7))
-        Q[1:4,1:4] = (self.Wq / 2.) * np.identity(3)
-        Q[4:,4:] = (self.Ww / 2.) * np.identity(3)
-
-        R = (self.Wu / 2.) * np.identity(3)
-
-        super().__init__(
-            X_bar, U_bar, A, B, Q, R,
-            U_lb=U_lb, U_ub=U_ub, X0_lb=X0_lb, X0_ub=X0_ub
-        )
-
-        self.B = self._B
+        if not hasattr(self, '_x0_sampler'):
+            self._w0_sampler = UniformSampler(
+                lb=-w0_ub, ub=w0_ub, norm=getattr(obj, 'x0_sample_norm', 2),
+                seed=getattr(obj, 'x0_sample_seed', None))
+        elif 'x0_max_rate_deg' in new_params or 'x0_sample_seed' in new_params:
+            self._x0_sampler.update(lb=-w0_ub, ub=w0_ub,
+                                    seed=new_params.get('x0_sample_seed'))
 
     def _break_state(self, X):
         '''
@@ -119,41 +113,6 @@ class MakeOCP(TemplateOCP):
             return q0, q, w, A0, Aq, Aw
 
         return q0, q, w
-
-    def constraint_fun(self, X):
-        '''
-        A (vector-valued) function which is zero when the quaternion norm state
-        constraint is satisfied.
-
-        Parameters
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states.
-
-        Returns
-        -------
-        C : (n_constraints,) or (n_constraints, n_data) array or None
-            Algebraic equation such that C(X)=0 means that X satisfies the state
-            constraints.
-        '''
-        return 1. - np.sum(X[:4]**2, axis=0, keepdims=True)
-
-    def constraint_jacobian(self, X):
-        '''
-        Constraint function Jacobian dC/dX of self.constraint_fun.
-
-        Parameters
-        ----------
-        X : (n_states,) array
-            Current state.
-
-        Returns
-        -------
-        JC : (n_constraints, n_states) array or None
-            dC/dX evaluated at the point X, where C(X)=self.constraint_fun(X).
-        '''
-        JC = -2. * X[:4]
-        return np.hstack((JC.reshape(1,-1), np.zeros((1,3))))
 
     def sample_X0(self, Ns, dist=None):
         # Samples angular velocities
@@ -431,3 +390,38 @@ class MakeOCP(TemplateOCP):
         L = np.atleast_2d(self.running_cost(X_aug[:7], U))
 
         return np.vstack((dq0dt, dqdt, dwdt, dA0dt, dAqdt, dAwdt, -L))
+
+    def _constraint_fun(self, X):
+        '''
+        A (vector-valued) function which is zero when the quaternion norm state
+        constraint is satisfied.
+
+        Parameters
+        ----------
+        X : (n_states, n_data) or (n_states,) array
+            Current states.
+
+        Returns
+        -------
+        C : (n_constraints,) or (n_constraints, n_data) array or None
+            Algebraic equation such that C(X)=0 means that X satisfies the state
+            constraints.
+        '''
+        return 1. - np.sum(X[:4]**2, axis=0, keepdims=True)
+
+    def _constraint_jacobian(self, X):
+        '''
+        Constraint function Jacobian dC/dX of self.constraint_fun.
+
+        Parameters
+        ----------
+        X : (n_states,) array
+            Current state.
+
+        Returns
+        -------
+        JC : (n_constraints, n_states) array or None
+            dC/dX evaluated at the point X, where C(X)=self.constraint_fun(X).
+        '''
+        JC = -2. * X[:4]
+        return np.hstack((JC.reshape(1,-1), np.zeros((1,3))))
