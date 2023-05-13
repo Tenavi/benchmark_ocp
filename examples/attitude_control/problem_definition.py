@@ -215,9 +215,9 @@ class AttitudeControl(OptimalControlProblem):
         w : (3,) or (3, n_points) array
             Angular momenta, `w = x[4:7]`.
         """
-        q0 = x[:1]
-        q = x[1:4]
-        w = x[4:7]
+        q0 = np.asarray(x[:1])
+        q = np.asarray(x[1:4])
+        w = np.asarray(x[4:7])
         return q0, q, w
 
     def sample_initial_conditions(self, n_samples=1, attitude_distance=None,
@@ -340,83 +340,61 @@ class AttitudeControl(OptimalControlProblem):
 
         return Q, R
 
-    def dynamics(self, X, U):
-        '''
-        Evaluate the closed-loop dynamics at single or multiple time instances.
+    def dynamics(self, x, u):
+        q0, q, w = self._break_state(x)
+        u = self._saturate(u)
 
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current state.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Feedback control U=U(X).
-
-        Returns
-        -------
-        dXdt : (n_states,) or (n_states, n_points) array
-            Dynamics dXdt = F(X,U).
-        '''
-        flat_out = X.ndim < 2
-
-        q0, q, w = self._break_state(X[:7].reshape(7,-1))
-
-        Jw = np.matmul(self.J, w)
+        Jw = np.matmul(self._J, w)
 
         dq0dt = - 0.5 * np.sum(w * q, axis=0, keepdims=True)
         dqdt = 0.5 * (-np.cross(w, q, axis=0) + q0 * w)
 
-        dwdt = np.cross(w, Jw, axis=0) + U.reshape(3,-1)
-        dwdt = np.matmul(-self.Jinv, dwdt)
+        dwdt = np.cross(w, Jw, axis=0) + u
+        dwdt = np.matmul(-self._Jinv, dwdt)
 
-        dXdt = np.vstack((dq0dt, dqdt, dwdt))
-        if flat_out:
-            dXdt = dXdt.flatten()
-        return dXdt
+        return np.concatenate((dq0dt, dqdt, dwdt), axis=0)
 
-    def jacobians(self, X, U, F0=None):
-        '''
-        Evaluate the Jacobians of the dynamics with respect to states and
-        controls at single or multiple time instances. Default implementation
-        approximates the Jacobians with central differences.
+    def jac(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
+        x, u, squeeze = self._reshape_inputs(x, u)
 
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current states.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Control inputs.
-        F0 : ignored
-            For API consistency only.
+        if return_dfdx:
+            q0, q, w = self._break_state(x)
 
-        Returns
-        -------
-        dFdX : (n_states, n_states, n_points) array
-            Jacobian with respect to states, dF/dX.
-        dFdU : (n_states, n_controls, n_points) array
-            Jacobian with respect to controls, dF/dX.
-        '''
-        q0, q, w = self._break_state(X.reshape(7, -1))
+            Jw = np.matmul(self._J, w)
 
-        Jw = np.matmul(self.J, w)
+            wx = cross_product_matrix(w)
+            qx = cross_product_matrix(q)
+            Jwx = cross_product_matrix(Jw)
 
-        wx = cross_product_matrix(w)
-        qx = cross_product_matrix(q)
-        Jwx = cross_product_matrix(Jw)
+            q0_diag = np.kron(np.eye(3), q0).reshape(3, 3, -1)
 
-        q0_diag = np.kron(np.eye(3), q0).reshape(3, 3, -1)
+            dfdx = np.zeros((self.n_states, *x.shape))
+            dfdx[0, 1:4] = -0.5 * w
+            dfdx[0, 4:] = -0.5 * q
+            dfdx[1:4, 0] = 0.5 * w
+            dfdx[1:4, 1:4] = -0.5 * wx
+            dfdx[1:4, 4:] = 0.5 * (qx + q0_diag)
+            dfdx[4:, 4:] = np.matmul(Jwx.T - np.matmul(self._JT, wx.T),
+                                     self._JinvT).T
 
-        dFdX = np.zeros((7, 7, w.shape[1]))
-        dFdX[0,1:4] = -0.5 * w
-        dFdX[0,4:] = -0.5 * q
-        dFdX[1:4,0] = 0.5 * w
-        dFdX[1:4,1:4] = -0.5 * wx
-        dFdX[1:4,4:] = 0.5 * (qx + q0_diag)
-        dFdX[4:,4:] = np.matmul(Jwx.T - np.matmul(self.JT, wx.T), self.JinvT).T
+            if squeeze:
+                dfdx = dfdx[..., 0]
+            if not return_dfdu:
+                return dfdx
 
-        dFdU = np.expand_dims(self.B, -1)
-        dFdU = np.tile(dFdU, (1,1,q0.shape[-1]))
+        if return_dfdu:
+            dfdu = np.tile(self._B[..., None], (1, 1, u.shape[1]))
 
-        return dFdX, dFdU
+            # Where the control is saturated, the Jacobian is zero
+            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            dfdu[:, sat_idx] = 0.
+
+            if squeeze:
+                dfdu = dfdu[..., 0]
+            if not return_dfdx:
+                return dfdu
+
+        return dfdx, dfdu
 
     def U_star(self, X, dVdX):
         '''
@@ -437,14 +415,6 @@ class AttitudeControl(OptimalControlProblem):
         U = np.matmul(self.JinvT, dVdX[4:]) / self.Wu
 
         return saturate_np(U, self.U_lb, self.U_ub)
-
-    def make_U_NN(self, X, dVdX):
-        '''Makes TensorFlow graph of optimal control with NN value gradient.'''
-        from tensorflow import matmul
-
-        U = matmul(self.Jinv.astype(np.float32) / self.Wu, dVdX[4:])
-
-        return saturate_tf(U, self.U_lb, self.U_ub)
 
     def jac_U_star(self, X, dVdX, U0=None):
         '''

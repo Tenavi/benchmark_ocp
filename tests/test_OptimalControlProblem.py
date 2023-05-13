@@ -72,7 +72,9 @@ def test_cost_functions(ocp_name, n_samples):
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
-    u = rng.uniform(low=-2., high=2., size=(ocp.n_controls, n_samples))
+    u_lb = getattr(ocp.parameters, 'u_lb', -1.) * 2.
+    u_ub = getattr(ocp.parameters, 'u_ub', 1.) * 2.
+    u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
 
     # Evaluate the cost functions and check that the shapes are correct
     L = ocp.running_cost(x, u)
@@ -88,7 +90,7 @@ def test_cost_functions(ocp_name, n_samples):
             F = ocp.terminal_cost(x.flatten())
             assert F.ndim == 0
     except NotImplementedError:
-        print(f'{ocp_name} OCP has no terminal cost.')
+        print(f"{ocp_name} OCP has no terminal cost.")
 
     # Check that gradients give the correct size
     dLdx, dLdu = ocp.running_cost_grad(x, u)
@@ -138,13 +140,15 @@ def test_dynamics(ocp_name, n_samples):
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
-    u = rng.uniform(low=-1., high=1., size=(ocp.n_controls, n_samples))
+    u_lb = getattr(ocp.parameters, 'u_lb', -1.) * 2.
+    u_ub = getattr(ocp.parameters, 'u_ub', 1.) * 2.
+    u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
 
     # Evaluate the vector field and check that the shape is correct
     f = ocp.dynamics(x, u)
     assert f.shape == (ocp.n_states, n_samples)
 
-    # Check that Jacobians give the correct size
+    # Check that Jacobians are the correct size
     dfdx, dfdu = ocp.jac(x, u)
     assert dfdx.shape == (ocp.n_states, ocp.n_states, n_samples)
     assert dfdu.shape == (ocp.n_states, ocp.n_controls, n_samples)
