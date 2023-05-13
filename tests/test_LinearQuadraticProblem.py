@@ -188,7 +188,12 @@ def test_cost_functions(n_states, n_controls, n_samples):
     assert dLdx.shape == (n_states, n_samples)
     assert dLdu.shape == (n_controls, n_samples)
 
-    # Check that Hessians give the correct size
+    # Check that control gradients match with finite difference approximation
+    fin_diff_dLdu = (super(LinearQuadraticProblem, ocp)
+                     .running_cost_grad(x, u, return_dLdx=False))
+    np.testing.assert_allclose(dLdu, fin_diff_dLdu, atol=1e-06)
+
+    # Check that Hessians are the correct size
     dLdx2, dLdu2 = ocp.running_cost_hess(x, u)
     assert dLdx2.shape == (n_states, n_states, n_samples)
     assert dLdu2.shape == (n_controls, n_controls, n_samples)
@@ -196,7 +201,7 @@ def test_cost_functions(n_states, n_controls, n_samples):
     # Check that control Hessians match with finite difference approximation
     fin_diff_dLdu2 = (super(LinearQuadraticProblem, ocp)
                       .running_cost_hess(x, u, return_dLdx=False))
-    np.testing.assert_allclose(dLdu2, fin_diff_dLdu2)
+    np.testing.assert_allclose(dLdu2, fin_diff_dLdu2, atol=1e-06)
 
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
@@ -206,8 +211,6 @@ def test_cost_functions(n_states, n_controls, n_samples):
         np.testing.assert_allclose(L[i], xi @ Q @ xi + ui @ R @ ui)
 
         np.testing.assert_allclose(dLdx[..., i], 2. * Q @ xi)
-        np.testing.assert_allclose(dLdu[..., i], 2. * R @ ui)
-
         np.testing.assert_allclose(dLdx2[..., i], Q)
 
     # Check shapes for flat vector inputs

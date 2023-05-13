@@ -185,13 +185,13 @@ class LinearQuadraticProblem(OptimalControlProblem):
         return cdist(xa, xb, metric='mahalanobis', VI=self.Q)
 
     def running_cost(self, x, u):
-        x, u, squeeze = self._center_inputs(x, u)
+        x_err, u_err, squeeze = self._center_inputs(x, u)
 
         # Batch multiply (x - xf).T @ Q @ (x - xf)
-        L = np.einsum('ij,ij->j', x, self.Q @ x)
+        L = np.einsum('ij,ij->j', x_err, self.Q @ x_err)
 
         # Batch multiply (u - uf).T @ R @ (u - xf) and sum
-        L += np.einsum('ij,ij->j', u, self.R @ u)
+        L += np.einsum('ij,ij->j', u_err, self.R @ u_err)
 
         if squeeze:
             return L[0]
@@ -200,17 +200,23 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     def running_cost_grad(self, x, u, return_dLdx=True, return_dLdu=True,
                           L0=None):
-        x, u, squeeze = self._center_inputs(x, u)
+        x_err, u_err, squeeze = self._center_inputs(x, u)
 
         if return_dLdx:
-            dLdx = 2. * np.einsum('ij,jb->ib', self.Q, x)
+            dLdx = 2. * np.einsum('ij,jb->ib', self.Q, x_err)
             if squeeze:
                 dLdx = dLdx[..., 0]
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
-            dLdu = 2. * np.einsum('ij,jb->ib', self.R, u)
+            dLdu = 2. * np.einsum('ij,jb->ib', self.R, u_err)
+
+            # Where the control is saturated, the gradient is zero
+            sat_idx = find_saturated(np.reshape(u, dLdu.shape),
+                                     self.u_lb, self.u_ub)
+            dLdu[sat_idx] = 0.
+
             if squeeze:
                 dLdu = dLdu[..., 0]
             if not return_dLdx:
@@ -232,9 +238,12 @@ class LinearQuadraticProblem(OptimalControlProblem):
         if return_dLdu:
             dLdu = np.tile(self.R[..., None], (1, 1, u.shape[1]))
 
-            # Where the control is saturated, the gradient is constant so the
-            # Hessian is zero
-            dLdu[:, find_saturated(u, self.u_lb, self.u_ub)] = 0.
+            # Where the control is saturated, the gradient is zero (constant).
+            # This makes the Hessian zero in all terms that include a saturated
+            # control
+            sat_idx = find_saturated(u, self.u_lb, self.u_ub)
+            sat_idx = sat_idx[None, ...] + sat_idx[:, None, :]
+            dLdu[sat_idx] = 0.
 
             if squeeze:
                 dLdu = dLdu[..., 0]

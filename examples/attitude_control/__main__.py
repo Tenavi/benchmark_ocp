@@ -9,8 +9,8 @@ from sklearn.metrics import r2_score
 
 from optimalcontrol import controls, simulate, open_loop, utilities, analysis
 
-from examples.van_der_pol import VanDerPol
-from examples.van_der_pol import example_config as config
+from examples.attitude_control import AttitudeControl
+from examples.attitude_control import example_config as config
 from examples import example_utilities as example_utils
 
 
@@ -23,11 +23,13 @@ args = parser.parse_args()
 random_seed = getattr(config, 'random_seed', None)
 if random_seed is None:
     random_seed = int(time.time())
-rng = np.random.default_rng(random_seed + 1)
+rng = np.random.default_rng(random_seed + 2)
 
-ocp = VanDerPol(x0_sample_seed=random_seed, **config.params)
-xf = ocp.xf.flatten()
-uf = ocp.uf.flatten()
+ocp = AttitudeControl(attitude_sample_seed=random_seed,
+                      rate_sample_seed=random_seed + 1, **config.params)
+
+xf = np.concatenate((ocp._q_final, np.zeros(3)))
+uf = np.zeros(ocp.n_controls)
 
 # Create an LQR controller as a baseline
 # System matrices (vector field Jacobians)
@@ -38,12 +40,18 @@ lqr = controls.LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
                                         u_lb=ocp.parameters.u_lb,
                                         u_ub=ocp.parameters.u_ub,
                                         xf=xf, uf=uf)
+print(A)
+print(B)
+print(Q)
+print(R)
 
 # Generate some training and test data
 
 # First sample initial conditions
 x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
-                                        distance=config.x0_distance)
+                                        )#distance=config.x0_distance)
+
+raise
 
 # Warm start the optimal control solver by integrating the system with LQR
 lqr_sims, status = simulate.monte_carlo_to_converge(

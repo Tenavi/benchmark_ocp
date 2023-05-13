@@ -1,7 +1,7 @@
 import numpy as np
 
 from optimalcontrol.problem import OptimalControlProblem
-from optimalcontrol.utilities import saturate, resize_vector
+from optimalcontrol.utilities import saturate, find_saturated, resize_vector
 from optimalcontrol.sampling import UniformSampler
 
 
@@ -99,23 +99,31 @@ class VanDerPol(OptimalControlProblem):
 
     def running_cost_grad(self, x, u, return_dLdx=True, return_dLdu=True,
                           L0=None):
-        if np.ndim(x) < 2:
-            x_err = x - self.xf.flatten()
-        else:
-            x_err = x - self.xf
-
-        u_err = self._saturate(u) - self._uf
-
-        x1 = x_err[:1]
-        x2 = x_err[1:]
+        x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
+            x_err = x - self.xf
+            x1 = x_err[:1]
+            x2 = x_err[1:]
+
             dLdx = np.concatenate((self._params.Wx * x1, self._params.Wy * x2))
+
+            if squeeze:
+                dLdx = dLdx[..., 0]
+
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
+            u_err = self._saturate(u) - self._uf
             dLdu = self._params.Wu * u_err
+            # Where the control is saturated, the gradient is zero
+            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            dLdu[sat_idx] = 0.
+
+            if squeeze:
+                dLdu = dLdu[..., 0]
+
             if not return_dLdx:
                 return dLdu
 
@@ -131,9 +139,19 @@ class VanDerPol(OptimalControlProblem):
                 return Q
 
         if return_dLdu:
-            R = np.reshape(self._params.Wu / 2., (1, 1))
-            if np.ndim(u) >= 2:
-                R = np.tile(R[..., None], (1, 1, np.shape(u)[1]))
+            R = np.reshape(self._params.Wu / 2., (1, 1, 1))
+            if np.ndim(u) > 1 and np.shape(u)[1] > 1:
+                R = np.tile(R, (1, 1, np.shape(u)[1]))
+
+            # Where the control is saturated, the gradient is zero (constant).
+            # This makes the Hessian zero in all terms that include a saturated
+            # control
+            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            sat_idx = sat_idx[None, ...] + sat_idx[:, None, ...]
+            R[sat_idx] = 0.
+
+            if np.ndim(u) < 2:
+                R = R[..., 0]
             if not return_dLdx:
                 return R
 

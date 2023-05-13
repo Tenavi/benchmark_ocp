@@ -41,7 +41,7 @@ def test_init(ocp_name):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1, 3))
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_sample_initial_conditions(ocp_name, n_samples):
     """Test that we can sample initial conditions from each OCP."""
     ocp = ocp_dict[ocp_name]()
@@ -62,7 +62,7 @@ def test_sample_initial_conditions(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1, 3))
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_cost_functions(ocp_name, n_samples):
     """Test that cost function inputs and outputs have the correct shape and
     that gradients and Hessian of the cost function match finite difference
@@ -72,7 +72,7 @@ def test_cost_functions(ocp_name, n_samples):
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
-    u = rng.uniform(low=-1., high=1., size=(ocp.n_controls, n_samples))
+    u = rng.uniform(low=-2., high=2., size=(ocp.n_controls, n_samples))
 
     # Evaluate the cost functions and check that the shapes are correct
     L = ocp.running_cost(x, u)
@@ -100,16 +100,18 @@ def test_cost_functions(ocp_name, n_samples):
     compare_finite_difference(u, dLdu, lambda u: ocp.running_cost(x, u),
                               method=ocp._fin_diff_method, atol=1e-05)
 
-    # Check that Hessians give the correct size
+    # Check that Hessians are the correct size
     dLdx, dLdu = ocp.running_cost_hess(x, u)
     assert dLdx.shape == (ocp.n_states, ocp.n_states, n_samples)
     assert dLdu.shape == (ocp.n_controls, ocp.n_controls, n_samples)
 
     compare_finite_difference(
-        x, 2. * dLdx, lambda x: ocp.running_cost_grad(x, u, return_dLdu=False),
+        x, 2. * dLdx,
+        lambda x: ocp.running_cost_grad(x, u, return_dLdu=False),
         method=ocp._fin_diff_method, atol=1e-05)
     compare_finite_difference(
-        u, 2. * dLdu, lambda u: ocp.running_cost_grad(x, u, return_dLdx=False),
+        u, 2. * dLdu,
+        lambda u: ocp.running_cost_grad(x, u, return_dLdx=False),
         method=ocp._fin_diff_method, atol=1e-05)
 
     # Check shapes for flat vector inputs
@@ -127,7 +129,7 @@ def test_cost_functions(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1, 3))
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_dynamics(ocp_name, n_samples):
     """Test that dynamics inputs and outputs have the correct shape and that
     Jacobians match finite difference approximations."""
@@ -163,7 +165,7 @@ def test_dynamics(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1, 3))
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_optimal_control(ocp_name, n_samples):
     """Test that the optimal control as a function of state and costate returns
     the correct shape and Jacobians match finite difference approximations."""
@@ -196,7 +198,7 @@ def test_optimal_control(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', range(1, 3))
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_bvp_dynamics(ocp_name, n_samples):
     """Test that BVP dynamics inputs and outputs have the correct shape and that
     the output is (approximately) the same as the superclass method."""
