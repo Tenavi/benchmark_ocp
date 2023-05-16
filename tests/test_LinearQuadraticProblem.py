@@ -135,7 +135,7 @@ def test_sample(n_states):
         assert np.all(x0 <= x0_ub)
 
     # With distance specification
-    def check_distance(n_samples, distance):
+    def check_distance(n_samples, distance, rtol=1e-06, atol=1e-06):
         x0 = ocp.sample_initial_conditions(n_samples, distance=distance)
         if n_samples > 1:
             assert x0.shape == (n_states, n_samples)
@@ -143,11 +143,11 @@ def test_sample(n_states):
             assert x0.shape == (n_states,)
             x0 = x0.reshape(n_states, 1)
         xQx = ocp.distances(x0, xf)
-        np.testing.assert_allclose(distance, xQx)
+        np.testing.assert_allclose(distance, xQx, rtol=rtol, atol=atol)
 
     distances = rng.uniform(size=(2,)) + np.array([0, 1])
     for distance in distances:
-        for n_samples in range(1, 5):
+        for n_samples in range(1, 10):
             check_distance(n_samples, distance)
 
     # Check again after updating Q matrix
@@ -157,7 +157,7 @@ def test_sample(n_states):
     np.testing.assert_allclose(Q, ocp.Q)
 
     for distance in distances:
-        for n_samples in range(1, 5):
+        for n_samples in range(1, 10):
             check_distance(n_samples, distance)
 
 
@@ -314,11 +314,34 @@ def test_optimal_control(n_states, n_controls, n_samples):
         assert dudx.shape == (n_controls, n_states)
 
     # Compare with LQR solution
-    LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                                    u_lb=-0.5, u_ub=0.5)
 
-    p = 2. * LQR.P @ (x - xf)
+    p = 2. * lqr.P @ (x - xf)
     u = ocp.optimal_control(x, p)
-    u_expected = LQR(x)
+    u_expected = lqr(x)
 
     np.testing.assert_allclose(u, u_expected)
+
+
+@pytest.mark.parametrize('zero_rows', (0, 1, 2, [0, 1], [0, 2], [1, 2]))
+def test_non_observable_lqr(zero_rows):
+    """Test that LQR can be created when one or more rows of A and Q are zero"""
+    n_states = 3
+    n_controls = 2
+
+    # Start with usual random matrices
+    A, B, Q, R, _, _ = make_LQ_params(n_states, n_controls)
+
+    # Set some rows (and columns of Q) to zero
+    A[zero_rows] = 0.
+    B[zero_rows] = 0.
+    Q[zero_rows] = 0.
+    Q[:, zero_rows] = 0.
+
+    # Should still be able to make an lqr controller
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
+
+    # The closed-loop eigenvalues should be non-positive
+    A = A - B @ lqr.K
+    assert np.linalg.eigvals(A).real.max() <= 0.

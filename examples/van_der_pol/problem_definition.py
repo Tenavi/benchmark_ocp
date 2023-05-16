@@ -203,13 +203,13 @@ class VanDerPol(OptimalControlProblem):
         return self._saturate(u)
 
     def optimal_control_jac(self, x, p, u0=None):
-        return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
+        return np.zeros((self.n_controls, *np.shape(x)))
 
     def bvp_dynamics(self, t, xp):
         u = self.optimal_control(xp[:2], xp[2:4])
         L = self.running_cost(xp[:2], u)
 
-        # Get states and costates
+        # Extract states and costates
         x1 = xp[:1]
         x2 = xp[1:2]
         x1_err = x1 - self.xf[:1]
@@ -225,4 +225,9 @@ class VanDerPol(OptimalControlProblem):
         dp1dt = -self._params.Wx * x1_err + p2 * (2.*self._params.mu*x1*x2 + 1.)
         dp2dt = -self._params.Wy * x2 - p1 - p2 * self._params.mu * (1. - x1**2)
 
-        return np.vstack((dx1dt, dx2dt, dp1dt, dp2dt, -L))
+        dxpdt = np.vstack((dx1dt, dx2dt, dp1dt, dp2dt, -L))
+
+        if u.ndim < 2:
+            return dxpdt[:, 0]
+
+        return dxpdt

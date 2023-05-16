@@ -8,6 +8,7 @@ controllers be implemented as subclasses of `Controller`. The
 import pickle
 
 import numpy as np
+from scipy.linalg import solve_continuous_are
 
 from . import utilities
 
@@ -132,9 +133,13 @@ class LinearQuadraticRegulator(Controller):
         if K is not None:
             self.K = np.asarray(K)
         else:
+            A = np.squeeze(A)
+            B = np.squeeze(B)
+            Q = np.squeeze(Q)
+            R = np.squeeze(R)
+
             if not hasattr(self, 'P'):
-                from scipy.linalg import solve_continuous_are
-                self.P = solve_continuous_are(A, B, Q, R)
+                self.P = self.solve_care(A, B, Q, R)
             self.RB = np.linalg.solve(R, np.transpose(B))
             self.K = np.matmul(self.RB, self.P)
 
@@ -150,6 +155,64 @@ class LinearQuadraticRegulator(Controller):
             self.u_lb = utilities.resize_vector(self.u_lb, self.n_controls)
         if self.u_ub is not None:
             self.u_ub = utilities.resize_vector(self.u_ub, self.n_controls)
+
+    @staticmethod
+    def solve_care(A, B, Q, R, zero_tol=1e-12):
+        r"""
+        Wrapper of `scipy.linalg.solve_continuous_are` to solve continuous-time
+        algebraic Riccati equations (CARE) where one or more rows of `A` and `Q`
+        are all zeros, which can happen for certain linearized systems. For
+        details see `scipy.linalg.solve_continuous_are`.
+
+        Parameters
+        ----------
+        A : (n_states, n_states) array
+            State Jacobian matrix, $df/dx (x_f, u_f)$.
+        B : (n_states, n_controls) array
+            Control Jacobian matrix, $df/du (x_f, u_f)$.
+        Q : (n_states, n_states) array
+            Hessian of running cost with respect to states,
+            $d^2L/dx^2 (x_f, u_f)$. Must be positive semi-definite.
+        R : (n_controls, n_controls) array
+            Hessian of running cost with respect to controls,
+            $d^2L/du^2 (x_f, u_f)$. Must be positive definite.
+        zero_tol : float, default=1e-12
+            Absolute tolerance when comparing elements of `A`, `B` and `Q` to
+            zero.
+
+        Returns
+        -------
+        P : (n_states, n_states) array
+            Solution to the continuous-time algebraic Riccati equation.
+
+        Raises
+        ------
+        LinAlgError
+            For cases where the stable subspace of the pencil could not be
+            isolated. See Notes section and the references for details.
+        """
+        n = np.shape(A)[0]
+
+        A = np.reshape(A, (n, n))
+        Q = np.reshape(Q, (n, n))
+        B = np.reshape(B, (n, -1))
+        R = np.reshape(R, (B.shape[1], B.shape[1]))
+
+        A_zero_idx = np.isclose(A, 0., atol=zero_tol).all(axis=-1)
+        Q_zero_idx = np.isclose(Q, 0., atol=zero_tol).all(axis=-1)
+        B_zero_idx = np.isclose(B, 0., atol=zero_tol).all(axis=-1)
+        non_zero_idx = ~ np.all([A_zero_idx, Q_zero_idx, B_zero_idx], axis=0)
+
+        A = A[non_zero_idx][:, non_zero_idx]
+        Q = Q[non_zero_idx][:, non_zero_idx]
+        B = B[non_zero_idx]
+
+        P = np.zeros((n, n))
+        P_sub = np.zeros((A.shape[0], n))
+        P_sub[:, non_zero_idx] = solve_continuous_are(A, B, Q, R)
+        P[non_zero_idx] = P_sub
+
+        return P
 
     def __call__(self, x):
         x_err = np.reshape(x, (self.n_states, -1)) - self.xf

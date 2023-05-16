@@ -10,6 +10,8 @@ from sklearn.metrics import r2_score
 from optimalcontrol import controls, simulate, open_loop, utilities, analysis
 
 from examples.attitude_control import AttitudeControl
+from examples.attitude_control.problem_definition import (quaternion_to_euler,
+                                                          euler_to_quaternion)
 from examples.attitude_control import example_config as config
 from examples import example_utilities as example_utils
 
@@ -28,30 +30,28 @@ rng = np.random.default_rng(random_seed + 2)
 ocp = AttitudeControl(attitude_sample_seed=random_seed,
                       rate_sample_seed=random_seed + 1, **config.params)
 
-xf = np.concatenate((ocp._q_final, np.zeros(3)))
-uf = np.zeros(ocp.n_controls)
+q_final = euler_to_quaternion(*ocp.parameters.final_attitude)
+
+xf = np.concatenate((q_final, np.zeros(3))).reshape(-1, 1)
+uf = np.zeros((ocp.n_controls, 1))
 
 # Create an LQR controller as a baseline
 # System matrices (vector field Jacobians)
 A, B = ocp.jac(xf, uf)
 # Cost matrices (1/2 Running cost Hessians)
 Q, R = ocp.running_cost_hess(xf, uf)
+
 lqr = controls.LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
                                         u_lb=ocp.parameters.u_lb,
                                         u_ub=ocp.parameters.u_ub,
                                         xf=xf, uf=uf)
-print(A)
-print(B)
-print(Q)
-print(R)
+
 
 # Generate some training and test data
 
 # First sample initial conditions
 x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
                                         )#distance=config.x0_distance)
-
-raise
 
 # Warm start the optimal control solver by integrating the system with LQR
 lqr_sims, status = simulate.monte_carlo_to_converge(
@@ -63,12 +63,12 @@ for i, sim in enumerate(lqr_sims):
     # interpolate initial and final conditions
     if status[i] != 0:
         x0 = x0_pool[:, i:i+1]
-        x_interp = interp1d([0., config.t_int], np.hstack((x0, ocp.xf)))
+        x_interp = interp1d([0., config.t_int], np.hstack((x0, xf)))
         sim['t'] = np.linspace(0., config.t_int, 100)
         sim['x'] = x_interp(sim['t'])
         sim['u'] = lqr(sim['x'])
     # Use LQR to generate a guess for the costates
-    sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.xf)
+    sim['p'] = 2. * lqr.P @ (sim['x'] - xf)
 
 # Solve open loop optimal control problems
 data, status, messages = example_utils.generate_data(ocp, lqr_sims,
@@ -114,7 +114,7 @@ for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
             # Try to resolve the OCP if the initial guess looks better
             new_sol = open_loop.solve_infinite_horizon(
                 ocp, sim['t'], sim['x'], u=sim['u'],
-                p=2. * lqr.P @ (sim['x'] - ocp.xf), v=sim['v'],
+                p=2. * lqr.P @ (sim['x'] - xf), v=sim['v'],
                 **config.open_loop_kwargs)
             if new_sol.v[0] < sol['v'][0]:
                 print(f"Found a better solution for OCP #{idx[i]:d} using NN "
@@ -154,9 +154,6 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
         [sol['v'][0] for sol in data[data_idx]],
         controller_costs={'LQR': lqr_costs, 'NN control': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
-    figs[data_name]['closed_loop_3d'] = example_utils.plot_closed_loop_3d(
-        sims[data_idx], data[data_idx], controller_name='NN control',
-        title=f'Closed-loop trajectories and controls ({data_name})')
     figs[data_name]['closed_loop'] = example_utils.plot_closed_loop(
         ocp, sims[data_idx], data_name=data_name)
 

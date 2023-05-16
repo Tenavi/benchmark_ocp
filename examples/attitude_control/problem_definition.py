@@ -130,7 +130,7 @@ class AttitudeControl(OptimalControlProblem):
             if obj.final_attitude[1] > np.pi / 2.:
                 raise ValueError("Final yaw must be between -pi/2 and pi/2")
             self._q_final = euler_to_quaternion(*obj.final_attitude)
-            self._q_final = self._q_final[1:].reshape(3, 1)
+            self._q_final = self._q_final[:-1].reshape(3, 1)
 
         if 'J' in new_params:
             try:
@@ -199,7 +199,7 @@ class AttitudeControl(OptimalControlProblem):
     @staticmethod
     def _break_state(x):
         """
-        Break up the state vector, `x=[q0, q, w]`, into individual pieces.
+        Break up the state vector, `x=[q, q0, w]`, into individual pieces.
 
         Parameters
         ----------
@@ -208,17 +208,15 @@ class AttitudeControl(OptimalControlProblem):
 
         Returns
         -------
+        q : (3,) or (3, n_points) array
+            Vector component of quaternion, `q = x[:3]`.
         q0 : (1,) or (1, n_points) array
-            Scalar component of quaternion, `q0 = x[:1]`.
-        q : (4,) or (4, n_points) array
-            Vector component of quaternion, `q = x[1:4]`.
+            Scalar component of quaternion, `q0 = x[3:4]`.
         w : (3,) or (3, n_points) array
             Angular momenta, `w = x[4:7]`.
         """
-        q0 = np.asarray(x[:1])
-        q = np.asarray(x[1:4])
-        w = np.asarray(x[4:7])
-        return q0, q, w
+        x = np.asarray(x)
+        return x[:3], x[3:4], x[4:7]
 
     def sample_initial_conditions(self, n_samples=1, attitude_distance=None,
                                   rate_distance=None):
@@ -258,7 +256,7 @@ class AttitudeControl(OptimalControlProblem):
                                   distance=attitude_distance)
         q = euler_to_quaternion(*angles)
         # Set scalar quaternion positive
-        q[0] = np.abs(q[0])
+        q[-1] = np.abs(q[-1])
 
         # Sample angular rates in radians/s
         w = self._w0_sampler(n_samples=n_samples, distance=rate_distance)
@@ -266,7 +264,7 @@ class AttitudeControl(OptimalControlProblem):
         return np.concatenate((q, w), axis=0)
 
     def running_cost(self, x, u):
-        _, q, w = self._break_state(x)
+        q, _, w = self._break_state(x)
 
         if np.ndim(x) < 2:
             q_err = q - self._q_final.flatten()
@@ -283,10 +281,10 @@ class AttitudeControl(OptimalControlProblem):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
-            q0, q, w = self._break_state(x)
+            q, q0, w = self._break_state(x)
             q_err = q - self._q_final
-            dLdx = np.concatenate((np.zeros_like(q0),
-                                   self._params.Wq * q_err,
+            dLdx = np.concatenate((self._params.Wq * q_err,
+                                   np.zeros_like(q0),
                                    self._params.Ww * w))
             if squeeze:
                 dLdx = dLdx[..., 0]
@@ -311,7 +309,8 @@ class AttitudeControl(OptimalControlProblem):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
-            Q = np.diag(np.concatenate(([0.], np.full(3, self._params.Wq / 2.),
+            Q = np.diag(np.concatenate((np.full(3, self._params.Wq / 2.),
+                                        [0.],
                                         np.full(3, self._params.Ww / 2.))))
             if not squeeze:
                 Q = Q[..., None]
@@ -341,7 +340,7 @@ class AttitudeControl(OptimalControlProblem):
         return Q, R
 
     def dynamics(self, x, u):
-        q0, q, w = self._break_state(x)
+        q, q0, w = self._break_state(x)
         u = self._saturate(u)
 
         Jw = np.matmul(self._J, w)
@@ -352,13 +351,13 @@ class AttitudeControl(OptimalControlProblem):
         dwdt = np.cross(w, Jw, axis=0) + u
         dwdt = np.matmul(-self._Jinv, dwdt)
 
-        return np.concatenate((dq0dt, dqdt, dwdt), axis=0)
+        return np.concatenate((dqdt, dq0dt, dwdt), axis=0)
 
     def jac(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dfdx:
-            q0, q, w = self._break_state(x)
+            q, q0, w = self._break_state(x)
 
             Jw = np.matmul(self._J, w)
 
@@ -369,11 +368,12 @@ class AttitudeControl(OptimalControlProblem):
             q0_diag = np.kron(np.eye(3), q0).reshape(3, 3, -1)
 
             dfdx = np.zeros((self.n_states, *x.shape))
-            dfdx[0, 1:4] = -0.5 * w
-            dfdx[0, 4:] = -0.5 * q
-            dfdx[1:4, 0] = 0.5 * w
-            dfdx[1:4, 1:4] = -0.5 * wx
-            dfdx[1:4, 4:] = 0.5 * (qx + q0_diag)
+
+            dfdx[3, :3] = -0.5 * w
+            dfdx[3, 4:] = -0.5 * q
+            dfdx[:3, 3] = 0.5 * w
+            dfdx[:3, :3] = -0.5 * wx
+            dfdx[:3, 4:] = 0.5 * (qx + q0_diag)
             dfdx[4:, 4:] = np.matmul(Jwx.T - np.matmul(self._JT, wx.T),
                                      self._JinvT).T
 
@@ -396,98 +396,54 @@ class AttitudeControl(OptimalControlProblem):
 
         return dfdx, dfdu
 
-    def U_star(self, X, dVdX):
-        '''
-        Evaluate the optimal control as a function of state and costate.
+    def optimal_control(self, x, p):
+        u = np.matmul(self._JinvT, p[4:]) / self._params.Wu
+        return self._saturate(u)
 
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
+    def optimal_control_jac(self, x, p, u0=None):
+        return np.zeros((self.n_controls, *np.shape(x)))
 
-        Returns
-        -------
-        U : (n_controls,) or (n_controls, n_points) array
-            Optimal control(s) arranged by (dimension, time).
-        '''
-        U = np.matmul(self.JinvT, dVdX[4:]) / self.Wu
+    def bvp_dynamics(self, t, xp):
+        # Extract states and costates
+        x = xp[:7]
+        p = xp[7:14]
 
-        return saturate_np(U, self.U_lb, self.U_ub)
+        q, q0, w = self._break_state(x)
+        p_q, p_q0, p_w = self._break_state(p)
 
-    def jac_U_star(self, X, dVdX, U0=None):
-        '''
-        Evaluate the Jacobian of the optimal control with respect to the state,
-        leaving the costate fixed.
+        if np.ndim(x) < 2:
+            q_err = q - self._q_final.flatten()
+        else:
+            q_err = q - self._q_final
 
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
-        U0 : ignored
-            For API consistency only.
+        u = self.optimal_control(x, p)
+        L = self.running_cost(x, u)
 
-        Returns
-        -------
-        U : (n_controls,) or (n_controls, n_points) array
-            Optimal control(s) arranged by (dimension, time).
-        '''
-        dVdX = dVdX.reshape(self.n_states, -1)
-        return np.zeros((self.n_controls, self.n_states, dVdX.shape[-1]))
-
-    def bvp_dynamics(self, t, X_aug):
-        '''
-        Evaluate the augmented dynamics for Pontryagin's Minimum Principle.
-        Default implementation uses finite differences for the costate dynamics.
-
-        Parameters
-        ----------
-        X_aug : (2*n_states+1, n_points) array
-            Current state, costate, and running cost.
-
-        Returns
-        -------
-        dX_aug_dt : (2*n_states+1, n_points) array
-            Concatenation of dynamics dXdt = F(X,U^*), costate dynamics,
-            dAdt = -dH/dX(X,U^*,dVdX), and change in cost dVdt = -L(X,U*),
-            where U^* is the optimal control.
-        '''
-        # Optimal control as a function of the costate
-        U = self.U_star(X_aug[:7], X_aug[7:14])
-
-        q0, q, w, A0, Aq, Aw = self._break_state(X_aug)
-
-        Jw = np.matmul(self.J, w)
-        JAw = np.matmul(self.JinvT, Aw)
+        Jw = np.matmul(self._J, w)
+        Jpw = np.matmul(self._JinvT, p_w)
 
         # State dynamics
         dq0dt = - 0.5 * np.sum(w * q, axis=0, keepdims=True)
         dqdt = 0.5 * (-np.cross(w, q, axis=0) + q0 * w)
 
-        dwdt = np.cross(w, Jw, axis=0) + U.reshape(3,-1)
-        dwdt = np.matmul(-self.Jinv, dwdt)
+        dwdt = np.cross(w, Jw, axis=0) + u
+        dwdt = np.matmul(-self._Jinv, dwdt)
 
         # Costate dynamics
-        dA0dt = - 0.5 * np.sum(w * Aq, axis=0, keepdims=True)
+        dpq0dt = - 0.5 * np.sum(w * p_q, axis=0, keepdims=True)
 
-        dAqdt = (
-            self.Wq * (self.X_bar[1:4] - q)
-            + 0.5 * (- np.cross(w, Aq, axis=0) + A0 * w)
-        )
+        dpqdt = ((- self._params.Wq) * q_err
+                 + 0.5 * (- np.cross(w, p_q, axis=0) + p_q0 * w))
 
-        dAwdt = (
-            self.Ww * (self.X_bar[4:] - w)
-            + 0.5 * (np.cross(q, Aq, axis=0) - q0*Aq + A0*q)
-            + np.matmul(-self.JT, np.cross(w, JAw, axis=0))
-            + np.cross(Jw, JAw, axis=0)
-        )
+        dpwdt = (- self._params.Ww * w
+                 + 0.5 * (np.cross(q, p_q, axis=0) - q0 * p_q + p_q0 * q)
+                 + np.matmul(-self._JT, np.cross(w, Jpw, axis=0))
+                 + np.cross(Jw, Jpw, axis=0))
 
-        L = np.atleast_2d(self.running_cost(X_aug[:7], U))
+        L = -L.reshape(dq0dt.shape)
 
-        return np.vstack((dq0dt, dqdt, dwdt, dA0dt, dAqdt, dAwdt, -L))
+        return np.concatenate((dqdt, dq0dt, dwdt, dpqdt, dpq0dt, dpwdt, L),
+                              axis=0)
 
     def _constraint_fun(self, X):
         '''

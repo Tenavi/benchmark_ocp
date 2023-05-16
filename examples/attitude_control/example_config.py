@@ -18,8 +18,10 @@ params = {}
 n_train = 25
 n_test = 25
 
-# Distance (by default in l-infinity norm) of initial condition samples
-x0_distance = 3.0
+# Distance in radians and radians/s (by default in l-infinity and l2 norm) of
+# initial condition samples
+attitude_distance = None
+rate_distance = None
 
 # Integration time horizon guess for infinite horizon problems
 t_int = 60.
@@ -37,4 +39,4 @@ open_loop_kwargs = {}
 
 # Keyword arguments for the SVR controller
 controller_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
-                     'solver': 'lbfgs', 'max_iter': 1000, 'tol': 1e-03}
+                     'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-04}

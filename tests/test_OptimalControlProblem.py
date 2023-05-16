@@ -223,3 +223,8 @@ def test_bvp_dynamics(ocp_name, n_samples):
     assert f.shape == (2*ocp.n_states+1, n_samples)
     f_super = super(type(ocp), ocp).bvp_dynamics(t, xp)
     np.testing.assert_allclose(f, f_super, atol=1e-05)
+
+    # Check shape for flat vector inputs
+    if n_samples == 1:
+        f = ocp.bvp_dynamics(t, xp.flatten())
+        assert f.shape == (2*ocp.n_states+1,)
