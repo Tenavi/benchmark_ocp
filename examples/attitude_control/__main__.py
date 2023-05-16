@@ -144,6 +144,8 @@ if max_eig > 0.:
     eigs, max_eig = analysis.linear_stability(jac)
 
 # Plot the results
+x_labels = tuple(f'$q_{i}$' for i in range(1, 5))
+x_labels += tuple(fr'$\omega_{i}$' for i in range(1, 4))
 figs = {'training': dict(), 'test': dict()}
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
     lqr_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
@@ -155,7 +157,7 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
         controller_costs={'LQR': lqr_costs, 'NN control': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
     figs[data_name]['closed_loop'] = example_utils.plot_closed_loop(
-        ocp, sims[data_idx], data_name=data_name)
+        ocp, sims[data_idx], x_labels=x_labels, data_name=data_name)
 
 # Save data, figures, and trained NN
 example_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))

@@ -354,7 +354,7 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
 def plot_closed_loop_3d(sims, open_loop_sols, z='u',
                         controller_name='learning-based control',
                         title='Closed-loop trajectories and controls',
-                        fig_kwargs=dict()):
+                        x_labels=(), z_labels=(), fig_kwargs=dict()):
     """
     Plot closed-loop simulations and open-loop solutions together on a single 3d
     plot. This produces one figure for each pairwise combination of system
@@ -403,6 +403,9 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     n_states = x_all.shape[0]
     n_other = z_all.shape[0]
 
+    x_labels = _check_labels(n_states, 'x', *x_labels)
+    z_labels = _check_labels(n_other, z, *z_labels)
+
     if n_states < 2:
         raise ValueError("plot_closed_loop_3d is only implemented for "
                          "n_states >= 2")
@@ -420,9 +423,9 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
             ax.scatter(x_all[i], x_all[j], z_all[k], c=z_all[k], marker='o',
                        s=9, alpha=0.5, label=controller_name)
 
-            ax.set_xlabel(f'$x_{i+1:d}$')
-            ax.set_ylabel(f'$x_{j+1:d}$')
-            ax.set_zlabel(f'${z:s}_{k+1:d}$' if n_other > 1 else f'${z:s}$')
+            ax.set_xlabel(x_labels[i])
+            ax.set_ylabel(x_labels[j])
+            ax.set_zlabel(z_labels[k])
             ax.set_title(title)
 
     if len(figs) == 1:
@@ -430,7 +433,8 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     return figs
 
 
-def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
+def plot_closed_loop(ocp, sims, data_name=None, x_labels=(), u_labels=(),
+                     fig_kwargs={}):
     """
     Plot the states, controls, and running cost vs. time for a set of
     trajectories.
@@ -470,6 +474,9 @@ def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
 
     n_plots = ocp.n_states + ocp.n_controls + 1
 
+    x_labels = _check_labels(ocp.n_states, 'x', *x_labels)
+    u_labels = _check_labels(ocp.n_controls, 'u', *u_labels)
+
     fig_kwargs = {'figsize': (6.4, n_plots * 1.5), **fig_kwargs}
     fig = plt.figure(**fig_kwargs)
 
@@ -482,7 +489,7 @@ def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
         for sim in sims:
             ax.plot(sim['t'], sim['x'][i], 'k', alpha=0.5)
 
-        ax.set_ylabel(f'$x_{i+1:d}$' if ocp.n_states > 1 else f'$x$')
+        ax.set_ylabel(x_labels[i])
 
         if i == 0:
             if data_name is not None:
@@ -497,7 +504,7 @@ def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
         for sim in sims:
             ax.plot(sim['t'], sim['u'][i], 'k', alpha=0.5)
 
-        ax.set_ylabel(f'$u_{i + 1:d}$' if ocp.n_controls > 1 else f'$u$')
+        ax.set_ylabel(u_labels[i])
 
         if i == 0:
             ax.set_title('Feedback controls')
@@ -515,3 +522,15 @@ def plot_closed_loop(ocp, sims, data_name=None, fig_kwargs=dict()):
     ax.set_title('Running cost')
 
     return fig
+
+
+def _check_labels(n_labels, backup_label, *labels):
+    if len(labels) < n_labels:
+        if n_labels == 1:
+            labels = [f'${backup_label:s}$']
+        else:
+            new_labels = tuple(f'${backup_label:s}_{i + 1:d}$'
+                               for i in range(n_labels))
+            labels = labels + new_labels[len(labels):]
+
+    return labels
