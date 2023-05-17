@@ -185,7 +185,6 @@ class PolynomialController(SupervisedController):
     """
     def _fit_regressor(self, x_scaled, u_scaled, degree=1, linear_model='Ridge',
                        **options):
-
         regressor = getattr(sk_linear_models, linear_model)(**options)
 
         if self.n_controls > 1 and linear_model[-2:] == 'CV':

@@ -13,27 +13,6 @@ from scipy.linalg import solve_continuous_are
 from . import utilities
 
 
-def from_pickle(filepath):
-    """
-    WARNING: `pickle` is not secure. Only unpickle files you trust.
-
-    Load a `Controller` object from a pickle file.
-
-    Parameters
-    ----------
-    filepath : path_like
-        Path to where a `Controller` object is saved.
-
-    Returns
-    -------
-    controller : `Controller`
-        Unpickled `Controller` instance.
-    """
-    with open(filepath, 'rb') as file:
-        controller = pickle.load(file)
-    return controller
-
-
 class Controller:
     """Base class for implementing a state feedback controller."""
     def __init__(self, *args, **kwargs):
@@ -258,3 +237,24 @@ class LinearQuadraticRegulator(Controller):
 
         dudx[zero_idx] = 0.
         return dudx
+
+
+def from_pickle(filepath):
+    """
+    WARNING: `pickle` is not secure. Only unpickle files you trust.
+
+    Load a `Controller` object from a pickle file.
+
+    Parameters
+    ----------
+    filepath : path_like
+        Path to where a `Controller` object is saved.
+
+    Returns
+    -------
+    controller : `Controller`
+        Unpickled `Controller` instance.
+    """
+    with open(filepath, 'rb') as file:
+        controller = pickle.load(file)
+    return controller
