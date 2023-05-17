@@ -11,7 +11,7 @@ from ._utilities import make_LQ_params, compare_finite_difference
 rng = np.random.default_rng()
 
 
-def _make_nondefinite_matrices(n, strict=True):
+def _make_indefinite_matrices(n, strict=True):
     """Generate random non-square and non-positive-definite cost matrices."""
     if n == 1:
         bad_mats = [np.array([[-1e-14]]),
@@ -100,13 +100,13 @@ def test_bad_inits(n_states, n_controls):
         _ = LinearQuadraticProblem(**bad_init)
 
     # Non positive semi-definite Q matrix
-    for bad_mat in _make_nondefinite_matrices(n_states, strict=False):
+    for bad_mat in _make_indefinite_matrices(n_states, strict=False):
         bad_init = {**init_dict, 'Q': bad_mat}
         with pytest.raises(ValueError, match="Q"):
             _ = LinearQuadraticProblem(**bad_init)
 
     # Non positive-definite R matrix
-    for bad_mat in _make_nondefinite_matrices(n_states, strict=True):
+    for bad_mat in _make_indefinite_matrices(n_states, strict=True):
         bad_init = {**init_dict, 'R': bad_mat}
         with pytest.raises(ValueError, match="R"):
             _ = LinearQuadraticProblem(**bad_init)

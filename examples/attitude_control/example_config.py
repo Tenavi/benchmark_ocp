@@ -37,6 +37,6 @@ open_loop_kwargs = {}
 
 #random_seed = 123
 
-# Keyword arguments for the SVR controller
+# Keyword arguments for the NN controller
 controller_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
                      'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-04}

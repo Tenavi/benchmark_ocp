@@ -133,15 +133,16 @@ class LinearQuadraticRegulator(Controller):
         if K is not None:
             self.K = np.asarray(K)
         else:
-            A = np.squeeze(A)
-            B = np.squeeze(B)
-            Q = np.squeeze(Q)
-            R = np.squeeze(R)
+            if np.ndim(B) > 2:
+                B = np.squeeze(B)
+            if np.ndim(R) > 2:
+                R = np.squeeze(R)
 
             if not hasattr(self, 'P'):
                 self.P = self.solve_care(A, B, Q, R)
-            self.RB = np.linalg.solve(R, np.transpose(B))
-            self.K = np.matmul(self.RB, self.P)
+
+            self._RB = np.linalg.solve(R, np.transpose(B))
+            self.K = np.matmul(self._RB, self.P)
 
         self.xf = utilities.resize_vector(xf, self.K.shape[1])
         self.uf = utilities.resize_vector(uf, self.K.shape[0])

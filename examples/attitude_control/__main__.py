@@ -7,13 +7,15 @@ from scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
 from sklearn.metrics import r2_score
 
-from optimalcontrol import controls, simulate, open_loop, utilities, analysis
+from optimalcontrol import simulate, utilities, analysis
+from optimalcontrol.controls import LinearQuadraticRegulator
+from optimalcontrol.open_loop import solve_infinite_horizon
+
+from examples.common_utilities import data_utils, supervised_learning, plotting
 
 from examples.attitude_control import AttitudeControl
-from examples.attitude_control.problem_definition import (quaternion_to_euler,
-                                                          euler_to_quaternion)
+from examples.attitude_control.problem_definition import euler_to_quaternion
 from examples.attitude_control import example_config as config
-from examples import example_utilities as example_utils
 
 
 parser = ap.ArgumentParser()
@@ -41,11 +43,10 @@ A, B = ocp.jac(xf, uf)
 # Cost matrices (1/2 Running cost Hessians)
 Q, R = ocp.running_cost_hess(xf, uf)
 
-lqr = controls.LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
-                                        u_lb=ocp.parameters.u_lb,
-                                        u_ub=ocp.parameters.u_ub,
-                                        xf=xf, uf=uf)
-
+lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
+                               u_lb=ocp.parameters.u_lb,
+                               u_ub=ocp.parameters.u_ub,
+                               xf=xf, uf=uf)
 
 # Generate some training and test data
 
@@ -71,8 +72,8 @@ for i, sim in enumerate(lqr_sims):
     sim['p'] = 2. * lqr.P @ (sim['x'] - xf)
 
 # Solve open loop optimal control problems
-data, status, messages = example_utils.generate_data(ocp, lqr_sims,
-                                                     **config.open_loop_kwargs)
+data, status, messages = data_utils.generate_data(ocp, lqr_sims,
+                                                  **config.open_loop_kwargs)
 
 # Reserve a subset of data for testing and use the rest for training
 data_idx = np.arange(x0_pool.shape[1])[status == 0]
@@ -87,11 +88,11 @@ test_data = data[test_idx]
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
-controller = example_utils.NNController(x_train, u_train,
-                                        u_lb=ocp.parameters.u_lb,
-                                        u_ub=ocp.parameters.u_ub,
-                                        random_state=random_seed + 2,
-                                        **config.controller_kwargs)
+controller = nn_controls.NeuralNetworkControl(x_train, u_train,
+                                              u_lb=ocp.parameters.u_lb,
+                                              u_ub=ocp.parameters.u_ub,
+                                              random_state=random_seed + 2,
+                                              **config.controller_kwargs)
 
 train_r2 = r2_score(u_train.T, controller(x_train).T)
 test_r2 = r2_score(u_test.T, controller(x_test).T)
@@ -112,7 +113,7 @@ for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
         sim = sims[idx[i]]
         if sol['v'][0] > sim['v'][0]:
             # Try to resolve the OCP if the initial guess looks better
-            new_sol = open_loop.solve_infinite_horizon(
+            new_sol = solve_infinite_horizon(
                 ocp, sim['t'], sim['x'], u=sim['u'],
                 p=2. * lqr.P @ (sim['x'] - xf), v=sim['v'],
                 **config.open_loop_kwargs)
@@ -152,16 +153,16 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                  for sim in lqr_sims[data_idx]]
     nn_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
                 for sim in sims[data_idx]]
-    figs[data_name]['cost_comparison'] = example_utils.plot_total_cost(
+    figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in data[data_idx]],
         controller_costs={'LQR': lqr_costs, 'NN control': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
-    figs[data_name]['closed_loop'] = example_utils.plot_closed_loop(
-        ocp, sims[data_idx], x_labels=x_labels, data_name=data_name)
+    figs[data_name]['closed_loop'] = plotting.plot_closed_loop(
+        ocp, sims[data_idx], x_labels=x_labels, subtitle=data_name)
 
 # Save data, figures, and trained NN
-example_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-example_utils.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
+data_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
+data_utils.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
 
 for data_name, figs_subset in figs.items():
     _fig_dir = os.path.join(config.fig_dir, data_name)

@@ -176,8 +176,8 @@ class VanDerPol(OptimalControlProblem):
         if return_dfdx:
             dfdx = np.zeros((self.n_states, *x.shape))
             dfdx[0, 1] = 1.
-            dfdx[1, 0] = -1. - 2.*self._params.mu*x[0]*x[1]
-            dfdx[1, 1] = self._params.mu*(1. - x[0]**2)
+            dfdx[1, 0] = -1. - 2. * self._params.mu * x[0] * x[1]
+            dfdx[1, 1] = self._params.mu * (1. - x[0]**2)
 
             if squeeze:
                 dfdx = dfdx[..., 0]

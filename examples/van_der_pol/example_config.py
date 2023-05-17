@@ -15,8 +15,8 @@ params = {}
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
-n_train = 25
-n_test = 25
+n_train = 30
+n_test = 30
 
 # Distance (by default in l-infinity norm) of initial condition samples
 x0_distance = 3.0
@@ -35,6 +35,8 @@ open_loop_kwargs = {}
 
 random_seed = 123
 
-# Keyword arguments for the SVR controller
-controller_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
-                     'solver': 'lbfgs', 'max_iter': 1000, 'tol': 1e-03}
+# Keyword arguments for the NN and polynomial controllers
+nn_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
+             'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-03}
+
+poly_kwargs = {'degree': 10, 'alpha': 0.1}

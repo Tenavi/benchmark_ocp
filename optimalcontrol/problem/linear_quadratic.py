@@ -125,7 +125,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 setattr(self, key, getattr(obj, key))
 
         if 'B' in new_params or 'R' in new_params:
-            self.RB2 = np.linalg.solve(self.R, self.B.T) / 2.
+            self._RB2 = np.linalg.solve(self.R, self.B.T) / 2.
 
         if 'Q' in new_params or not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
@@ -287,7 +287,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
     def optimal_control(self, x, p):
         p = np.reshape(p, (self.n_states, -1))
-        u = self.uf - np.matmul(self.RB2, p)
+        u = self.uf - np.matmul(self._RB2, p)
         u = self._saturate(u)
 
         if np.ndim(x) < 2:
@@ -314,11 +314,11 @@ class LinearQuadraticProblem(OptimalControlProblem):
         Returns
         -------
         x - xf : (n_states, n_points) array
-            State(s) arranged by (dimension, time). If the input was flat,
-            `n_points = 1`.
+            Centered state(s) arranged by (dimension, time). If the input was
+            flat, `n_points = 1`.
         u - uf : (n_controls, n_points) array
-            Control(s) arranged by (dimension, time). If the input was flat,
-            `n_points = 1`.
+            Centered saturated control(s) arranged by (dimension, time). If the
+            input was flat, `n_points = 1`.
         squeeze: bool
             True if either input was flat.
 
@@ -329,4 +329,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
             `x.shape[1] != u.shape[1]`.
         """
         x, u, squeeze = self._reshape_inputs(x, u)
-        return x - self.xf, self._saturate(u) - self.uf, squeeze
+        x_err = x - self.xf
+        u_err = self._saturate(u) - self.uf
+        return x_err, u_err, squeeze
