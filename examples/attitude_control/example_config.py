@@ -15,8 +15,8 @@ params = {}
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
-n_train = 25
-n_test = 25
+n_train = 40
+n_test = 40
 
 # Distance in radians and radians/s (by default in l-infinity and l2 norm) of
 # initial condition samples
@@ -27,7 +27,7 @@ rate_distance = None
 t_int = 60.
 
 # Maximum integration time allowed
-t_max = 180.
+t_max = 300.
 
 # Keyword arguments for closed-loop simulation
 sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
@@ -35,8 +35,10 @@ sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {}
 
-#random_seed = 123
+random_seed = 123
 
-# Keyword arguments for the NN controller
-controller_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
-                     'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-04}
+# Keyword arguments for the NN and polynomial controllers
+nn_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
+             'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-03}
+
+poly_kwargs = {'degree': 2, 'alpha': 500.}

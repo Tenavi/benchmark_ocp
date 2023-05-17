@@ -68,7 +68,7 @@ for i, sim in enumerate(lqr_sims):
 data, status, messages = data_utils.generate_data(ocp, lqr_sims,
                                                   **config.open_loop_kwargs)
 
-print("\n" + "+" * 80 + "\n")
+print("\n" + "+" * 80)
 
 # Reserve a subset of data for testing and use the rest for training
 data_idx = np.arange(x0_pool.shape[1])[status == 0]
@@ -99,18 +99,6 @@ except TypeError:
         x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
         **config.poly_kwargs)
 
-x, y = np.meshgrid(np.linspace(-3, 3, 151), np.linspace(-3, 3, 151))
-xy = np.stack((x.flatten(), y.flatten()), axis=0)
-u = poly_control(xy).reshape(x.shape)
-
-print("\n" + "+" * 80)
-
-for controller in (nn_control, poly_control):
-    train_r2 = controller.score(x_train, u_train)
-    test_r2 = controller.score(x_test, u_test)
-    print(f"\n{type(controller).__name__:s} R2 score: {train_r2:.4f} (train) "
-          f"{test_r2:.4f} (test)")
-
 print("\n" + "+" * 80)
 
 for controller in (nn_control, poly_control):
@@ -135,6 +123,14 @@ for controller in (nn_control, poly_control):
         jac = utilities.closed_loop_jacobian(x, ocp.jac, controller)
         eigs, max_eig = analysis.linear_stability(jac)
 
+print("\n" + "+" * 80)
+
+for controller in (nn_control, poly_control):
+    train_r2 = controller.r2_score(x_train, u_train)
+    test_r2 = controller.r2_score(x_test, u_test)
+    print(f"\n{type(controller).__name__:s} R2 score: {train_r2:.4f} (train) "
+          f"{test_r2:.4f} (test)")
+
 print("\n" + "+" * 80 + "\n")
 
 # Evaluate performance of the learned controllers in closed-loop simulation
@@ -145,8 +141,8 @@ poly_sims, _ = simulate.monte_carlo_to_converge(
 
 for sims in (nn_sims, poly_sims):
     for sim in sims:
-        sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.xf)
         sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
+        sim['L'] = ocp.running_cost(sim['x'], sim['u'])
 
 for controller, sims in zip((nn_control, poly_control), (nn_sims, poly_sims)):
     # If the closed-loop cost is lower than the optimal cost, we may have found
@@ -158,7 +154,8 @@ for controller, sims in zip((nn_control, poly_control), (nn_sims, poly_sims)):
             if sol['v'][0] > sim['v'][0]:
                 # Try to resolve the OCP if the initial guess looks better
                 new_sol = solve_infinite_horizon(
-                    ocp, sim['t'], sim['x'], u=sim['u'], p=sim['p'], v=sim['v'],
+                    ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
+                    p=2. * lqr.P @ (sim['x'] - ocp.xf),
                     **config.open_loop_kwargs)
                 if new_sol.v[0] < sol['v'][0]:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
@@ -168,6 +165,7 @@ for controller, sims in zip((nn_control, poly_control), (nn_sims, poly_sims)):
 
 # Plot the results
 figs = {'training': dict(), 'test': dict()}
+
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
     lqr_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
                  for sim in lqr_sims[data_idx]]
@@ -187,7 +185,8 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                                 (nn_sims, poly_sims)):
         ctrl_name = f'{type(controller).__name__:s}'
         figs[data_name]['closed_loop' + ctrl_name] = plotting.plot_closed_loop(
-            ocp, sims[data_idx], subtitle=ctrl_name + ', ' + data_name)
+            sims[data_idx], t_max=config.t_int,
+            subtitle=ctrl_name + ', ' + data_name)
         figs[data_name]['closed_loop_3d' + ctrl_name] = plotting.plot_closed_loop_3d(
             sims[data_idx], data[data_idx], controller_name=ctrl_name,
             title=f'Closed-loop trajectories and controls ({ctrl_name}, '

@@ -3,8 +3,9 @@ import time
 import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model as sk_linear_models
-from sklearn.preprocessing import RobustScaler, PolynomialFeatures
 from sklearn.pipeline import Pipeline
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.preprocessing import RobustScaler, PolynomialFeatures
 from sklearn.metrics import r2_score
 
 from optimalcontrol import controls, utilities
@@ -107,15 +108,57 @@ class SupervisedController(controls.Controller):
 
         return u
 
-    def score(self, x, u_true, multioutput='uniform_average'):
-        u_pred = self(x)
-        u_true = np.reshape(u_true, u_pred.shape)
-        return r2_score(u_true.T, u_pred.T, multioutput=multioutput)
+    def r2_score(self, x_data, u_data, multioutput='uniform_average'):
+        r"""
+        Return the coefficient of determination of the control prediction in the
+        physical (unscaled) domain.
+
+        The coefficient of determination, $R^2$, is defined as
+        `r2 = 1 - residual / total`, where
+        `residual = ((u_data - u_pred)**2).sum()` with `u_pred = self(x_data)`,
+        and `total = ((u_data - u_data.mean()) ** 2).sum()`. The best possible
+        score is 1.0 and it can be negative (because the model can be
+        arbitrarily worse). A constant model that always predicts the expected
+        value of `u_data`, disregarding the input features, would get an $R^2$
+        score of 0.0.
+        
+        Parameters
+        ----------
+        x_data : (n_states, n_data) array
+            A set of system states (obtained by solving a set of open-loop
+            optimal control problems).
+        u_data : (n_controls, n_data) array
+            The optimal feedback controls evaluated at the states `x_data`.
+        multioutput : {'raw_values', 'uniform_average', 'variance_weighted'}, \
+                (n_controls,) array, or None, default='uniform_average'
+
+            Defines aggregating of multiple output scores. An array value
+            defines weights used to average scores, and None reverts to the
+            default 'uniform_average'.
+
+                * 'raw_values' : Returns a full set of scores for each control.
+
+                * 'uniform_average' :
+                    Scores of all control dimensions are averaged with uniform
+                    weight.
+
+                * 'variance_weighted' :
+                    Scores of all control dimensions are averaged, weighted by
+                    the variances of each individual control.
+
+        Returns
+        -------
+        r2 : float or (n_controls,) array
+            The $R^2$ score, or array of scores if `multioutput=='raw_values'`.
+        """
+        u_pred = self(x_data)
+        u_data = np.reshape(u_data, u_pred.shape)
+        return r2_score(u_data.T, u_pred.T, multioutput=multioutput)
 
 
 class NeuralNetworkController(SupervisedController):
     """
-    A simple example of how one might implement a neural network controller
+    A simple example of how one might implement a neural network control law
     trained by supervised learning. To do this, we generate a dataset of
     state-control pairs (`x_data`, `u_data`), and optionally for time-dependent
     problems, associated time values `t_data`, and the neural network learns the
@@ -129,18 +172,25 @@ class NeuralNetworkController(SupervisedController):
 
 class PolynomialController(SupervisedController):
     """
-    A simple example of how one might implement a polynomial controller trained
+    A simple example of how one might implement a polynomial control law trained
     by supervised learning. To do this, we generate a dataset of state-control
     pairs (`x_data`, `u_data`), and optionally for time-dependent problems,
     associated time values `t_data`, and the polynomial regressor learns the
     mapping from `x_data` (and `t_data`) to `u_data`. The polynomial is
     implemented with `sklearn.preprocessing.PolynomialFeatures` and a choice of
     model from `sklearn.linear_model`, controlled by the `linear_model` keyword
-    (default='Ridge').
+    (default='Ridge'). Note that if `n_controls > 1` and a cross alidation-based
+    `linear_model` is used, this is not natively supported in `sklearn` so the
+    regressor will be wrapped with `sklearn.multioutput.MultiOutputRegressor`.
     """
     def _fit_regressor(self, x_scaled, u_scaled, degree=1, linear_model='Ridge',
                        **options):
-        linear_model = getattr(sk_linear_models, linear_model)
+
+        regressor = getattr(sk_linear_models, linear_model)(**options)
+
+        if self.n_controls > 1 and linear_model[-2:] == 'CV':
+            regressor = MultiOutputRegressor(regressor)
+
         regressor = Pipeline([('kernel', PolynomialFeatures(degree=degree)),
-                              ('linear_model', linear_model(**options))])
+                              ('regressor', regressor)])
         return regressor.fit(x_scaled, u_scaled)

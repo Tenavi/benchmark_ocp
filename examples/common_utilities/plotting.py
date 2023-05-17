@@ -9,6 +9,9 @@ from matplotlib import pyplot as plt
 matplotlib.rc('text', usetex=True)
 matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
+_mpl_markers = ['o', 'x', 'd', '*', '+', 'v', '^', '<', '>', 's', 'p', 'h', '8',
+                'X', 'P', '.', '1', '2', '3', '4']
+
 
 def plot_total_cost(optimal_costs, controller_costs=dict(),
                     title='Closed-loop cost evaluation', fig_kwargs=dict()):
@@ -44,8 +47,8 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
 
     ax = plt.axes()
 
-    for label, costs in controller_costs.items():
-        plt.scatter(optimal_costs, costs, s=16, label=label)
+    for marker, (label, costs) in zip(_mpl_markers, controller_costs.items()):
+        plt.scatter(optimal_costs, costs, s=16, marker=marker, label=label)
 
     ax.set_ylim(bottom=ax.get_xlim()[0])
     ax.set_xlim(right=ax.get_ylim()[1])
@@ -64,7 +67,8 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
 def plot_closed_loop_3d(sims, open_loop_sols, z='u',
                         controller_name='learning-based control',
                         title='Closed-loop trajectories and controls',
-                        x_labels=(), z_labels=(), fig_kwargs=dict()):
+                        x_labels=(), z_labels=(),
+                        fig_kwargs={}, plot_kwargs={}):
     """
     Plot closed-loop simulations and open-loop solutions together on a single 3d
     plot. This produces one figure for each pairwise combination of system
@@ -102,6 +106,9 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     fig_kwargs : dict, optional
         Keyword arguments to pass during figure creation. See
         `matplotlib.pyplot.figure`.
+    plot_kwargs : dict, default={'color': 'black', 'alpha': 0.5}
+        Keyword arguments to pass when generating line plots. See
+        `matplotlib.pyplot.plot`.
 
     Returns
     -------
@@ -120,6 +127,8 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     x_labels = _check_labels(n_states, 'x', *x_labels)
     z_labels = _check_labels(n_other, z, *z_labels)
 
+    plot_kwargs = {'color': 'black', 'alpha': 0.5, **plot_kwargs}
+
     if n_states < 2:
         raise ValueError("plot_closed_loop_3d is only implemented for "
                          "n_states >= 2")
@@ -131,11 +140,11 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
             ax = plt.axes(projection='3d')
 
             for sol in open_loop_sols:
-                ax.plot(sol['x'][i], sol['x'][j], sol['u'][k], 'k', alpha=0.5,
+                ax.plot(sol['x'][i], sol['x'][j], sol['u'][k], **plot_kwargs,
                         label='open-loop optimal')
 
             ax.scatter(x_all[i], x_all[j], z_all[k], c=z_all[k], marker='o',
-                       s=9, alpha=0.5, label=controller_name)
+                       s=9, alpha=plot_kwargs['alpha'], label=controller_name)
 
             ax.set_xlabel(x_labels[i])
             ax.set_ylabel(x_labels[j])
@@ -147,17 +156,14 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     return figs
 
 
-def plot_closed_loop(ocp, sims, x_labels=(), u_labels=(), subtitle=None,
-                     fig_kwargs={}):
+def plot_closed_loop(sims, t_max=None, x_labels=(), u_labels=(), subtitle=None,
+                     fig_kwargs={}, plot_kwargs={}):
     """
     Plot the states, controls, and running cost vs. time for a set of
     trajectories.
 
     Parameters
     ----------
-    ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing a
-        `running_cost` method.
     sims : length n_sims list of dicts
         Closed loop simulations output by
         `optimalcontrol.simulate.monte_carlo_fixed_time` or
@@ -166,10 +172,14 @@ def plot_closed_loop(ocp, sims, x_labels=(), u_labels=(), subtitle=None,
 
             * 't' : (n_points,) array
                 Time points.
-            * 'x' : (`ocp.n_states`, n_points) array
+            * 'x' : (n_states, n_points) array
                 System states at times 't'.
-            * 'u' : (`ocp.n_controls`, n_points) array
+            * 'u' : (n_controls, n_points) array
                 Control inputs at times 't'.
+            * 'L' : (n_points,) array, optional
+                Running cost at times 't'.
+    t_max : float, optional
+        Maximum time horizon to plot.
     x_labels : tuple, default=('$x_1$', '$x_2$', ...)
         Tuple of strings specifying how to label plot axes for states.
     u_labels : tuple, default=('$u_1$', '$u_2$', ...)
@@ -178,9 +188,11 @@ def plot_closed_loop(ocp, sims, x_labels=(), u_labels=(), subtitle=None,
         If provided, this string appears in parentheses after the first plot
         title.
     fig_kwargs : dict, optional
-        fig_kwargs : dict, optional
         Keyword arguments to pass during figure creation. See
         `matplotlib.pyplot.figure`.
+    plot_kwargs : dict, default={'color': 'black', 'alpha': 0.5}
+        Keyword arguments to pass when generating line plots. See
+        `matplotlib.pyplot.plot`.
 
     Returns
     -------
@@ -188,24 +200,30 @@ def plot_closed_loop(ocp, sims, x_labels=(), u_labels=(), subtitle=None,
         Figure instance with a set of plots of each state, control, and the
         running cost vs. time for all trajectories.
     """
-    t_max = np.max([sim['t'][-1] for sim in sims])
+    if t_max is None:
+        t_max = np.max([sim['t'][-1] for sim in sims])
 
-    n_plots = ocp.n_states + ocp.n_controls + 1
+    n_states = np.shape(sims[0]['x'])[0]
+    n_controls = np.shape(sims[0]['u'])[0]
 
-    x_labels = _check_labels(ocp.n_states, 'x', *x_labels)
-    u_labels = _check_labels(ocp.n_controls, 'u', *u_labels)
+    n_plots = n_states + n_controls + ('L' in sims[0].keys())
+
+    x_labels = _check_labels(n_states, 'x', *x_labels)
+    u_labels = _check_labels(n_controls, 'u', *u_labels)
+
+    plot_kwargs = {'color': 'black', 'alpha': 0.5, **plot_kwargs}
 
     fig_kwargs = {'figsize': (6.4, n_plots * 1.5), **fig_kwargs}
     fig = plt.figure(**fig_kwargs)
 
-    plt.subplots_adjust(hspace=0.5)
+    plt.subplots_adjust(hspace=0.5, bottom=0.05, top=0.95)
 
-    for i in range(ocp.n_states):
+    for i in range(n_states):
         ax = plt.subplot(n_plots, 1, i + 1)
         ax.set_xlim(0., t_max)
 
         for sim in sims:
-            ax.plot(sim['t'], sim['x'][i], 'k', alpha=0.5)
+            ax.plot(sim['t'], sim['x'][i], **plot_kwargs)
 
         ax.set_ylabel(x_labels[i])
 
@@ -215,29 +233,30 @@ def plot_closed_loop(ocp, sims, x_labels=(), u_labels=(), subtitle=None,
             else:
                 ax.set_title('Closed-loop states')
 
-    for i in range(ocp.n_controls):
-        ax = plt.subplot(n_plots, 1, ocp.n_states + i + 1)
+    for i in range(n_controls):
+        ax = plt.subplot(n_plots, 1, n_states + i + 1)
         ax.set_xlim(0., t_max)
 
         for sim in sims:
-            ax.plot(sim['t'], sim['u'][i], 'k', alpha=0.5)
+            ax.plot(sim['t'], sim['u'][i], **plot_kwargs)
 
         ax.set_ylabel(u_labels[i])
 
         if i == 0:
             ax.set_title('Feedback controls')
 
-    ax = plt.subplot(n_plots, 1, n_plots)
-    ax.set_xlim(0., t_max)
+    if 'L' in sims[0].keys():
+        ax = plt.subplot(n_plots, 1, n_plots)
+        ax.set_xlim(0., t_max)
 
-    for sim in sims:
-        ax.plot(sim['t'], ocp.running_cost(sim['x'], sim['u']), 'k', alpha=0.5)
+        for sim in sims:
+            ax.plot(sim['t'], sim['L'], **plot_kwargs)
 
-    ax.set_yscale('log')
+        ax.set_yscale('log')
+        ax.set_ylabel(r'$\mathcal L$')
+        ax.set_title('Running cost')
 
     ax.set_xlabel('$t$')
-    ax.set_ylabel(r'$\mathcal L$')
-    ax.set_title('Running cost')
 
     return fig
 
