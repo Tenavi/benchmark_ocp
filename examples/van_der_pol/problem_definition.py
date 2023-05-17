@@ -1,7 +1,7 @@
 import numpy as np
 
 from optimalcontrol.problem import OptimalControlProblem
-from optimalcontrol.utilities import saturate, resize_vector
+from optimalcontrol.utilities import saturate, find_saturated, resize_vector
 from optimalcontrol.sampling import UniformSampler
 
 
@@ -34,8 +34,8 @@ class VanDerPol(OptimalControlProblem):
             self.xf[0] = obj.xf
 
         if 'b' in new_params:
-            self.B = np.zeros((2, 1))
-            self.B[1] = obj.b
+            self._B = np.zeros((2, 1))
+            self._B[1] = obj.b
 
         if 'b' in new_params or 'xf' in new_params:
             self._uf = float(self.xf[0] / obj.b)
@@ -51,7 +51,7 @@ class VanDerPol(OptimalControlProblem):
         if not hasattr(self, '_x0_sampler'):
             self._x0_sampler = UniformSampler(
                 lb=obj.x0_lb, ub=obj.x0_ub, xf=self.xf,
-                norm=getattr(obj, 'x0_sample_norm', 1),
+                norm=getattr(obj, 'x0_sample_norm', np.inf),
                 seed=getattr(obj, 'x0_sample_seed', None))
         elif any(['x0_lb' in new_params, 'x0_ub' in new_params,
                   'x0_sample_seed' in new_params, 'xf' in new_params]):
@@ -99,23 +99,31 @@ class VanDerPol(OptimalControlProblem):
 
     def running_cost_grad(self, x, u, return_dLdx=True, return_dLdu=True,
                           L0=None):
-        if np.ndim(x) < 2:
-            x_err = x - self.xf.flatten()
-        else:
-            x_err = x - self.xf
-
-        u_err = self._saturate(u) - self._uf
-
-        x1 = x_err[:1]
-        x2 = x_err[1:]
+        x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
+            x_err = x - self.xf
+            x1 = x_err[:1]
+            x2 = x_err[1:]
+
             dLdx = np.concatenate((self._params.Wx * x1, self._params.Wy * x2))
+
+            if squeeze:
+                dLdx = dLdx[..., 0]
+
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
+            u_err = self._saturate(u) - self._uf
             dLdu = self._params.Wu * u_err
+            # Where the control is saturated, the gradient is zero
+            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            dLdu[sat_idx] = 0.
+
+            if squeeze:
+                dLdu = dLdu[..., 0]
+
             if not return_dLdx:
                 return dLdu
 
@@ -131,9 +139,19 @@ class VanDerPol(OptimalControlProblem):
                 return Q
 
         if return_dLdu:
-            R = np.reshape(self._params.Wu / 2., (1, 1))
-            if np.ndim(u) >= 2:
-                R = np.tile(R[..., None], (1, 1, np.shape(u)[1]))
+            R = np.reshape(self._params.Wu / 2., (1, 1, 1))
+            if np.ndim(u) > 1 and np.shape(u)[1] > 1:
+                R = np.tile(R, (1, 1, np.shape(u)[1]))
+
+            # Where the control is saturated, the gradient is zero (constant).
+            # This makes the Hessian zero in all terms that include a saturated
+            # control
+            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            sat_idx = sat_idx[None, ...] + sat_idx[:, None, ...]
+            R[sat_idx] = 0.
+
+            if np.ndim(u) < 2:
+                R = R[..., 0]
             if not return_dLdx:
                 return R
 
@@ -153,21 +171,28 @@ class VanDerPol(OptimalControlProblem):
         return np.concatenate((dx1dt, dx2dt), axis=0)
 
     def jac(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
-        if return_dfdx:
-            dfdx = np.zeros((self.n_states, * np.shape(x)))
-            dfdx[0, 1] = 1.
-            dfdx[1, 0] = -1. - 2.*self._params.mu*x[0]*x[1]
-            dfdx[1, 1] = self._params.mu*(1. - x[0]**2)
+        x, u, squeeze = self._reshape_inputs(x, u)
 
+        if return_dfdx:
+            dfdx = np.zeros((self.n_states, *x.shape))
+            dfdx[0, 1] = 1.
+            dfdx[1, 0] = -1. - 2. * self._params.mu * x[0] * x[1]
+            dfdx[1, 1] = self._params.mu * (1. - x[0]**2)
+
+            if squeeze:
+                dfdx = dfdx[..., 0]
             if not return_dfdu:
                 return dfdx
 
         if return_dfdu:
-            if np.ndim(u) > 1:
-                dfdu = np.tile(self.B[..., None], (1, 1, np.shape(u)[-1]))
-            else:
-                dfdu = np.copy(self.B)
+            dfdu = np.tile(self._B[..., None], (1, 1, u.shape[1]))
 
+            # Where the control is saturated, the Jacobian is zero
+            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            dfdu[:, sat_idx] = 0.
+
+            if squeeze:
+                dfdu = dfdu[..., 0]
             if not return_dfdx:
                 return dfdu
 
@@ -178,13 +203,13 @@ class VanDerPol(OptimalControlProblem):
         return self._saturate(u)
 
     def optimal_control_jac(self, x, p, u0=None):
-        return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
+        return np.zeros((self.n_controls, *np.shape(x)))
 
     def bvp_dynamics(self, t, xp):
         u = self.optimal_control(xp[:2], xp[2:4])
         L = self.running_cost(xp[:2], u)
 
-        # Get states and costates
+        # Extract states and costates
         x1 = xp[:1]
         x2 = xp[1:2]
         x1_err = x1 - self.xf[:1]
@@ -200,4 +225,9 @@ class VanDerPol(OptimalControlProblem):
         dp1dt = -self._params.Wx * x1_err + p2 * (2.*self._params.mu*x1*x2 + 1.)
         dp2dt = -self._params.Wy * x2 - p1 - p2 * self._params.mu * (1. - x1**2)
 
-        return np.vstack((dx1dt, dx2dt, dp1dt, dp2dt, -L))
+        dxpdt = np.vstack((dx1dt, dx2dt, dp1dt, dp2dt, -L))
+
+        if u.ndim < 2:
+            return dxpdt[:, 0]
+
+        return dxpdt

@@ -385,19 +385,19 @@ class OptimalControlProblem:
 
         Parameters
         ----------
-        t : (n_points,) array
+        t : (n_points,) array or float
             Time collocation points for each state.
-        xp : (2*n_states + 1, n_points) array
+        xp : (2*n_states + 1, n_points) or (2*n_states + 1,) array
             Current state, costate, and value function, vertically stacked in
             that order.
 
         Returns
         -------
-        dxpdt : (2*n_states + 1, n_points) array
-            Vertical concatenation of dynamics $dx/dt = f(x,u)$, costate
-            dynamics $dp/dt = -dH/dx(x,u,p)$, and running cost $L(x,u)$,
-            where $u = u(x,p)$ is the optimal control and $H(x,u,p)$ is the
-            Hamiltonian.
+        dxpdt : (2*n_states + 1, n_points) or (2*n_states + 1,) array
+            Vertical stack of dynamics $dx/dt = f(x,u)$, costate dynamics
+            $dp/dt = -dH/dx(x,u,p)$, and running cost $L(x,u)$, where
+            $u = u(x,p)$ is the optimal control and $H(x,u,p)$ is the
+            Pontryagin Hamiltonian.
         """
         x = xp[:self.n_states]
         p = xp[self.n_states:-1]
@@ -425,7 +425,12 @@ class OptimalControlProblem:
         # Costate dynamics (gradient of optimized Hamiltonian)
         dHdx = dLdx + np.einsum('ijk,ik->jk', dfdx, p)
 
-        return np.vstack((dxdt, -dHdx, -L))
+        dxpdt = np.vstack((dxdt, -dHdx, -L))
+
+        if np.ndim(x) < 2:
+            return dxpdt[:, 0]
+
+        return dxpdt
 
     def hamiltonian(self, x, u, p):
         """

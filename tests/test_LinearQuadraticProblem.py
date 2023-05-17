@@ -11,7 +11,7 @@ from ._utilities import make_LQ_params, compare_finite_difference
 rng = np.random.default_rng()
 
 
-def _make_nondefinite_matrices(n, strict=True):
+def _make_indefinite_matrices(n, strict=True):
     """Generate random non-square and non-positive-definite cost matrices."""
     if n == 1:
         bad_mats = [np.array([[-1e-14]]),
@@ -100,13 +100,13 @@ def test_bad_inits(n_states, n_controls):
         _ = LinearQuadraticProblem(**bad_init)
 
     # Non positive semi-definite Q matrix
-    for bad_mat in _make_nondefinite_matrices(n_states, strict=False):
+    for bad_mat in _make_indefinite_matrices(n_states, strict=False):
         bad_init = {**init_dict, 'Q': bad_mat}
         with pytest.raises(ValueError, match="Q"):
             _ = LinearQuadraticProblem(**bad_init)
 
     # Non positive-definite R matrix
-    for bad_mat in _make_nondefinite_matrices(n_states, strict=True):
+    for bad_mat in _make_indefinite_matrices(n_states, strict=True):
         bad_init = {**init_dict, 'R': bad_mat}
         with pytest.raises(ValueError, match="R"):
             _ = LinearQuadraticProblem(**bad_init)
@@ -135,7 +135,7 @@ def test_sample(n_states):
         assert np.all(x0 <= x0_ub)
 
     # With distance specification
-    def check_distance(n_samples, distance):
+    def check_distance(n_samples, distance, rtol=1e-06, atol=1e-06):
         x0 = ocp.sample_initial_conditions(n_samples, distance=distance)
         if n_samples > 1:
             assert x0.shape == (n_states, n_samples)
@@ -143,11 +143,11 @@ def test_sample(n_states):
             assert x0.shape == (n_states,)
             x0 = x0.reshape(n_states, 1)
         xQx = ocp.distances(x0, xf)
-        np.testing.assert_allclose(distance, xQx)
+        np.testing.assert_allclose(distance, xQx, rtol=rtol, atol=atol)
 
     distances = rng.uniform(size=(2,)) + np.array([0, 1])
     for distance in distances:
-        for n_samples in range(1, 5):
+        for n_samples in range(1, 10):
             check_distance(n_samples, distance)
 
     # Check again after updating Q matrix
@@ -157,7 +157,7 @@ def test_sample(n_states):
     np.testing.assert_allclose(Q, ocp.Q)
 
     for distance in distances:
-        for n_samples in range(1, 5):
+        for n_samples in range(1, 10):
             check_distance(n_samples, distance)
 
 
@@ -188,7 +188,12 @@ def test_cost_functions(n_states, n_controls, n_samples):
     assert dLdx.shape == (n_states, n_samples)
     assert dLdu.shape == (n_controls, n_samples)
 
-    # Check that Hessians give the correct size
+    # Check that control gradients match with finite difference approximation
+    fin_diff_dLdu = (super(LinearQuadraticProblem, ocp)
+                     .running_cost_grad(x, u, return_dLdx=False))
+    np.testing.assert_allclose(dLdu, fin_diff_dLdu, atol=1e-06)
+
+    # Check that Hessians are the correct size
     dLdx2, dLdu2 = ocp.running_cost_hess(x, u)
     assert dLdx2.shape == (n_states, n_states, n_samples)
     assert dLdu2.shape == (n_controls, n_controls, n_samples)
@@ -196,7 +201,7 @@ def test_cost_functions(n_states, n_controls, n_samples):
     # Check that control Hessians match with finite difference approximation
     fin_diff_dLdu2 = (super(LinearQuadraticProblem, ocp)
                       .running_cost_hess(x, u, return_dLdx=False))
-    np.testing.assert_allclose(dLdu2, fin_diff_dLdu2)
+    np.testing.assert_allclose(dLdu2, fin_diff_dLdu2, atol=1e-06)
 
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
@@ -206,8 +211,6 @@ def test_cost_functions(n_states, n_controls, n_samples):
         np.testing.assert_allclose(L[i], xi @ Q @ xi + ui @ R @ ui)
 
         np.testing.assert_allclose(dLdx[..., i], 2. * Q @ xi)
-        np.testing.assert_allclose(dLdu[..., i], 2. * R @ ui)
-
         np.testing.assert_allclose(dLdx2[..., i], Q)
 
     # Check shapes for flat vector inputs
@@ -311,11 +314,34 @@ def test_optimal_control(n_states, n_controls, n_samples):
         assert dudx.shape == (n_controls, n_states)
 
     # Compare with LQR solution
-    LQR = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                                    u_lb=-0.5, u_ub=0.5)
 
-    p = 2. * LQR.P @ (x - xf)
+    p = 2. * lqr.P @ (x - xf)
     u = ocp.optimal_control(x, p)
-    u_expected = LQR(x)
+    u_expected = lqr(x)
 
     np.testing.assert_allclose(u, u_expected)
+
+
+@pytest.mark.parametrize('zero_rows', (0, 1, 2, [0, 1], [0, 2], [1, 2]))
+def test_non_observable_lqr(zero_rows):
+    """Test that LQR can be created when one or more rows of A and Q are zero"""
+    n_states = 3
+    n_controls = 2
+
+    # Start with usual random matrices
+    A, B, Q, R, _, _ = make_LQ_params(n_states, n_controls)
+
+    # Set some rows (and columns of Q) to zero
+    A[zero_rows] = 0.
+    B[zero_rows] = 0.
+    Q[zero_rows] = 0.
+    Q[:, zero_rows] = 0.
+
+    # Should still be able to make an lqr controller
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
+
+    # The closed-loop eigenvalues should be non-positive
+    A = A - B @ lqr.K
+    assert np.linalg.eigvals(A).real.max() <= 0.

@@ -12,8 +12,10 @@ from optimalcontrol.open_loop import solve_infinite_horizon
 
 from examples.common_utilities import data_utils, supervised_learning, plotting
 
-from examples.van_der_pol import VanDerPol
-from examples.van_der_pol import example_config as config
+from examples.attitude_control import AttitudeControl
+from examples.attitude_control.problem_definition import (euler_to_quaternion,
+                                                          quaternion_to_euler)
+from examples.attitude_control import example_config as config
 
 
 parser = ap.ArgumentParser()
@@ -25,17 +27,22 @@ args = parser.parse_args()
 random_seed = getattr(config, 'random_seed', None)
 if random_seed is None:
     random_seed = int(time.time())
-rng = np.random.default_rng(random_seed + 1)
+rng = np.random.default_rng(random_seed + 2)
 
-ocp = VanDerPol(x0_sample_seed=random_seed, **config.params)
-xf = ocp.xf.flatten()
-uf = ocp.uf.flatten()
+ocp = AttitudeControl(attitude_sample_seed=random_seed,
+                      rate_sample_seed=random_seed + 1, **config.params)
+
+q_final = euler_to_quaternion(*ocp.parameters.final_attitude)
+
+xf = np.concatenate((q_final, np.zeros(3))).reshape(-1, 1)
+uf = np.zeros((ocp.n_controls, 1))
 
 # Create an LQR controller as a baseline
 # System matrices (vector field Jacobians)
 A, B = ocp.jac(xf, uf)
 # Cost matrices (1/2 Running cost Hessians)
 Q, R = ocp.running_cost_hess(xf, uf)
+
 lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
                                u_lb=ocp.parameters.u_lb,
                                u_ub=ocp.parameters.u_ub,
@@ -44,8 +51,10 @@ lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
 # Generate some training and test data
 
 # First sample initial conditions
-x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
-                                        distance=config.x0_distance)
+x0_pool = ocp.sample_initial_conditions(
+    config.n_train + config.n_test,
+    attitude_distance=config.attitude_distance,
+    rate_distance=config.rate_distance)
 
 # Warm start the optimal control solver by integrating the system with LQR
 lqr_sims, status = simulate.monte_carlo_to_converge(
@@ -57,12 +66,12 @@ for i, sim in enumerate(lqr_sims):
     # interpolate initial and final conditions
     if status[i] != 0:
         x0 = x0_pool[:, i:i+1]
-        x_interp = interp1d([0., config.t_int], np.hstack((x0, ocp.xf)))
+        x_interp = interp1d([0., config.t_int], np.hstack((x0, xf)))
         sim['t'] = np.linspace(0., config.t_int, 100)
         sim['x'] = x_interp(sim['t'])
         sim['u'] = lqr(sim['x'])
     # Use LQR to generate a guess for the costates
-    sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.xf)
+    sim['p'] = 2. * lqr.P @ (sim['x'] - xf)
 
 # Solve open loop optimal control problems
 data, status, messages = data_utils.generate_data(ocp, lqr_sims,
@@ -93,8 +102,8 @@ try:
     poly_control = supervised_learning.PolynomialController(
         x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
         random_state=random_seed + 3, **config.poly_kwargs)
+# In case the linear_model doesn't take a random_state or verbose
 except TypeError:
-    # In case the linear_model doesn't use a random_state
     poly_control = supervised_learning.PolynomialController(
         x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
         **config.poly_kwargs)
@@ -111,7 +120,7 @@ for controller in (nn_control, poly_control):
     # If an unstable equilibrium was found, try perturbing the equilibrium
     # slightly and integrating from there to find a stable equilibrium
     if max_eig > 0.:
-        x += rng.normal(scale=1/100, size=x.shape)
+        x += rng.normal(scale=1 / 100, size=x.shape)
         t, x, _ = simulate.integrate_to_converge(
             ocp, controller, x, config.t_int, config.t_max, **config.sim_kwargs)
 
@@ -153,10 +162,10 @@ for controller, sims in zip((nn_control, poly_control), (nn_sims, poly_sims)):
 
             if sol['v'][0] > sim['v'][0]:
                 # Try to resolve the OCP if the initial guess looks better
-                new_sol = solve_infinite_horizon(
-                    ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
-                    p=2. * lqr.P @ (sim['x'] - ocp.xf),
-                    **config.open_loop_kwargs)
+                new_sol = solve_infinite_horizon(ocp, sim['t'], sim['x'],
+                                                 u=sim['u'], v=sim['v'],
+                                                 p=2. * lqr.P @ (sim['x'] - xf),
+                                                 **config.open_loop_kwargs)
                 if new_sol.v[0] < sol['v'][0]:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
                           f"warm start with {type(controller).__name__:s}")
@@ -164,6 +173,10 @@ for controller, sims in zip((nn_control, poly_control), (nn_sims, poly_sims)):
                         sol[key] = getattr(new_sol, key)
 
 # Plot the results
+x_labels = ('yaw (deg)', 'pitch (deg)', 'roll (deg)')
+x_labels += tuple(fr'$\omega_{i}$ (deg/s)' for i in range(1, 4))
+u_labels = tuple(fr'$\tau_{i}$ ($N \cdot m$)' for i in range(1, 4))
+
 figs = {'training': dict(), 'test': dict()}
 
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
@@ -184,13 +197,16 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
     for controller, sims in zip((nn_control, poly_control),
                                 (nn_sims, poly_sims)):
         ctrl_name = f'{type(controller).__name__:s}'
+
+        for sim in sims[data_idx]:
+            q, w = sim['x'][:4], sim['x'][4:]
+            sim['x'] = np.vstack((quaternion_to_euler(q, degrees=True),
+                                  np.rad2deg(w)))
+
         figs[data_name]['closed_loop' + ctrl_name] = plotting.plot_closed_loop(
-            sims[data_idx], t_max=config.t_int,
+            sims[data_idx], t_max=2 * config.t_int,
+            x_labels=x_labels, u_labels=u_labels,
             subtitle=ctrl_name + ', ' + data_name)
-        figs[data_name]['closed_loop_3d' + ctrl_name] = plotting.plot_closed_loop_3d(
-            sims[data_idx], data[data_idx], controller_name=ctrl_name,
-            title=f'Closed-loop trajectories and controls ({ctrl_name}, '
-                  f'{data_name})')
 
 # Save data, figures, and trained controllers
 data_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
