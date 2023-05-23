@@ -9,6 +9,7 @@ import pickle
 
 import numpy as np
 from scipy.linalg import solve_continuous_are
+from sklearn.metrics import r2_score
 
 from . import utilities
 
@@ -52,6 +53,53 @@ class Controller:
             Jacobian of feedback control for each column in `x`.
         """
         return utilities.approx_derivative(self, x, f0=u0)
+
+    def r2_score(self, x_data, u_data, multioutput='uniform_average'):
+        r"""
+        Return the coefficient of determination of the control prediction in the
+        physical (unscaled) domain.
+
+        The coefficient of determination, $R^2$, is defined as
+        `r2 = 1 - residual / total`, where
+        `residual = ((u_data - u_pred)**2).sum()` with `u_pred = self(x_data)`,
+        and `total = ((u_data - u_data.mean()) ** 2).sum()`. The best possible
+        score is 1.0 and it can be negative (because the model can be
+        arbitrarily worse). A constant model that always predicts the expected
+        value of `u_data`, disregarding the input features, would get an $R^2$
+        score of 0.0.
+
+        Parameters
+        ----------
+        x_data : (n_states, n_data) array
+            A set of system states (obtained by solving a set of open-loop
+            optimal control problems).
+        u_data : (n_controls, n_data) array
+            The optimal feedback controls evaluated at the states `x_data`.
+        multioutput : {'raw_values', 'uniform_average', 'variance_weighted'}, \
+                (n_controls,) array, or None, default='uniform_average'
+
+            Defines aggregating of multiple output scores. An array value
+            defines weights used to average scores, and None reverts to the
+            default 'uniform_average'.
+
+                * 'raw_values' : Returns a full set of scores for each control.
+
+                * 'uniform_average' :
+                    Scores of all control dimensions are averaged with uniform
+                    weight.
+
+                * 'variance_weighted' :
+                    Scores of all control dimensions are averaged, weighted by
+                    the variances of each individual control.
+
+        Returns
+        -------
+        r2 : float or (n_controls,) array
+            The $R^2$ score, or array of scores if `multioutput=='raw_values'`.
+        """
+        u_pred = self(x_data)
+        u_data = np.reshape(u_data, u_pred.shape)
+        return r2_score(u_data.T, u_pred.T, multioutput=multioutput)
 
     def pickle(self, filepath):
         """
@@ -233,13 +281,15 @@ class LinearQuadraticRegulator(Controller):
         if u0 is None:
             u0 = self(x)
 
+        u0 = np.reshape(u0, (self.n_controls, -1))
+        zero_idx = utilities.find_saturated(u0, lb=self.u_lb, ub=self.u_ub)
+
         if np.ndim(x) < 2:
             dudx = - self.K
+            zero_idx = np.squeeze(zero_idx, axis=-1)
         else:
             dudx = np.tile(- self.K[:, None], (1, np.shape(x)[1], 1))
             dudx = np.moveaxis(dudx, 1, 2)
-
-        zero_idx = utilities.find_saturated(u0, lb=self.u_lb, ub=self.u_ub)
 
         dudx[zero_idx] = 0.
         return dudx

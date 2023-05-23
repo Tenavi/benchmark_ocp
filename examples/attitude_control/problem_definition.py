@@ -93,13 +93,13 @@ class AttitudeControl(OptimalControlProblem):
     _required_parameters = {'J': [[59.22, -1.14, -0.8],
                                   [-1.14, 40.56, 0.1],
                                   [-0.8, 0.1, 57.6]],
-                            'Wq': 1., 'Ww': 1., 'Wu': 1.,
+                            'Wq': 1/4, 'Ww': 1/2, 'Wu': 1.,
                             'final_attitude': [0., 0., 0.],
                             'initial_max_attitude': [np.pi, np.pi/2., np.pi],
-                            'initial_max_rate': 0.1,
+                            'initial_max_rate': 0.15,
                             'attitude_sample_norm': np.inf,
                             'rate_sample_norm': 2}
-    _optional_parameters = {'u_lb': -0.3, 'u_ub': 0.3,
+    _optional_parameters = {'u_lb': -0.2, 'u_ub': 0.2,
                             'attitude_sample_seed': None,
                             'rate_sample_seed': None}
 

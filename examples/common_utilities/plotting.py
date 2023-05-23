@@ -43,9 +43,7 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
     fig : `matplotlib.figure.Figure`
         Figure instance with a scatterplot of closed-loop vs. optimal costs.
     """
-    fig = plt.figure(**fig_kwargs)
-
-    ax = plt.axes()
+    fig, ax = plt.subplots(**fig_kwargs)
 
     for marker, (label, costs) in zip(_mpl_markers, controller_costs.items()):
         plt.scatter(optimal_costs, costs, s=16, marker=marker, label=label)
@@ -55,11 +53,11 @@ def plot_total_cost(optimal_costs, controller_costs=dict(),
 
     plt.plot(ax.get_xlim(), ax.get_ylim(), 'k--')
 
-    ax.set_xlabel('optimal value $V$')
-    ax.set_ylabel('closed-loop cost $J$')
-    ax.set_title(title)
+    ax.set_xlabel('optimal value $V$', fontsize=12)
+    ax.set_ylabel('closed-loop cost $J$', fontsize=12)
+    ax.set_title(title, fontsize=14)
 
-    make_legend(ax)
+    make_legend(ax, fontsize=12)
 
     return fig
 
@@ -146,17 +144,18 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
             ax.scatter(x_all[i], x_all[j], z_all[k], c=z_all[k], marker='o',
                        s=9, alpha=plot_kwargs['alpha'], label=controller_name)
 
-            ax.set_xlabel(x_labels[i])
-            ax.set_ylabel(x_labels[j])
-            ax.set_zlabel(z_labels[k])
-            ax.set_title(title)
+            ax.set_xlabel(x_labels[i], fontsize=12)
+            ax.set_ylabel(x_labels[j], fontsize=12)
+            ax.set_zlabel(z_labels[k], fontsize=12)
+            ax.set_title(title, fontsize=14)
 
     if len(figs) == 1:
         return figs[0]
     return figs
 
 
-def plot_closed_loop(sims, t_max=None, x_labels=(), u_labels=(), subtitle=None,
+def plot_closed_loop(sims, t_max=None, x_index=None, u_index=None,
+                     x_labels=(), u_labels=(), subtitle=None,
                      fig_kwargs={}, plot_kwargs={}):
     """
     Plot the states, controls, and running cost vs. time for a set of
@@ -180,6 +179,10 @@ def plot_closed_loop(sims, t_max=None, x_labels=(), u_labels=(), subtitle=None,
                 Running cost at times 't'.
     t_max : float, optional
         Maximum time horizon to plot.
+    x_index : array_like of ints, default=[0, 1, ..., n_states]
+        Indices of which states to plot.
+    u_index : array_like of ints, default=[0, 1, ..., n_controls]
+        Indices of which controls to plot.
     x_labels : tuple, default=('$x_1$', '$x_2$', ...)
         Tuple of strings specifying how to label plot axes for states.
     u_labels : tuple, default=('$u_1$', '$u_2$', ...)
@@ -206,57 +209,63 @@ def plot_closed_loop(sims, t_max=None, x_labels=(), u_labels=(), subtitle=None,
     n_states = np.shape(sims[0]['x'])[0]
     n_controls = np.shape(sims[0]['u'])[0]
 
-    n_plots = n_states + n_controls + ('L' in sims[0].keys())
+    if x_index is None:
+        x_index = np.arange(n_states)
+    x_index = np.reshape(x_index, -1)
+    if u_index is None:
+        u_index = np.arange(n_controls)
+    u_index = np.reshape(u_index, -1)
+
+    n_plots = x_index.shape[0] + u_index.shape[0] + ('L' in sims[0].keys())
 
     x_labels = _check_labels(n_states, 'x', *x_labels)
     u_labels = _check_labels(n_controls, 'u', *u_labels)
 
     plot_kwargs = {'color': 'black', 'alpha': 0.5, **plot_kwargs}
 
-    fig_kwargs = {'figsize': (6.4, n_plots * 1.5), **fig_kwargs}
-    fig = plt.figure(**fig_kwargs)
+    fig_kwargs = {'layout': 'constrained', 'figsize': (6.4, n_plots * 1.5),
+                  **fig_kwargs}
 
-    plt.subplots_adjust(hspace=0.5, bottom=0.05, top=0.95)
+    fig, axes = plt.subplots(nrows=n_plots, **fig_kwargs)
 
-    for i in range(n_states):
-        ax = plt.subplot(n_plots, 1, i + 1)
-        ax.set_xlim(0., t_max)
+    axes[-1].set_xlabel('$t$', fontsize=12)
 
-        for sim in sims:
-            ax.plot(sim['t'], sim['x'][i], **plot_kwargs)
+    if subtitle is not None:
+        axes[0].set_title(f'Closed-loop states ({subtitle})', fontsize=14)
+    else:
+        axes[0].set_title('Closed-loop states', fontsize=14)
 
-        ax.set_ylabel(x_labels[i])
-
-        if i == 0:
-            if subtitle is not None:
-                ax.set_title(f'Closed-loop states ({subtitle})')
-            else:
-                ax.set_title('Closed-loop states')
-
-    for i in range(n_controls):
-        ax = plt.subplot(n_plots, 1, n_states + i + 1)
-        ax.set_xlim(0., t_max)
+    for i, j in enumerate(x_index):
+        ax = axes[i]
 
         for sim in sims:
-            ax.plot(sim['t'], sim['u'][i], **plot_kwargs)
+            ax.plot(sim['t'], sim['x'][j], **plot_kwargs)
 
-        ax.set_ylabel(u_labels[i])
+        ax.set_xlim(0., t_max)
+        ax.set_ylabel(x_labels[j], fontsize=12)
+
+    for i, j in enumerate(u_index):
+        ax = axes[x_index.shape[0] + i]
+
+        for sim in sims:
+            ax.plot(sim['t'], sim['u'][j], **plot_kwargs)
+
+        ax.set_xlim(0., t_max)
+        ax.set_ylabel(u_labels[j], fontsize=12)
 
         if i == 0:
-            ax.set_title('Feedback controls')
+            ax.set_title('Feedback controls', fontsize=14)
 
     if 'L' in sims[0].keys():
-        ax = plt.subplot(n_plots, 1, n_plots)
-        ax.set_xlim(0., t_max)
+        ax = axes[-1]
 
         for sim in sims:
             ax.plot(sim['t'], sim['L'], **plot_kwargs)
 
+        ax.set_xlim(0., t_max)
         ax.set_yscale('log')
-        ax.set_ylabel(r'$\mathcal L$')
-        ax.set_title('Running cost')
-
-    ax.set_xlabel('$t$')
+        ax.set_ylabel(r'$\mathcal L$', fontsize=12)
+        ax.set_title('Running cost', fontsize=14)
 
     return fig
 
