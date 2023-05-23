@@ -93,13 +93,13 @@ class AttitudeControl(OptimalControlProblem):
     _required_parameters = {'J': [[59.22, -1.14, -0.8],
                                   [-1.14, 40.56, 0.1],
                                   [-0.8, 0.1, 57.6]],
-                            'Wq': 1., 'Ww': 1., 'Wu': 1.,
+                            'Wq': 1/4, 'Ww': 1/2, 'Wu': 1.,
                             'final_attitude': [0., 0., 0.],
                             'initial_max_attitude': [np.pi, np.pi/2., np.pi],
-                            'initial_max_rate': 0.1,
+                            'initial_max_rate': 0.15,
                             'attitude_sample_norm': np.inf,
                             'rate_sample_norm': 2}
-    _optional_parameters = {'u_lb': -0.3, 'u_ub': 0.3,
+    _optional_parameters = {'u_lb': -0.2, 'u_ub': 0.2,
                             'attitude_sample_seed': None,
                             'rate_sample_seed': None}
 
@@ -124,13 +124,15 @@ class AttitudeControl(OptimalControlProblem):
                 obj.final_attitude = np.abs(obj.final_attitude).reshape(3)
             except:
                 raise ValueError("final_attitude must be a (3,) array")
-            if np.any(obj.final_attitude > np.pi):
-                raise ValueError("Final pitch and roll must be between -pi and "
-                                 "pi")
-            if obj.final_attitude[1] > np.pi / 2.:
-                raise ValueError("Final yaw must be between -pi/2 and pi/2")
             self._q_final = euler_to_quaternion(*obj.final_attitude)
             self._q_final = self._q_final[:-1].reshape(3, 1)
+
+        if 'initial_max_attitude' in new_params:
+            try:
+                obj.initial_max_attitude = np.reshape(
+                    np.abs(obj.initial_max_attitude), (3,))
+            except:
+                raise ValueError("initial_max_attitude must be a (3,) array")
 
         if 'J' in new_params:
             try:
@@ -158,18 +160,6 @@ class AttitudeControl(OptimalControlProblem):
             else:
                 u_bound = getattr(obj, key, None)
             setattr(obj, key, u_bound)
-
-        if 'initial_max_attitude' in new_params:
-            try:
-                obj.initial_max_attitude = np.reshape(
-                    np.abs(obj.initial_max_attitude), (3,))
-            except:
-                raise ValueError("initial_max_attitude must be a (3,) array")
-            if np.any(obj.initial_max_attitude > np.pi):
-                raise ValueError("Initial pitch and roll must be between -pi "
-                                 "and pi")
-            if obj.initial_max_attitude[1] > np.pi / 2.:
-                raise ValueError("Initial yaw must be between -pi/2 and pi/2")
 
         if not hasattr(self, '_a0_sampler'):
             self._a0_sampler = UniformSampler(

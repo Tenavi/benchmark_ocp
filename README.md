@@ -40,6 +40,6 @@ Install `pdoc` and run
   * Time-dependent problems
   * update and publish `pylgr` package for finite horizon and time-dependent problems
   * Constraints and integration events
-  * RK4 batch integrator
-  * Zero-order hold control wrapper
-  * LQR integrator
+  * RK4 integration
+  * zero-order hold and control delay
+  * Servo LQR (integrator states)

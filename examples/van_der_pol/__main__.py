@@ -83,25 +83,25 @@ test_data = data[test_idx]
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
-print("\nTraining neural network controller...")
-nn_control = supervised_learning.NeuralNetworkController(
-    x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
-    random_state=random_seed + 2, **config.nn_kwargs)
-
 print("\nTraining polynomial controller...")
 try:
     poly_control = supervised_learning.PolynomialController(
         x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
-        random_state=random_seed + 3, **config.poly_kwargs)
+        random_state=random_seed + 2, **config.poly_kwargs)
+# In case the linear_model doesn't take a random_state or verbose
 except TypeError:
-    # In case the linear_model doesn't use a random_state
     poly_control = supervised_learning.PolynomialController(
         x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
         **config.poly_kwargs)
 
+print("\nTraining neural network controller...")
+nn_control = supervised_learning.NeuralNetworkController(
+    x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
+    random_state=random_seed + 3, **config.nn_kwargs)
+
 print("\n" + "+" * 80)
 
-for controller in (nn_control, poly_control):
+for controller in (lqr, poly_control, nn_control):
     print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
 
     x, f = analysis.find_equilibrium(ocp, controller, xf)
@@ -125,7 +125,7 @@ for controller in (nn_control, poly_control):
 
 print("\n" + "+" * 80)
 
-for controller in (nn_control, poly_control):
+for controller in (lqr, poly_control, nn_control):
     train_r2 = controller.r2_score(x_train, u_train)
     test_r2 = controller.r2_score(x_test, u_test)
     print(f"\n{type(controller).__name__:s} R2 score: {train_r2:.4f} (train) "
@@ -134,17 +134,17 @@ for controller in (nn_control, poly_control):
 print("\n" + "+" * 80 + "\n")
 
 # Evaluate performance of the learned controllers in closed-loop simulation
-nn_sims, _ = simulate.monte_carlo_to_converge(
-    ocp, nn_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
 poly_sims, _ = simulate.monte_carlo_to_converge(
     ocp, poly_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
+nn_sims, _ = simulate.monte_carlo_to_converge(
+    ocp, nn_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
 
-for sims in (nn_sims, poly_sims):
+for sims in (lqr_sims, poly_sims, nn_sims):
     for sim in sims:
         sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
         sim['L'] = ocp.running_cost(sim['x'], sim['u'])
 
-for controller, sims in zip((nn_control, poly_control), (nn_sims, poly_sims)):
+for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
     # If the closed-loop cost is lower than the optimal cost, we may have found
     # a better local minimum
     for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
@@ -169,25 +169,29 @@ figs = {'training': dict(), 'test': dict()}
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
     lqr_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
                  for sim in lqr_sims[data_idx]]
-    nn_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
-                for sim in nn_sims[data_idx]]
     poly_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
                   for sim in poly_sims[data_idx]]
+    nn_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
+                for sim in nn_sims[data_idx]]
 
     figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in data[data_idx]],
         controller_costs={'LQR': lqr_costs,
-                          f'{type(nn_control).__name__:s}': nn_costs,
-                          f'{type(poly_control).__name__:s}': poly_costs},
+                          f'{type(poly_control).__name__:s}': poly_costs,
+                          f'{type(nn_control).__name__:s}': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
 
-    for controller, sims in zip((nn_control, poly_control),
-                                (nn_sims, poly_sims)):
+    for controller, sims in zip((lqr, poly_control, nn_control),
+                                (lqr_sims, poly_sims, nn_sims)):
         ctrl_name = f'{type(controller).__name__:s}'
-        figs[data_name]['closed_loop' + ctrl_name] = plotting.plot_closed_loop(
+
+        fig_name = 'closed_loop_' + ctrl_name
+        figs[data_name][fig_name] = plotting.plot_closed_loop(
             sims[data_idx], t_max=config.t_int,
             subtitle=ctrl_name + ', ' + data_name)
-        figs[data_name]['closed_loop_3d' + ctrl_name] = plotting.plot_closed_loop_3d(
+
+        fig_name = 'closed_loop_3d_' + ctrl_name
+        figs[data_name][fig_name] = plotting.plot_closed_loop_3d(
             sims[data_idx], data[data_idx], controller_name=ctrl_name,
             title=f'Closed-loop trajectories and controls ({ctrl_name}, '
                   f'{data_name})')
@@ -204,8 +208,8 @@ for data_name, figs_subset in figs.items():
         plt.savefig(os.path.join(_fig_dir, fig_name + '.pdf'))
 
 lqr.pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
-nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
 poly_control.pickle(os.path.join(config.controller_dir, 'poly_control.pickle'))
+nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
 
 if args.show_plots:
     plt.show()

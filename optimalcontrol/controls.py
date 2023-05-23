@@ -9,6 +9,7 @@ import pickle
 
 import numpy as np
 from scipy.linalg import solve_continuous_are
+from sklearn.metrics import r2_score
 
 from . import utilities
 
@@ -52,6 +53,53 @@ class Controller:
             Jacobian of feedback control for each column in `x`.
         """
         return utilities.approx_derivative(self, x, f0=u0)
+
+    def r2_score(self, x_data, u_data, multioutput='uniform_average'):
+        r"""
+        Return the coefficient of determination of the control prediction in the
+        physical (unscaled) domain.
+
+        The coefficient of determination, $R^2$, is defined as
+        `r2 = 1 - residual / total`, where
+        `residual = ((u_data - u_pred)**2).sum()` with `u_pred = self(x_data)`,
+        and `total = ((u_data - u_data.mean()) ** 2).sum()`. The best possible
+        score is 1.0 and it can be negative (because the model can be
+        arbitrarily worse). A constant model that always predicts the expected
+        value of `u_data`, disregarding the input features, would get an $R^2$
+        score of 0.0.
+
+        Parameters
+        ----------
+        x_data : (n_states, n_data) array
+            A set of system states (obtained by solving a set of open-loop
+            optimal control problems).
+        u_data : (n_controls, n_data) array
+            The optimal feedback controls evaluated at the states `x_data`.
+        multioutput : {'raw_values', 'uniform_average', 'variance_weighted'}, \
+                (n_controls,) array, or None, default='uniform_average'
+
+            Defines aggregating of multiple output scores. An array value
+            defines weights used to average scores, and None reverts to the
+            default 'uniform_average'.
+
+                * 'raw_values' : Returns a full set of scores for each control.
+
+                * 'uniform_average' :
+                    Scores of all control dimensions are averaged with uniform
+                    weight.
+
+                * 'variance_weighted' :
+                    Scores of all control dimensions are averaged, weighted by
+                    the variances of each individual control.
+
+        Returns
+        -------
+        r2 : float or (n_controls,) array
+            The $R^2$ score, or array of scores if `multioutput=='raw_values'`.
+        """
+        u_pred = self(x_data)
+        u_data = np.reshape(u_data, u_pred.shape)
+        return r2_score(u_data.T, u_pred.T, multioutput=multioutput)
 
     def pickle(self, filepath):
         """
@@ -119,6 +167,7 @@ class LinearQuadraticRegulator(Controller):
 
             if not hasattr(self, 'P'):
                 self.P = self.solve_care(A, B, Q, R)
+                #self.P = solve_continuous_are(A, B, Q, R)
 
             self._RB = np.linalg.solve(R, np.transpose(B))
             self.K = np.matmul(self._RB, self.P)
@@ -140,9 +189,14 @@ class LinearQuadraticRegulator(Controller):
     def solve_care(A, B, Q, R, zero_tol=1e-12):
         r"""
         Wrapper of `scipy.linalg.solve_continuous_are` to solve continuous-time
-        algebraic Riccati equations (CARE) where one or more rows of `A` and `Q`
-        are all zeros, which can happen for certain linearized systems. For
-        details see `scipy.linalg.solve_continuous_are`.
+        algebraic Riccati equations (CARE), where one or more columns of `A` and
+        `Q` can be all zeros, which can happen for certain linearized systems.
+        In such situations, these zero-column states don't impact dynamics of
+        other states or the cost function. The CARE solver will often fail for
+        the full set of states, but can find a solution to the sub-problem which
+        ignores the zero-column states. Using the resulting control law in the
+        full system stabilizes the controlled states, with the ignored states'
+        stability depending on their dynamics.
 
         Parameters
         ----------
@@ -157,19 +211,20 @@ class LinearQuadraticRegulator(Controller):
             Hessian of running cost with respect to controls,
             $d^2L/du^2 (x_f, u_f)$. Must be positive definite.
         zero_tol : float, default=1e-12
-            Absolute tolerance when comparing elements of `A`, `B` and `Q` to
-            zero.
+            Absolute tolerance when comparing elements of `A` and `Q` to zero.
 
         Returns
         -------
         P : (n_states, n_states) array
-            Solution to the continuous-time algebraic Riccati equation.
+            Solution to the continuous-time algebraic Riccati equation. If any
+            columns of `A` and `Q` are all zeros, these columns of `P` will also
+            be zero.
 
         Raises
         ------
         LinAlgError
             For cases where the stable subspace of the pencil could not be
-            isolated. See Notes section and the references for details.
+            isolated. See `scipy.linalg.solve_continuous_are` for details.
         """
         n = np.shape(A)[0]
 
@@ -178,10 +233,9 @@ class LinearQuadraticRegulator(Controller):
         B = np.reshape(B, (n, -1))
         R = np.reshape(R, (B.shape[1], B.shape[1]))
 
-        A_zero_idx = np.isclose(A, 0., atol=zero_tol).all(axis=-1)
-        Q_zero_idx = np.isclose(Q, 0., atol=zero_tol).all(axis=-1)
-        B_zero_idx = np.isclose(B, 0., atol=zero_tol).all(axis=-1)
-        non_zero_idx = ~ np.all([A_zero_idx, Q_zero_idx, B_zero_idx], axis=0)
+        A_zero_idx = np.isclose(A, 0., atol=zero_tol).all(axis=0)
+        Q_zero_idx = np.isclose(Q, 0., atol=zero_tol).all(axis=0)
+        non_zero_idx = ~ np.all([A_zero_idx, Q_zero_idx], axis=0)
 
         A = A[non_zero_idx][:, non_zero_idx]
         Q = Q[non_zero_idx][:, non_zero_idx]
@@ -227,13 +281,15 @@ class LinearQuadraticRegulator(Controller):
         if u0 is None:
             u0 = self(x)
 
+        u0 = np.reshape(u0, (self.n_controls, -1))
+        zero_idx = utilities.find_saturated(u0, lb=self.u_lb, ub=self.u_ub)
+
         if np.ndim(x) < 2:
             dudx = - self.K
+            zero_idx = np.squeeze(zero_idx, axis=-1)
         else:
             dudx = np.tile(- self.K[:, None], (1, np.shape(x)[1], 1))
             dudx = np.moveaxis(dudx, 1, 2)
-
-        zero_idx = utilities.find_saturated(u0, lb=self.u_lb, ub=self.u_ub)
 
         dudx[zero_idx] = 0.
         return dudx

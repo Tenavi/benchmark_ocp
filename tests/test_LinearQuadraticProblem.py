@@ -324,24 +324,33 @@ def test_optimal_control(n_states, n_controls, n_samples):
     np.testing.assert_allclose(u, u_expected)
 
 
-@pytest.mark.parametrize('zero_rows', (0, 1, 2, [0, 1], [0, 2], [1, 2]))
-def test_non_observable_lqr(zero_rows):
-    """Test that LQR can be created when one or more rows of A and Q are zero"""
+@pytest.mark.parametrize('zero_index', (0, 1, 2, [0, 1], [0, 2], [1, 2]))
+def test_zero_column_lqr(zero_index):
+    """
+    Test that LQR can be created when one or more columns of A and Q are zero.
+    This creates a situation where some states don't impact dynamics of other
+    states or the cost function. The Riccati solver will often fail for the full
+    set of states, but can find a solution to the sub-problem which ignores
+    these states. Using the resulting control law in the full system stabilizes
+    the controlled states, with the ignored states' stability depending on their
+    dynamics. Since such problems do appear in practice (e.g. linearized rigid
+    body attitude control with quaternion attitude representation), it is
+    desirable to be able to generate an LQR controller in these situations.
+    """
     n_states = 3
     n_controls = 2
 
     # Start with usual random matrices
     A, B, Q, R, _, _ = make_LQ_params(n_states, n_controls)
 
-    # Set some rows (and columns of Q) to zero
-    A[zero_rows] = 0.
-    B[zero_rows] = 0.
-    Q[zero_rows] = 0.
-    Q[:, zero_rows] = 0.
+    # Set some columns of A and Q to zero
+    A[:, zero_index] = 0.
+    Q[zero_index] = 0.
+    Q[:, zero_index] = 0.
 
     # Should still be able to make an lqr controller
     lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
 
     # The closed-loop eigenvalues should be non-positive
-    A = A - B @ lqr.K
-    assert np.linalg.eigvals(A).real.max() <= 0.
+    A_cl = A + np.matmul(B, - lqr.K)
+    assert np.linalg.eigvals(A_cl).real.max() <= 0.
