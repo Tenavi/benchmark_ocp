@@ -70,8 +70,8 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 obj.A = np.atleast_1d(obj.A)
                 obj.A = obj.A.reshape(obj.A.shape[0], obj.A.shape[0])
             except:
-                raise ValueError('State Jacobian matrix A must have shape '
-                                 '(n_states, n_states)')
+                raise ValueError("State Jacobian matrix A must have shape "
+                                 "(n_states, n_states)")
 
         if 'B' in new_params:
             try:
@@ -81,8 +81,8 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 else:
                     obj.B = np.reshape(obj.B, (self.n_states, -1))
             except:
-                raise ValueError('Control Jacobian matrix B must have shape '
-                                 '(n_states, n_controls)')
+                raise ValueError("Control Jacobian matrix B must have shape "
+                                 "(n_states, n_controls)")
 
         if 'Q' in new_params:
             try:
@@ -92,9 +92,9 @@ class LinearQuadraticProblem(OptimalControlProblem):
                     raise
                 obj.singular_Q = np.any(np.isclose(eigs, 0.))
             except:
-                raise ValueError('State cost matrix Q must have shape '
-                                 '(n_states, n_states) and be positive '
-                                 'semi-definite')
+                raise ValueError("State cost matrix Q must have shape "
+                                 "(n_states, n_states) and be positive "
+                                 "semi-definite")
 
         if 'R' in new_params:
             try:
@@ -103,9 +103,9 @@ class LinearQuadraticProblem(OptimalControlProblem):
                 if not np.all(eigs > 0.) or not np.allclose(obj.R, obj.R.T):
                     raise
             except:
-                raise ValueError('Control cost matrix R must have shape '
-                                 '(n_controls, n_controls) and be positive '
-                                 'definite')
+                raise ValueError("Control cost matrix R must have shape "
+                                 "(n_controls, n_controls) and be positive "
+                                 "definite")
 
         if 'xf' in new_params:
             obj.xf = resize_vector(obj.xf, self.n_states)

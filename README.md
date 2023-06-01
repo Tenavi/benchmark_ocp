@@ -3,7 +3,7 @@ This software repository contains a collection of benchmark optimal feedback con
   * [Neural Network Optimal Feedback Control with Guaranteed Local Stability](https://doi.org/10.1109/OJCSYS.2022.3205863)
   * [QRnet: Optimal Regulator Design With LQR-Augmented Neural Networks](https://doi.org/10.1109/LCSYS.2020.3034415)
 
-If you use this software, please cite one or more of the above works. Please reach out with any questions, or if you encounter bugs or other problems.
+If you use this software, please cite the software package and/or one or more of the above works. Please reach out with any questions, or if you encounter bugs or other problems.
 
 ## Installation
 
@@ -33,13 +33,3 @@ Run `pytest tests -s -v` from the root directory.
 Install `pdoc` and run
 
     pdoc optimalcontrol --d numpy --math -t documentation/.template/ -o documentation/
-
-## To-do list
-
-  * examples
-  * Time-dependent problems
-  * update and publish `pylgr` package for finite horizon and time-dependent problems
-  * Constraints and integration events
-  * RK4 integration
-  * zero-order hold and control delay
-  * Servo LQR (integrator states)

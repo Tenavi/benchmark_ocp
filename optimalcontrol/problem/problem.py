@@ -8,13 +8,13 @@ from .parameters import ProblemParameters
 
 class OptimalControlProblem:
     """
-    Template super class defining an optimal control problem (OCP) including
-    nonlinear dynamics, cost functions, constraints, costate dynamics, and
-    optimal control as a function of state and costate.
+    Template superclass defining an optimal control problem (OCP) including
+    nonlinear dynamics, cost functions, constraints, and costate dynamics, as
+    well as optimal control as a function of state and costate.
     """
-    # Dicts of required and optional cost and system parameters.
-    # Parameters without default values should have None entries.
-    # To be overwritten by subclass implementations.
+    # Dicts of default cost function and dynamics parameters, separated into
+    # required and optional parameters. To be overwritten by subclass
+    # implementations.
     _required_parameters = {}
     _optional_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
@@ -29,14 +29,13 @@ class OptimalControlProblem:
             Parameters specifying the cost function and system dynamics. If
             empty, defaults defined by the subclass will be used.
         """
-        self._params = ProblemParameters(
-            required=self._required_parameters.keys(),
-            optional=self._optional_parameters.keys(),
-            update_fun=self._update_params)
         problem_parameters = {**self._required_parameters,
                               **self._optional_parameters,
                               **problem_parameters}
-        self.parameters.update(**problem_parameters)
+        self._params = ProblemParameters(
+            required=self._required_parameters.keys(),
+            update_fun=self._update_params)
+        self._params.update(**problem_parameters)
 
     @property
     def n_states(self):
@@ -62,8 +61,8 @@ class OptimalControlProblem:
 
     def _update_params(self, obj, **new_params):
         """
-        Things the subclass does when problem parameters are changed. Also
-        called during initialization.
+        Things the subclass does when problem parameters are changed and during
+        initialization.
 
         Parameters
         ----------

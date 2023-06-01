@@ -27,7 +27,7 @@ def test_init(ocp_name):
         assert getattr(ocp.parameters, param) is not None
 
     # Check that problem parameters can be updated
-    ocp.parameters.optional = {'dummy_variable': False}
+    ocp.parameters.update(dummy_variable=False)
     assert not ocp.parameters.dummy_variable
     ocp.parameters.update(dummy_variable=True)
     assert ocp.parameters.dummy_variable
