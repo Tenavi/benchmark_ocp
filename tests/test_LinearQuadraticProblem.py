@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.problem import ProblemParameters, LinearQuadraticProblem
+from optimalcontrol.problem import LinearQuadraticProblem, ProblemParameters
 from optimalcontrol.controls import LinearQuadraticRegulator
 
 from ._utilities import make_LQ_params, compare_finite_difference
