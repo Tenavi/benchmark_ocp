@@ -28,8 +28,8 @@ if random_seed is None:
 rng = np.random.default_rng(random_seed + 1)
 
 ocp = VanDerPol(x0_sample_seed=random_seed, **config.params)
-xf = ocp.xf.flatten()
-uf = ocp.uf.flatten()
+xf = ocp.parameters.xf.flatten()
+uf = ocp.parameters.uf
 
 # Create an LQR controller as a baseline
 # System matrices (vector field Jacobians)
@@ -57,12 +57,13 @@ for i, sim in enumerate(lqr_sims):
     # interpolate initial and final conditions
     if status[i] != 0:
         x0 = x0_pool[:, i:i+1]
-        x_interp = interp1d([0., config.t_int], np.hstack((x0, ocp.xf)))
+        x_interp = interp1d([0., config.t_int],
+                            np.hstack((x0, ocp.parameters.xf)))
         sim['t'] = np.linspace(0., config.t_int, 100)
         sim['x'] = x_interp(sim['t'])
         sim['u'] = lqr(sim['x'])
     # Use LQR to generate a guess for the costates
-    sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.xf)
+    sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.parameters.xf)
 
 # Solve open loop optimal control problems
 data, status, messages = data_utils.generate_data(ocp, lqr_sims,
@@ -155,7 +156,7 @@ for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
                 # Try to resolve the OCP if the initial guess looks better
                 new_sol = solve_infinite_horizon(
                     ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
-                    p=2. * lqr.P @ (sim['x'] - ocp.xf),
+                    p=2. * lqr.P @ (sim['x'] - ocp.parameters.xf),
                     **config.open_loop_kwargs)
                 if new_sol.v[0] < sol['v'][0]:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "

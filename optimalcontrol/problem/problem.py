@@ -29,13 +29,17 @@ class OptimalControlProblem:
             Parameters specifying the cost function and system dynamics. If
             empty, defaults defined by the subclass will be used.
         """
+        # Combine all default and non-default parameters
         problem_parameters = {**self._required_parameters,
                               **self._optional_parameters,
                               **problem_parameters}
-        self._params = ProblemParameters(
+        # Initialize the parameter container
+        # type(self) is used here in case subclass implementations forget to
+        # make _parameter_update_fun a staticmethod.
+        self.parameters = ProblemParameters(
             required=self._required_parameters.keys(),
-            update_fun=self._update_params)
-        self._params.update(**problem_parameters)
+            update_fun=type(self)._parameter_update_fun)
+        self.parameters.update(**problem_parameters)
 
     @property
     def n_states(self):
@@ -53,24 +57,22 @@ class OptimalControlProblem:
         `np.inf`)."""
         raise NotImplementedError
 
-    @property
-    def parameters(self):
-        """Returns a `ProblemParameters` instance specifying parameters for the
-        cost function(s) and system dynamics."""
-        return self._params
-
-    def _update_params(self, obj, **new_params):
+    @staticmethod
+    def _parameter_update_fun(obj, **new_params):
         """
-        Things the subclass does when problem parameters are changed and during
-        initialization.
+        Performs operations on `self.parameters` during initialization and each
+        time `self.parameters.update` is called. This is used for checking
+        parameter shapes and performing other needed calculations.
 
         Parameters
         ----------
         obj : `ProblemParameters`
-            Pass an instance of `ProblemParameters` to modify its instance
-            attributes, if needed.
+            In standard use, `obj` refers to `self.parameters`. Note that
+            `_parameter_update_fun` allows `obj` itself to be modified.
         **new_params : dict
-            Parameters which are changing.
+            Parameters which are being set or changing. In standard use, we can
+            expect that each entry of `new_params` is also an attribute of
+            `obj`.
         """
         pass
 
@@ -575,3 +577,42 @@ class OptimalControlProblem:
             raise ValueError(f'x.shape[1] = f{n_x} != u.shape[1] = {n_u}')
 
         return x, u, squeeze
+
+    def _center_inputs(self, x, u, xf, uf):
+        """
+        Wrapper of `_reshape_inputs` that reshapes 1d array state and controls
+        into 2d arrays, saturates the controls, and subtracts nominal states and
+        controls.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        xf : (n_states, 1) array
+            Nominal state to subtract from `x`.
+        uf : (n_controls, 1) array
+            Nominal control to subtract from `u`.
+
+        Returns
+        -------
+        x - xf : (n_states, n_points) array
+            Centered state(s) arranged by (dimension, time). If the input was
+            flat, `n_points = 1`.
+        u - uf : (n_controls, n_points) array
+            Centered saturated control(s) arranged by (dimension, time). If the
+            input was flat, `n_points = 1`.
+        squeeze: bool
+            True if either input was flat.
+
+        Raises
+        ------
+        ValueError
+            If cannot reshape states and controls to the correct sizes, or if
+            `x.shape[1] != u.shape[1]`.
+        """
+        x, u, squeeze = self._reshape_inputs(x, u)
+        x_err = x - np.reshape(xf, (self.n_states, 1))
+        u_err = self._saturate(u) - np.reshape(uf, (self.n_controls, 1))
+        return x_err, u_err, squeeze

@@ -104,7 +104,7 @@ class AttitudeControl(OptimalControlProblem):
                             'rate_sample_seed': None}
 
     def _saturate(self, u):
-        return saturate(u, self._params.u_lb, self._params.u_ub)
+        return saturate(u, self.parameters.u_lb, self.parameters.u_ub)
 
     @property
     def n_states(self):
@@ -118,51 +118,49 @@ class AttitudeControl(OptimalControlProblem):
     def final_time(self):
         return np.inf
 
-    def _update_params(self, obj, **new_params):
+    @staticmethod
+    def _parameter_update_fun(obj, **new_params):
         if 'final_attitude' in new_params:
             try:
                 obj.final_attitude = np.abs(obj.final_attitude).reshape(3)
-            except:
+            except ValueError:
                 raise ValueError("final_attitude must be a (3,) array")
-            self._q_final = euler_to_quaternion(*obj.final_attitude)
-            self._q_final = self._q_final[:-1].reshape(3, 1)
+            obj._q_final = euler_to_quaternion(*obj.final_attitude)
+            obj._q_final = obj._q_final[:-1].reshape(3, 1)
 
         if 'initial_max_attitude' in new_params:
             try:
                 obj.initial_max_attitude = np.reshape(
                     np.abs(obj.initial_max_attitude), (3,))
-            except:
+            except ValueError:
                 raise ValueError("initial_max_attitude must be a (3,) array")
 
         if 'J' in new_params:
             try:
                 obj.J = np.reshape(obj.J, (3, 3))
-            except:
+            except ValueError:
                 raise ValueError("Inertia matrix J must be (3, 3)")
-            self._J = obj.J
-            self._JT = self._J.T
-            self._Jinv = np.linalg.inv(self._J)
-            self._JinvT = self._Jinv.T
-            self._B = np.vstack((np.zeros((4, 3)), -self._Jinv))
+            obj._Jinv = np.linalg.inv(obj.J)
+            obj._B = np.vstack((np.zeros((4, 3)), -obj._Jinv))
 
         for key in ('Wq', 'Ww', 'Wu'):
             if key in new_params:
                 try:
                     val = float(getattr(obj, key))
-                    assert val > 0.
+                    if val <= 0.:
+                        raise TypeError
                     setattr(obj, key, val)
-                except:
+                except TypeError:
                     raise ValueError(f"{key:s} must be a positive float")
 
         for key in ('u_lb', 'u_ub'):
-            if key in new_params:
-                u_bound = resize_vector(new_params[key], self.n_controls)
-            else:
-                u_bound = getattr(obj, key, None)
-            setattr(obj, key, u_bound)
+            u_bound = new_params.get(key)
+            if u_bound is not None:
+                u_bound = resize_vector(u_bound, 3)
+                setattr(obj, key, u_bound)
 
-        if not hasattr(self, '_a0_sampler'):
-            self._a0_sampler = UniformSampler(
+        if not hasattr(obj, '_a0_sampler'):
+            obj._a0_sampler = UniformSampler(
                 lb=-obj.initial_max_attitude, ub=obj.initial_max_attitude,
                 xf=obj.final_attitude,
                 norm=getattr(obj, 'attitude_sample_norm'),
@@ -170,20 +168,20 @@ class AttitudeControl(OptimalControlProblem):
         elif ('attitude_sample_seed' in new_params
               or 'initial_max_attitude' in new_params
               or 'final_attitude' in new_params):
-            self._a0_sampler.update(
+            obj._a0_sampler.update(
                 lb=-obj.initial_max_attitude, ub=obj.initial_max_attitude,
                 xf=obj.final_attitude,
                 seed=new_params.get('attitude_sample_seed'))
 
         w0_ub = resize_vector(np.abs(obj.initial_max_rate), 3)
-        if not hasattr(self, '_w0_sampler'):
-            self._w0_sampler = UniformSampler(
+        if not hasattr(obj, '_w0_sampler'):
+            obj._w0_sampler = UniformSampler(
                 lb=-w0_ub, ub=w0_ub, xf=np.zeros(3),
                 norm=getattr(obj, 'rate_sample_norm'),
                 seed=getattr(obj, 'rate_sample_seed', None))
         elif ('initial_max_rate' in new_params
               or 'rate_sample_seed' in new_params):
-            self._w0_sampler.update(
+            obj._w0_sampler.update(
                 lb=-w0_ub, ub=w0_ub, seed=new_params.get('rate_sample_seed'))
 
     @staticmethod
@@ -242,14 +240,15 @@ class AttitudeControl(OptimalControlProblem):
             sample. If `n_samples==1` then `x0` will be a 1d array.
         """
         # Sample Euler angles in radians and convert to quaternions
-        angles = self._a0_sampler(n_samples=n_samples,
-                                  distance=attitude_distance)
+        angles = self.parameters._a0_sampler(n_samples=n_samples,
+                                             distance=attitude_distance)
         q = euler_to_quaternion(*angles)
         # Set scalar quaternion positive
         q[-1] = np.abs(q[-1])
 
         # Sample angular rates in radians/s
-        w = self._w0_sampler(n_samples=n_samples, distance=rate_distance)
+        w = self.parameters._w0_sampler(n_samples=n_samples,
+                                        distance=rate_distance)
 
         return np.concatenate((q, w), axis=0)
 
@@ -257,12 +256,13 @@ class AttitudeControl(OptimalControlProblem):
         q, _, w = self._break_state(x)
 
         if np.ndim(x) < 2:
-            q_err = q - self._q_final.flatten()
+            q_err = q - self.parameters._q_final.flatten()
         else:
-            q_err = q - self._q_final
-        Lq = (self._params.Wq / 2.) * np.sum(q_err**2, axis=0)
-        Lw = (self._params.Ww / 2.) * np.sum(w**2, axis=0)
-        Lu = (self._params.Wu / 2.) * np.sum(self._saturate(u)**2, axis=0)
+            q_err = q - self.parameters._q_final
+
+        Lq = (self.parameters.Wq / 2.) * np.sum(q_err**2, axis=0)
+        Lw = (self.parameters.Ww / 2.) * np.sum(w**2, axis=0)
+        Lu = (self.parameters.Wu / 2.) * np.sum(self._saturate(u)**2, axis=0)
 
         return Lq + Lw + Lu
 
@@ -272,20 +272,21 @@ class AttitudeControl(OptimalControlProblem):
 
         if return_dLdx:
             q, q0, w = self._break_state(x)
-            q_err = q - self._q_final
-            dLdx = np.concatenate((self._params.Wq * q_err,
+            q_err = q - self.parameters._q_final
+            dLdx = np.concatenate((self.parameters.Wq * q_err,
                                    np.zeros_like(q0),
-                                   self._params.Ww * w))
+                                   self.parameters.Ww * w))
             if squeeze:
                 dLdx = dLdx[..., 0]
             if not return_dLdu:
                 return dLdx
 
         if return_dLdu:
-            dLdu = self._params.Wu * self._saturate(u)
+            dLdu = self.parameters.Wu * self._saturate(u)
 
             # Where the control is saturated, the gradient is zero
-            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            sat_idx = find_saturated(u, self.parameters.u_lb,
+                                     self.parameters.u_ub)
             dLdu[sat_idx] = 0.
             if squeeze:
                 dLdu = dLdu[..., 0]
@@ -299,9 +300,9 @@ class AttitudeControl(OptimalControlProblem):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         if return_dLdx:
-            Q = np.diag(np.concatenate((np.full(3, self._params.Wq / 2.),
+            Q = np.diag(np.concatenate((np.full(3, self.parameters.Wq / 2.),
                                         [0.],
-                                        np.full(3, self._params.Ww / 2.))))
+                                        np.full(3, self.parameters.Ww / 2.))))
             if not squeeze:
                 Q = Q[..., None]
             if x.shape[1] > 1:
@@ -311,14 +312,15 @@ class AttitudeControl(OptimalControlProblem):
                 return Q
 
         if return_dLdu:
-            R = np.diag(np.full(3, self._params.Wu / 2.))[..., None]
+            R = np.diag(np.full(3, self.parameters.Wu / 2.))[..., None]
             if u.shape[1] > 1:
                 R = np.tile(R, (1, 1, np.shape(u)[1]))
 
             # Where the control is saturated, the gradient is zero (constant).
             # This makes the Hessian zero in all terms that include a saturated
             # control
-            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            sat_idx = find_saturated(u, self.parameters.u_lb,
+                                     self.parameters.u_ub)
             sat_idx = sat_idx[None, ...] + sat_idx[:, None, ...]
             R[sat_idx] = 0.
 
@@ -333,13 +335,13 @@ class AttitudeControl(OptimalControlProblem):
         q, q0, w = self._break_state(x)
         u = self._saturate(u)
 
-        Jw = np.matmul(self._J, w)
+        Jw = np.matmul(self.parameters.J, w)
 
         dq0dt = - 0.5 * np.sum(w * q, axis=0, keepdims=True)
         dqdt = 0.5 * (-np.cross(w, q, axis=0) + q0 * w)
 
         dwdt = np.cross(w, Jw, axis=0) + u
-        dwdt = np.matmul(-self._Jinv, dwdt)
+        dwdt = np.matmul(-self.parameters._Jinv, dwdt)
 
         return np.concatenate((dqdt, dq0dt, dwdt), axis=0)
 
@@ -349,7 +351,7 @@ class AttitudeControl(OptimalControlProblem):
         if return_dfdx:
             q, q0, w = self._break_state(x)
 
-            Jw = np.matmul(self._J, w)
+            Jw = np.matmul(self.parameters.J, w)
 
             wx = cross_product_matrix(w)
             qx = cross_product_matrix(q)
@@ -364,8 +366,9 @@ class AttitudeControl(OptimalControlProblem):
             dfdx[:3, 3] = 0.5 * w
             dfdx[:3, :3] = -0.5 * wx
             dfdx[:3, 4:] = 0.5 * (qx + q0_diag)
-            dfdx[4:, 4:] = np.matmul(Jwx.T - np.matmul(self._JT, wx.T),
-                                     self._JinvT).T
+            dfdx[4:, 4:] = np.matmul(
+                Jwx.T - np.matmul(self.parameters.J.T, wx.T),
+                self.parameters._Jinv.T).T
 
             if squeeze:
                 dfdx = dfdx[..., 0]
@@ -373,10 +376,11 @@ class AttitudeControl(OptimalControlProblem):
                 return dfdx
 
         if return_dfdu:
-            dfdu = np.tile(self._B[..., None], (1, 1, u.shape[1]))
+            dfdu = np.tile(self.parameters._B[..., None], (1, 1, u.shape[1]))
 
             # Where the control is saturated, the Jacobian is zero
-            sat_idx = find_saturated(u, self._params.u_lb, self._params.u_ub)
+            sat_idx = find_saturated(u, self.parameters.u_lb,
+                                     self.parameters.u_ub)
             dfdu[:, sat_idx] = 0.
 
             if squeeze:
@@ -387,7 +391,7 @@ class AttitudeControl(OptimalControlProblem):
         return dfdx, dfdu
 
     def optimal_control(self, x, p):
-        u = np.matmul(self._JinvT, p[4:]) / self._params.Wu
+        u = np.matmul(self.parameters._Jinv.T, p[4:]) / self.parameters.Wu
         return self._saturate(u)
 
     def optimal_control_jac(self, x, p, u0=None):
@@ -402,32 +406,32 @@ class AttitudeControl(OptimalControlProblem):
         p_q, p_q0, p_w = self._break_state(p)
 
         if np.ndim(x) < 2:
-            q_err = q - self._q_final.flatten()
+            q_err = q - self.parameters._q_final.flatten()
         else:
-            q_err = q - self._q_final
+            q_err = q - self.parameters._q_final
 
         u = self.optimal_control(x, p)
         L = self.running_cost(x, u)
 
-        Jw = np.matmul(self._J, w)
-        Jpw = np.matmul(self._JinvT, p_w)
+        Jw = np.matmul(self.parameters.J, w)
+        Jpw = np.matmul(self.parameters._Jinv.T, p_w)
 
         # State dynamics
         dq0dt = - 0.5 * np.sum(w * q, axis=0, keepdims=True)
         dqdt = 0.5 * (-np.cross(w, q, axis=0) + q0 * w)
 
         dwdt = np.cross(w, Jw, axis=0) + u
-        dwdt = np.matmul(-self._Jinv, dwdt)
+        dwdt = np.matmul(-self.parameters._Jinv, dwdt)
 
         # Costate dynamics
         dpq0dt = - 0.5 * np.sum(w * p_q, axis=0, keepdims=True)
 
-        dpqdt = ((- self._params.Wq) * q_err
+        dpqdt = ((- self.parameters.Wq) * q_err
                  + 0.5 * (- np.cross(w, p_q, axis=0) + p_q0 * w))
 
-        dpwdt = (- self._params.Ww * w
+        dpwdt = (- self.parameters.Ww * w
                  + 0.5 * (np.cross(q, p_q, axis=0) - q0 * p_q + p_q0 * q)
-                 + np.matmul(-self._JT, np.cross(w, Jpw, axis=0))
+                 + np.matmul(-self.parameters.J.T, np.cross(w, Jpw, axis=0))
                  + np.cross(Jw, Jpw, axis=0))
 
         L = -L.reshape(dq0dt.shape)
@@ -436,7 +440,7 @@ class AttitudeControl(OptimalControlProblem):
                               axis=0)
 
     def _constraint_fun(self, X):
-        '''
+        """
         A (vector-valued) function which is zero when the quaternion norm state
         constraint is satisfied.
 
@@ -450,11 +454,11 @@ class AttitudeControl(OptimalControlProblem):
         C : (n_constraints,) or (n_constraints, n_data) array or None
             Algebraic equation such that C(X)=0 means that X satisfies the state
             constraints.
-        '''
+        """
         return 1. - np.sum(X[:4]**2, axis=0, keepdims=True)
 
     def _constraint_jacobian(self, X):
-        '''
+        """
         Constraint function Jacobian dC/dX of self.constraint_fun.
 
         Parameters
@@ -466,6 +470,6 @@ class AttitudeControl(OptimalControlProblem):
         -------
         JC : (n_constraints, n_states) array or None
             dC/dX evaluated at the point X, where C(X)=self.constraint_fun(X).
-        '''
+        """
         JC = -2. * X[:4]
         return np.hstack((JC.reshape(1,-1), np.zeros((1,3))))
