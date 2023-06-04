@@ -38,7 +38,7 @@ jobs:
 
       # For now, just verify that the documentation successfully compiles
       - name: Document
-        run: pdoc optimalcontrol --d numpy --math -t documentation/.template/ -o documentation/
+        run: pdoc ./optimalcontrol --d numpy --math -t documentation/.template/ -o documentation/
 
       - uses: actions/upload-pages-artifact@v1
         with:
