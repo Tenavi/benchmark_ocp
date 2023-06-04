@@ -2,7 +2,7 @@ import pytest
 
 import numpy as np
 
-from optimalcontrol.problem import ProblemParameters, LinearQuadraticProblem
+from optimalcontrol.problem import LinearQuadraticProblem, ProblemParameters
 from optimalcontrol.controls import LinearQuadraticRegulator
 
 from ._utilities import make_LQ_params, compare_finite_difference
@@ -44,21 +44,21 @@ def test_init(n_states, n_controls):
     assert ocp.n_controls == n_controls
     assert np.isinf(ocp.final_time)
     assert isinstance(ocp.parameters, ProblemParameters)
-    assert hasattr(ocp, '_x0_sampler')
-    np.testing.assert_allclose(np.linalg.cholesky(Q).T, ocp._x0_sampler.norm)
+    np.testing.assert_allclose(np.linalg.cholesky(Q).T,
+                               ocp.parameters._x0_sampler.norm)
 
     # Check that problem parameters can be updated
-    assert not np.allclose(xf, ocp.xf)
+    assert not np.allclose(xf, ocp.parameters.xf)
     ocp.parameters.update(xf=xf)
-    np.testing.assert_allclose(xf, ocp.xf)
+    np.testing.assert_allclose(xf, ocp.parameters.xf)
 
     # Check that updating with nothing doesn't make any errors
     ocp.parameters.update()
 
     # Check that a new instance of the problem doesn't carry old parameters
     ocp2 = LinearQuadraticProblem(A=A + 1., B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
-    np.testing.assert_allclose(ocp.A, A)
-    np.testing.assert_allclose(ocp2.A, A + 1.)
+    np.testing.assert_allclose(ocp.parameters.A, A)
+    np.testing.assert_allclose(ocp2.parameters.A, A + 1.)
 
 
 @pytest.mark.parametrize('missing', ['A', 'B', 'Q', 'R', 'x0_lb', 'x0_ub'])
@@ -151,10 +151,10 @@ def test_sample(n_states):
             check_distance(n_samples, distance)
 
     # Check again after updating Q matrix
-    _, _, Q, _, _, _ = make_LQ_params(n_states, n_controls)
-    assert not np.allclose(Q, ocp.Q)
+    Q = Q + np.eye(n_states)
+    assert not np.allclose(Q, ocp.parameters.Q)
     ocp.parameters.update(Q=Q)
-    np.testing.assert_allclose(Q, ocp.Q)
+    np.testing.assert_allclose(Q, ocp.parameters.Q)
 
     for distance in distances:
         for n_samples in range(1, 10):

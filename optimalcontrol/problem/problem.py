@@ -3,18 +3,17 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
 from ..utilities import approx_derivative
-from .parameters import ProblemParameters
 
 
 class OptimalControlProblem:
     """
-    Template super class defining an optimal control problem (OCP) including
-    nonlinear dynamics, cost functions, constraints, costate dynamics, and
-    optimal control as a function of state and costate.
+    Template superclass defining an optimal control problem (OCP) including
+    nonlinear dynamics, cost functions, constraints, and costate dynamics, as
+    well as optimal control as a function of state and costate.
     """
-    # Dicts of required and optional cost and system parameters.
-    # Parameters without default values should have None entries.
-    # To be overwritten by subclass implementations.
+    # Dicts of default cost function and dynamics parameters, separated into
+    # required and optional parameters. To be overwritten by subclass
+    # implementations.
     _required_parameters = {}
     _optional_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
@@ -29,13 +28,16 @@ class OptimalControlProblem:
             Parameters specifying the cost function and system dynamics. If
             empty, defaults defined by the subclass will be used.
         """
-        self._params = ProblemParameters(
-            required=self._required_parameters.keys(),
-            optional=self._optional_parameters.keys(),
-            update_fun=self._update_params)
+        # Combine all default and non-default parameters
         problem_parameters = {**self._required_parameters,
                               **self._optional_parameters,
                               **problem_parameters}
+        # Initialize the parameter container
+        # type(self) is used here in case subclass implementations forget to
+        # make _parameter_update_fun a staticmethod.
+        self.parameters = ProblemParameters(
+            required=self._required_parameters.keys(),
+            update_fun=type(self)._parameter_update_fun)
         self.parameters.update(**problem_parameters)
 
     @property
@@ -54,24 +56,22 @@ class OptimalControlProblem:
         `np.inf`)."""
         raise NotImplementedError
 
-    @property
-    def parameters(self):
-        """Returns a `ProblemParameters` instance specifying parameters for the
-        cost function(s) and system dynamics."""
-        return self._params
-
-    def _update_params(self, obj, **new_params):
+    @staticmethod
+    def _parameter_update_fun(obj, **new_params):
         """
-        Things the subclass does when problem parameters are changed. Also
-        called during initialization.
+        Performs operations on `self.parameters` during initialization and each
+        time `self.parameters.update` is called. This is used for checking
+        parameter shapes and performing other needed calculations.
 
         Parameters
         ----------
         obj : `ProblemParameters`
-            Pass an instance of `ProblemParameters` to modify its instance
-            attributes, if needed.
+            In standard use, `obj` refers to `self.parameters`. Note that
+            `_parameter_update_fun` allows `obj` itself to be modified.
         **new_params : dict
-            Parameters which are changing.
+            Parameters which are being set or changing. In standard use, we can
+            expect that each entry of `new_params` is also an attribute of
+            `obj`.
         """
         pass
 
@@ -576,3 +576,118 @@ class OptimalControlProblem:
             raise ValueError(f'x.shape[1] = f{n_x} != u.shape[1] = {n_u}')
 
         return x, u, squeeze
+
+    def _center_inputs(self, x, u, xf, uf):
+        """
+        Wrapper of `_reshape_inputs` that reshapes 1d array state and controls
+        into 2d arrays, saturates the controls, and subtracts nominal states and
+        controls.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        xf : (n_states, 1) array
+            Nominal state to subtract from `x`.
+        uf : (n_controls, 1) array
+            Nominal control to subtract from `u`.
+
+        Returns
+        -------
+        x - xf : (n_states, n_points) array
+            Centered state(s) arranged by (dimension, time). If the input was
+            flat, `n_points = 1`.
+        u - uf : (n_controls, n_points) array
+            Centered saturated control(s) arranged by (dimension, time). If the
+            input was flat, `n_points = 1`.
+        squeeze: bool
+            True if either input was flat.
+
+        Raises
+        ------
+        ValueError
+            If cannot reshape states and controls to the correct sizes, or if
+            `x.shape[1] != u.shape[1]`.
+        """
+        x, u, squeeze = self._reshape_inputs(x, u)
+        x_err = x - np.reshape(xf, (self.n_states, 1))
+        u_err = self._saturate(u) - np.reshape(uf, (self.n_controls, 1))
+        return x_err, u_err, squeeze
+
+
+class ProblemParameters:
+    """Utility class to store cost function and system dynamics parameters and
+    allow these to be updated (during simulation, for example)."""
+    def __init__(self, required=[], update_fun=None, **params):
+        """
+        Parameters
+        ----------
+        required : list or set of strings, default=[]
+            Names of parameters which cannot be None.
+        update_fun : callable, optional
+            A function to execute whenever problem parameters are modified by
+            `update`. The function must have the call signature
+            `update_fun(obj, **params)` where `obj` refers to the
+            `ProblemParameters` instance and `params` are parameters to be
+            modified, specified as keyword arguments.
+        **params : dict
+            Parameters to set as initialization, as keyword arguments. Sets
+            attributes of the `ProblemParameters` instance with these
+            parameters, so unexpected behavior can occur if these overwrite
+            class or instance attributes.
+        """
+        if update_fun is None:
+            self._update_fun = lambda s, **p: None
+        elif callable(update_fun):
+            self._update_fun = update_fun
+        else:
+            raise TypeError('update_fun must be set with a callable')
+
+        self._param_dict = dict()
+        self.required = set(required)
+        if len(params):
+            self.update(**params)
+
+    def update(self, check_required=True, **params):
+        """
+        Modify individual or multiple parameters using keyword arguments. This
+        internally calls `self._update_fun(self, **params)`.
+
+        Parameters
+        ----------
+        check_required : bool, default=True
+            Ensure that all required parameters have been set (after updating).
+        **params : dict
+            Parameters to change, as keyword arguments. Sets attributes of the
+            `ProblemParameters` instance with these parameters, so unexpected
+            behavior can occur if these overwrite class or instance attributes.
+
+        Raises
+        ------
+        RuntimeError
+            If `check_required` is True and any of the parameters in
+            `self.required` is None after updating.
+        """
+        self._param_dict.update(params)
+        self.__dict__.update(params)
+
+        if check_required:
+            for p in self.required:
+                if getattr(self, p, None) is None:
+                    raise RuntimeError(f"{p} is required but has not been set")
+
+        # Run other needed operations
+        self._update_fun(self, **params)
+
+    def as_dict(self):
+        """
+        Return all named parameters in the form of a dict.
+
+        Returns
+        -------
+        parameter_dict : dict
+            Dict containing all parameters set using `__init__` or `update`.
+        """
+        return self._param_dict
