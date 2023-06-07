@@ -9,30 +9,33 @@ from sklearn.metrics import r2_score
 from optimalcontrol import controls, simulate, utilities, analysis
 from optimalcontrol.problem.linear_quadratic import LinearQuadraticProblem
 
-from examples.van_der_pol import VanDerPol
 from examples.lqr import lin_vdp_config as config
 from examples.common_utilities import data_utils, supervised_learning, plotting
 
-# Create the LQR problem by linearizing Van-der-pol example at the terminal state
+parser = ap.ArgumentParser()
+parser.add_argument('-p', '--problem', default='double_int',
+                    help="Specify LQR problem to get config")
+args = parser.parse_args()
+
+
+if args.problem == 'double_int':
+    from examples.lqr import double_int_config as config
+elif args.problem == 'lin_vdp':
+    from examples.lqr import lin_vdp_config as config
+else:
+    raise NotImplementedError("The config file is not defined for problem: {}".format(args.problem))
+
+print("\nSolving LQR problem: {}".format(config.problem_name))
+print("\n" + "+" * 80 + "\n")
+
 random_seed = getattr(config, 'random_seed', None)
 if random_seed is None:
     random_seed = int(time.time())
 rng = np.random.default_rng(random_seed + 1)
 
-vdp = VanDerPol(x0_sample_seed=random_seed, **config.params)
-xf = vdp.parameters.xf.flatten()
-uf = vdp.parameters.uf
-# System matrices (vector field Jacobians)
-A, B = vdp.jac(xf, uf)
-# Cost matrices (1/2 Running cost Hessians)
-Q, R = vdp.running_cost_hess(xf, uf)
-param_dict = {'A': A, 'B': B, 'Q': Q, 'R': R, 'x0_lb': vdp.parameters.x0_lb, 'x0_ub': vdp.parameters.x0_ub}
-ocp = LinearQuadraticProblem(**param_dict)
-lqr = controls.LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
-                                        u_lb=ocp.parameters.u_lb,
-                                        u_ub=ocp.parameters.u_ub, xf=xf, uf=uf)
 
-# Generate some training and test data
+ocp = LinearQuadraticProblem(**config.lqr_param_dict, **config.x0_bounds)
+lqr = controls.LinearQuadraticRegulator(**config.lqr_param_dict)
 
 # First sample initial conditions
 x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
@@ -66,7 +69,7 @@ controller = supervised_learning.NeuralNetworkController(
 
 print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
 
-x, f = analysis.find_equilibrium(ocp, controller, xf)
+x, f = analysis.find_equilibrium(ocp, controller, config.lqr_param_dict['xf'])
 jac = utilities.closed_loop_jacobian(x, ocp.jac, controller)
 eigs, max_eig = analysis.linear_stability(jac)
 

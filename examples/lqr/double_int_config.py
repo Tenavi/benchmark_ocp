@@ -1,32 +1,32 @@
 import os
-from examples.van_der_pol import VanDerPol
+import numpy as np
 
 # Directories where data, figures, and feedback controllers will be saved
-data_dir = os.path.join('examples', 'lqr', 'lin_vdp', 'data')
-fig_dir = os.path.join('examples', 'lqr', 'lin_vdp', 'figures')
-controller_dir = os.path.join('examples', 'lqr', 'lin_vdp', 'controllers')
+data_dir = os.path.join('examples', 'lqr', 'double_int', 'data')
+fig_dir = os.path.join('examples', 'lqr', 'double_int', 'figures')
+controller_dir = os.path.join('examples', 'lqr', 'double_int', 'controllers')
 
 for directory in [data_dir, fig_dir, controller_dir]:
     os.makedirs(directory, exist_ok=True)
 
 random_seed = 123
-problem_name = "Linerized Van der Pol oscillator"
+problem_name = "Double Integrator"
 
-# Changes to default problem parameters
-params = {}
-
-# Create the LQR problem by linearizing Van-der-pol example at the terminal state
-vdp = VanDerPol(x0_sample_seed=random_seed, **params)
-xf = vdp.parameters.xf.flatten()
-uf = vdp.parameters.uf
-# System matrices (vector field Jacobians)
-A, B = vdp.jac(xf, uf)
-# Cost matrices (1/2 Running cost Hessians)
-Q, R = vdp.running_cost_hess(xf, uf)
+# Double integrator problem definition
+# see https://underactuated.mit.edu/dp.html#example1 and 
+# https://underactuated.mit.edu/lqr.html#example1 for more details
+A = np.array([[0., 1.], [0., 0.]])
+B = np.array([[0.], [1.]])
+Q = np.eye(2)
+R = np.eye(1)
+xf = np.array([0., 0.])
+uf = 0.
+x0_lb = -np.array([[3.], [3.]])
+x0_ub = np.array([[3.], [3.]])
 lqr_param_dict = {
     'A': A, 'B': B, 'Q': Q, 'R': R, 'u_lb': None, 'u_ub': None, 'xf': xf, 'uf': uf
 }
-x0_bounds = {'x0_lb': vdp.parameters.x0_lb, 'x0_ub': vdp.parameters.x0_ub}
+x0_bounds = {'x0_lb': x0_lb, 'x0_ub': x0_ub}
 
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
@@ -51,4 +51,4 @@ open_loop_kwargs = {}
 
 # Keyword arguments for the SVR controller
 controller_kwargs = {'hidden_layer_sizes': (32, 32), 'activation': 'relu',
-                     'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-03}
+                     'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-03}
