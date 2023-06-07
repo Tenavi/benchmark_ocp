@@ -1,3 +1,5 @@
+""""Config file for double integrator as an LQR problem."""
+
 import os
 import numpy as np
 

@@ -5,26 +5,20 @@ import argparse as ap
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.metrics import r2_score
+from importlib.machinery import SourceFileLoader
 
 from optimalcontrol import controls, simulate, utilities, analysis
 from optimalcontrol.problem.linear_quadratic import LinearQuadraticProblem
 
-from examples.lqr import lin_vdp_config as config
 from examples.common_utilities import data_utils, supervised_learning, plotting
 
 parser = ap.ArgumentParser()
-parser.add_argument('-p', '--problem', default='double_int',
-                    help="Specify LQR problem to get config")
+parser.add_argument('-c', '--config_path', default='examples/lqr/double_int/config.py',
+                    help="The path of config file")
 args = parser.parse_args()
 
 
-if args.problem == 'double_int':
-    from examples.lqr import double_int_config as config
-elif args.problem == 'lin_vdp':
-    from examples.lqr import lin_vdp_config as config
-else:
-    raise NotImplementedError("The config file is not defined for problem: {}".format(args.problem))
-
+config = SourceFileLoader('config', args.config_path).load_module()
 print("\nSolving LQR problem: {}".format(config.problem_name))
 print("\n" + "+" * 80 + "\n")
 

@@ -1,3 +1,5 @@
+""""Config file for linearized Van der Pol oscillator as an LQR problem."""
+
 import os
 from examples.van_der_pol import VanDerPol
 
