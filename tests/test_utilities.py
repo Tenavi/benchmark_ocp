@@ -78,6 +78,74 @@ def test_resize_vector_float_in(n_rows):
     np.testing.assert_allclose(y, y_expect)
 
 
+@pytest.mark.parametrize('n_controls', (1, 2))
+@pytest.mark.parametrize('lb', (None, -rng.uniform()))
+@pytest.mark.parametrize('ub', (None, rng.uniform()))
+def test_saturate(n_controls, lb, ub):
+    """Test that the saturation function works given different input shapes."""
+    n_points = 30
+    u = rng.uniform(low=-1.5, high=1.5, size=(n_controls, n_points))
+
+    # Brute force construction of saturated controls
+    u_sat_ref = u.copy()
+    for d in range(n_controls):
+        for k in range(n_points):
+            if lb is not None and u_sat_ref[d, k] < lb:
+                u_sat_ref[d, k] = lb
+            elif ub is not None and ub < u_sat_ref[d, k]:
+                u_sat_ref[d, k] = ub
+
+    # Test float bounds at single points
+    for k in range(n_points):
+        for d in range(n_controls):
+            u_sat = utilities.saturate(u[d, k], lb, ub)
+            assert u_sat.shape == ()
+            np.testing.assert_array_equal(u_sat, u_sat_ref[d, k])
+
+        u_sat = utilities.saturate(u[:, k], lb, ub)
+        np.testing.assert_array_equal(u_sat, u_sat_ref[:, k])
+
+    # Test float bounds at all points
+    # one-dimensional control
+    for d in range(n_controls):
+        u_sat = utilities.saturate(u[d], lb, ub)
+        np.testing.assert_array_equal(u_sat, u_sat_ref[d])
+
+    # two-dimensional control
+    u_sat = utilities.saturate(u, lb, ub)
+    np.testing.assert_array_equal(u_sat, u_sat_ref)
+
+    # Test vector bounds and (n_controls, 1) matrix bounds
+    if lb is not None or ub is not None:
+        # Construct vector and matrix bounds
+        lb_vec = np.full(n_controls, lb) if lb is not None else None
+        ub_vec = np.full(n_controls, ub) if ub is not None else None
+
+        lb_mat = np.full((n_controls, 1), lb) if lb is not None else None
+        ub_mat = np.full((n_controls, 1), ub) if ub is not None else None
+
+        # Test at single points
+        for k in range(n_points):
+            u_sat = utilities.saturate(u[:, k], lb_vec, ub_vec)
+            np.testing.assert_array_equal(u_sat, u_sat_ref[:, k])
+
+            u_sat = utilities.saturate(u[:, k], lb_mat, ub_mat)
+            np.testing.assert_array_equal(u_sat, u_sat_ref[:, k])
+
+            u_sat = utilities.saturate(u[:, k:k+1], lb_vec, ub_vec)
+            np.testing.assert_array_equal(u_sat, u_sat_ref[:, k:k+1])
+
+            u_sat = utilities.saturate(u[:, k:k + 1], lb_mat, ub_mat)
+            np.testing.assert_array_equal(u_sat, u_sat_ref[:, k:k + 1])
+
+        # Test at all points
+        u_sat = utilities.saturate(u, lb_vec, ub_vec)
+        np.testing.assert_array_equal(u_sat, u_sat_ref)
+
+        u_sat = utilities.saturate(u, lb_mat, ub_mat)
+        np.testing.assert_array_equal(u_sat, u_sat_ref)
+
+
 @pytest.mark.parametrize('n_points', range(4))
 @pytest.mark.parametrize('n_states', range(1, 4))
 @pytest.mark.parametrize('n_out', range(4))

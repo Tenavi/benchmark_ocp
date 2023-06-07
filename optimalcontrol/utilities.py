@@ -24,11 +24,12 @@ def saturate(u, lb=None, ub=None):
     if lb is None and ub is None:
         return u
 
-    if np.ndim(u) < 2:
-        if lb is not None and np.ndim(lb) > 1:
-            lb = np.reshape(lb, -1)
-        if ub is not None and np.ndim(ub) > 1:
-            ub = np.reshape(ub, -1)
+    bound_shape = (-1,) + (1,) * (np.ndim(u) - 1)
+
+    if lb is not None and np.ndim(lb) != np.ndim(u):
+        lb = np.reshape(lb, bound_shape)
+    if ub is not None and np.ndim(ub) != np.ndim(u):
+        ub = np.reshape(ub, bound_shape)
 
     return np.clip(u, lb, ub)
 
