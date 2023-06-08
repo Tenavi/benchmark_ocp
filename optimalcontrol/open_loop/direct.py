@@ -11,6 +11,7 @@ import numpy as np
 import warnings
 
 from .solutions import OpenLoopSolution
+from ..utilities import resize_vector
 
 try:
     import pylgr
@@ -156,10 +157,16 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     if n_add_nodes < 1:
         raise ValueError('n_add_nodes must be a positive int')
 
+    # Currently pylgr expects controls to have shape (n_controls, 1)
+    u_lb = getattr(ocp.parameters, 'u_lb', None)
+    u_ub = getattr(ocp.parameters, 'u_ub', None)
+    if u_lb is not None:
+        u_lb = resize_vector(u_lb, ocp.n_controls)
+    if u_ub is not None:
+        u_ub = resize_vector(u_ub, ocp.n_controls)
+
     ps_sol = pylgr.solve_ocp(ocp.dynamics, ocp.running_cost, t, x, u,
-                             U_lb=getattr(ocp.parameters, 'u_lb', None),
-                             U_ub=getattr(ocp.parameters, 'u_ub', None),
-                             dynamics_jac=ocp.jac,
+                             U_lb=u_lb, U_ub=u_ub, dynamics_jac=ocp.jac,
                              cost_grad=ocp.running_cost_grad, tol=tol,
                              n_nodes=n_nodes, maxiter=max_iter, verbose=verbose)
 

@@ -53,15 +53,14 @@ def find_saturated(u, lb=None, ub=None):
         `sat_idx[i,j] = True` if `u[i,j] <= lb[i]` or `u[i,j] >= ub[i]`. If
         `lb` or `ub` is `None` then these are ignored.
     """
-    if lb is None and ub is None:
-        return np.full(np.shape(u), False)
-
     if lb is not None and ub is not None:
         return np.any([ub <= u, u <= lb], axis=0)
     elif ub is not None:
         return ub <= u
-    else:
+    elif lb is not None:
         return u <= lb
+    else:
+        return np.full(np.shape(u), False)
 
 
 def check_int_input(n, argname, low=None):

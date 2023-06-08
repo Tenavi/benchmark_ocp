@@ -22,7 +22,8 @@ except ImportError:
 
 
 @pytest.mark.parametrize('method', methods)
-def test_solve_infinite_horizon(method):
+@pytest.mark.parametrize('u_ub', (None, 1.))
+def test_solve_infinite_horizon(method, u_ub):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
@@ -32,6 +33,8 @@ def test_solve_infinite_horizon(method):
     n_states = 3
     n_controls = 2
     t1_tol = 1e-14
+
+    u_lb = None if u_ub is None else -1.
 
     # Direct method is much less accurate than indirect, but the solution is
     # still considered reasonable.
@@ -44,10 +47,10 @@ def test_solve_infinite_horizon(method):
 
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
-                                 x0_lb=-1., x0_ub=1., u_lb=-1., u_ub=1.,
+                                 x0_lb=-1., x0_ub=1., u_lb=u_lb, u_ub=u_ub,
                                  x0_sample_seed=456)
     lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
-                                   u_lb=-1., u_ub=1.)
+                                   u_lb=u_lb, u_ub=u_ub)
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
     # Integrate over initially short time horizon

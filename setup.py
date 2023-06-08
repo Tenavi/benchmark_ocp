@@ -12,7 +12,7 @@ with open('requirements.txt', 'r') as fh:
 if __name__ == '__main__':
     setuptools.setup(
         name='optimalcontrol',
-        version='0.7.3',
+        version='0.7.4',
         description="Benchmark problems for optimal feedback control",
         long_description=long_description,
         long_description_content_type='text/markdown',

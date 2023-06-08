@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.spatial.distance import cdist
 
-from ..utilities import approx_derivative
+from ..utilities import approx_derivative, saturate, find_saturated
 
 
 class OptimalControlProblem:
@@ -15,7 +15,7 @@ class OptimalControlProblem:
     # required and optional parameters. To be overwritten by subclass
     # implementations.
     _required_parameters = {}
-    _optional_parameters = {}
+    _optional_parameters = {'u_lb': None, 'u_ub': None}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
     _fin_diff_method = '3-point'
@@ -55,6 +55,45 @@ class OptimalControlProblem:
         """Time horizon of the system; can be infinite (positive float or
         `np.inf`)."""
         raise NotImplementedError
+
+    def _saturate(self, u):
+        """
+        Saturate control inputs between lower bound `self.parameters.u_lb` and
+        upper bound `self.parameters.u_ub`, if one or both of these are defined.
+
+        Parameters
+        ----------
+        u : (n_controls,) or (n_controls, n_points) array
+            Unsaturated control inputs arranged by (dimension, time).
+
+        Returns
+        -------
+        u_sat : (n_controls,) or (n_controls, n_points) array
+            Saturated control inputs arranged by (dimension, time).
+        """
+        return saturate(u, lb=getattr(self.parameters, 'u_lb'),
+                        ub=getattr(self.parameters, 'u_ub'))
+
+    def _find_saturated(self, u):
+        """
+        Find indices where control inputs are saturated, with lower bound
+        `self.parameters.u_lb` and upper bound `self.parameters.u_ub`, if one or
+        both of these are defined.
+
+        Parameters
+        ----------
+        u : (n_controls,) or (n_controls, n_points) array
+            Controls arranged by (dimension, time).
+
+        Returns
+        -------
+        sat_idx : boolean array with same shape as `u`
+            `sat_idx[i,j] = True` if `u[i,j] <= u_lb[i]` or `u[i,j] >= u_ub[i]`.
+            If `self.parameters.u_lb` or `self.parameters.u_lb` is not defined,
+            then these are ignored.
+        """
+        return find_saturated(u, lb=getattr(self.parameters, 'u_lb'),
+                              ub=getattr(self.parameters, 'u_ub'))
 
     @staticmethod
     def _parameter_update_fun(obj, **new_params):

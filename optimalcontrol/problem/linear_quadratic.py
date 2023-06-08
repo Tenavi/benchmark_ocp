@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 
 from ..sampling import UniformSampler
-from ..utilities import saturate, find_saturated, resize_vector
+from ..utilities import resize_vector
 from .problem import OptimalControlProblem
 
 
@@ -47,9 +47,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
     _required_parameters = {'A': None, 'B': None, 'Q': None, 'R': None,
                             'xf': 0., 'uf': 0., 'x0_lb': None, 'x0_ub': None}
     _optional_parameters = {'u_lb': None, 'u_ub': None, 'x0_sample_seed': None}
-
-    def _saturate(self, u):
-        return saturate(u, self.parameters.u_lb, self.parameters.u_ub)
 
     @property
     def n_states(self):
@@ -113,12 +110,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         if 'uf' in new_params:
             obj.uf = resize_vector(obj.uf, obj.n_controls)
-
-        for key in ('u_lb', 'u_ub'):
-            if key in new_params:
-                if getattr(obj, key, None) is not None:
-                    u_bound = resize_vector(new_params[key], obj.n_controls)
-                    setattr(obj, key, u_bound)
 
         if 'B' in new_params or 'R' in new_params:
             obj._RB2 = np.linalg.solve(obj.R, obj.B.T) / 2.
@@ -212,8 +203,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
             dLdu = 2. * np.einsum('ij,jb->ib', self.parameters.R, u_err)
 
             # Where the control is saturated, the gradient is zero
-            sat_idx = find_saturated(np.reshape(u, dLdu.shape),
-                                     self.parameters.u_lb, self.parameters.u_ub)
+            sat_idx = self._find_saturated(np.reshape(u, dLdu.shape))
             dLdu[sat_idx] = 0.
 
             if squeeze:
@@ -240,8 +230,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
             # Where the control is saturated, the gradient is zero (constant).
             # This makes the Hessian zero in all terms that include a saturated
             # control
-            sat_idx = find_saturated(u, self.parameters.u_lb,
-                                     self.parameters.u_ub)
+            sat_idx = self._find_saturated(u)
             sat_idx = sat_idx[None, ...] + sat_idx[:, None, :]
             dLdu[sat_idx] = 0.
 
@@ -277,7 +266,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
             dfdu = np.tile(self.parameters.B[..., None], (1, 1, u.shape[1]))
 
             # Where the control is saturated, the Jacobian is zero
-            idx = find_saturated(u, self.parameters.u_lb, self.parameters.u_ub)
+            idx = self._find_saturated(u)
             dfdu[:, idx] = 0.
 
             if squeeze:

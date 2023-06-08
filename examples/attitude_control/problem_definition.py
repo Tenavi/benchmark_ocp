@@ -4,7 +4,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from optimalcontrol.problem import OptimalControlProblem
-from optimalcontrol.utilities import saturate, find_saturated, resize_vector
+from optimalcontrol.utilities import resize_vector
 from optimalcontrol.sampling import UniformSampler
 
 
@@ -103,9 +103,6 @@ class AttitudeControl(OptimalControlProblem):
                             'attitude_sample_seed': None,
                             'rate_sample_seed': None}
 
-    def _saturate(self, u):
-        return saturate(u, self.parameters.u_lb, self.parameters.u_ub)
-
     @property
     def n_states(self):
         return 7
@@ -152,12 +149,6 @@ class AttitudeControl(OptimalControlProblem):
                     setattr(obj, key, val)
                 except TypeError:
                     raise ValueError(f"{key:s} must be a positive float")
-
-        for key in ('u_lb', 'u_ub'):
-            u_bound = new_params.get(key)
-            if u_bound is not None:
-                u_bound = resize_vector(u_bound, 3)
-                setattr(obj, key, u_bound)
 
         if not hasattr(obj, '_a0_sampler'):
             obj._a0_sampler = UniformSampler(
@@ -285,8 +276,7 @@ class AttitudeControl(OptimalControlProblem):
             dLdu = self.parameters.Wu * self._saturate(u)
 
             # Where the control is saturated, the gradient is zero
-            sat_idx = find_saturated(u, self.parameters.u_lb,
-                                     self.parameters.u_ub)
+            sat_idx = self._find_saturated(u)
             dLdu[sat_idx] = 0.
             if squeeze:
                 dLdu = dLdu[..., 0]
@@ -319,8 +309,7 @@ class AttitudeControl(OptimalControlProblem):
             # Where the control is saturated, the gradient is zero (constant).
             # This makes the Hessian zero in all terms that include a saturated
             # control
-            sat_idx = find_saturated(u, self.parameters.u_lb,
-                                     self.parameters.u_ub)
+            sat_idx = self._find_saturated(u)
             sat_idx = sat_idx[None, ...] + sat_idx[:, None, ...]
             R[sat_idx] = 0.
 
@@ -379,8 +368,7 @@ class AttitudeControl(OptimalControlProblem):
             dfdu = np.tile(self.parameters._B[..., None], (1, 1, u.shape[1]))
 
             # Where the control is saturated, the Jacobian is zero
-            sat_idx = find_saturated(u, self.parameters.u_lb,
-                                     self.parameters.u_ub)
+            sat_idx = self._find_saturated(u)
             dfdu[:, sat_idx] = 0.
 
             if squeeze:
