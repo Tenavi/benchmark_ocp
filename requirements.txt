@@ -4,5 +4,5 @@ pytest
 jupyter
 tqdm
 pandas
-scikit-learn
+scikit-learn>=1.0
 matplotlib

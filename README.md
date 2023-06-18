@@ -18,7 +18,7 @@ following software dependencies:
     jupyter
     tqdm>=4.65.0
     pandas>=1.3.5
-    scikit-learn
+    scikit-learn>=1.0.2
     matplotlib>=3.5.3
     pylgr
 
