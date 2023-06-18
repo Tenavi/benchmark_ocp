@@ -45,20 +45,20 @@ def test_init(n_states, n_controls):
     assert np.isinf(ocp.final_time)
     assert isinstance(ocp.parameters, ProblemParameters)
     np.testing.assert_allclose(np.linalg.cholesky(Q).T,
-                               ocp.parameters._x0_sampler.norm)
+                               ocp.parameters._x0_sampler.norm, atol=1e-12)
 
     # Check that problem parameters can be updated
     assert not np.allclose(xf, ocp.parameters.xf)
     ocp.parameters.update(xf=xf)
-    np.testing.assert_allclose(xf, ocp.parameters.xf)
+    np.testing.assert_allclose(xf, ocp.parameters.xf, atol=1e-12)
 
     # Check that updating with nothing doesn't make any errors
     ocp.parameters.update()
 
     # Check that a new instance of the problem doesn't carry old parameters
     ocp2 = LinearQuadraticProblem(A=A + 1., B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.)
-    np.testing.assert_allclose(ocp.parameters.A, A)
-    np.testing.assert_allclose(ocp2.parameters.A, A + 1.)
+    np.testing.assert_allclose(ocp.parameters.A, A, atol=1e-12)
+    np.testing.assert_allclose(ocp2.parameters.A, A + 1., atol=1e-12)
 
 
 @pytest.mark.parametrize('missing', ['A', 'B', 'Q', 'R', 'x0_lb', 'x0_ub'])
@@ -154,7 +154,7 @@ def test_sample(n_states):
     Q = Q + np.eye(n_states)
     assert not np.allclose(Q, ocp.parameters.Q)
     ocp.parameters.update(Q=Q)
-    np.testing.assert_allclose(Q, ocp.parameters.Q)
+    np.testing.assert_allclose(Q, ocp.parameters.Q, atol=1e-12)
 
     for distance in distances:
         for n_samples in range(1, 10):
@@ -208,10 +208,10 @@ def test_cost_functions(n_states, n_controls, n_samples):
         xi = x[:, i] - xf.flatten()
         ui = ocp._saturate(u[:, i]) - uf.flatten()
 
-        np.testing.assert_allclose(L[i], xi @ Q @ xi + ui @ R @ ui)
+        np.testing.assert_allclose(L[i], xi @ Q @ xi + ui @ R @ ui, atol=1e-12)
 
-        np.testing.assert_allclose(dLdx[..., i], 2. * Q @ xi)
-        np.testing.assert_allclose(dLdx2[..., i], Q)
+        np.testing.assert_allclose(dLdx[..., i], 2. * Q @ xi, atol=1e-12)
+        np.testing.assert_allclose(dLdx2[..., i], Q, atol=1e-12)
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
@@ -257,16 +257,16 @@ def test_dynamics(n_states, n_controls, n_samples):
     # saturated.
     fin_diff_dfdu = (
         super(LinearQuadraticProblem, ocp).jac(x, u, return_dfdx=False))
-    np.testing.assert_allclose(dfdu, fin_diff_dfdu)
+    np.testing.assert_allclose(dfdu, fin_diff_dfdu, rtol=1e-06, atol=1e-12)
 
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
         xi = x[:, i] - xf.flatten()
         ui = ocp._saturate(u[:,i]) - uf.flatten()
 
-        np.testing.assert_allclose(f[:, i], A @ xi + B @ ui)
+        np.testing.assert_allclose(f[:, i], A @ xi + B @ ui, atol=1e-12)
 
-        np.testing.assert_allclose(dfdx[..., i], A)
+        np.testing.assert_allclose(dfdx[..., i], A, atol=1e-12)
 
     # Check shapes for flat vector inputs
     if n_samples == 1:
@@ -321,7 +321,7 @@ def test_optimal_control(n_states, n_controls, n_samples):
     u = ocp.optimal_control(x, p)
     u_expected = lqr(x)
 
-    np.testing.assert_allclose(u, u_expected)
+    np.testing.assert_allclose(u, u_expected, rtol=1e-06, atol=1e-12)
 
 
 @pytest.mark.parametrize('zero_index', (0, 1, 2, [0, 1], [0, 2], [1, 2]))

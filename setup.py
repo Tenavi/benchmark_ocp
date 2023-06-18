@@ -12,11 +12,12 @@ with open('requirements.txt', 'r') as fh:
 if __name__ == '__main__':
     setuptools.setup(
         name='optimalcontrol',
-        version='0.7.4',
+        version='0.7.5',
         description="Benchmark problems for optimal feedback control",
         long_description=long_description,
         long_description_content_type='text/markdown',
         author="Tenavi Nakamura-Zimmerer",
         author_email="tenavi.nakamura-zimmerer@nasa.gov",
         packages=['optimalcontrol'],
+        python_requires='>=3.7',
         install_requires=requirements)

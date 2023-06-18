@@ -29,7 +29,7 @@ class VanDerPol(OptimalControlProblem):
         if 'xf' in new_params:
             if np.size(obj.xf) != 1:
                 raise ValueError("xf must be a float")
-            obj.xf = np.array([[float(obj.xf)], [0.]])
+            obj.xf = np.array([np.reshape(obj.xf, (1,)), [0.]])
 
         if 'b' in new_params:
             if np.size(obj.b) != 1:
@@ -38,7 +38,7 @@ class VanDerPol(OptimalControlProblem):
             obj._B[1] = obj.b
 
         if 'b' in new_params or 'xf' in new_params:
-            obj.uf = float(obj.xf[0] / obj.b)
+            obj.uf = float(np.squeeze(obj.xf[0] / obj.b))
 
         if not hasattr(obj, '_x0_sampler'):
             obj._x0_sampler = UniformSampler(
