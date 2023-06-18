@@ -92,12 +92,12 @@ def check_int_input(n, argname, low=None):
     if not isinstance(argname, str):
         raise TypeError("argname must be a str")
     if low is not None:
-        low = check_int_input(low, "low")
+        low = check_int_input(low, 'low')
 
     try:
-        n = np.asarray(n).astype(int, casting='safe')
+        n = np.squeeze(n).astype(np.int64, casting='safe')
         n = int(n)
-    except:
+    except TypeError:
         raise TypeError(f"{argname} must be an int")
 
     if low is not None and n < low:

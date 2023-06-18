@@ -26,9 +26,10 @@ def test_check_int_input_bad_low(low):
 def test_check_int_input(shape):
     """Make sure `check_int_input` works with a variety of acceptable inputs."""
     n = rng.choice(100, size=shape) - 50
-    assert utilities.check_int_input(n.tolist(), 'n') == int(n)
+    _n = int(np.squeeze(n))
+    assert utilities.check_int_input(n.tolist(), 'n') == _n
     for dtype in [np.int8, np.int16, np.int32, np.int64]:
-        assert utilities.check_int_input(n.astype(dtype), 'n') == int(n)
+        assert utilities.check_int_input(n.astype(dtype), 'n') == _n
 
 
 @pytest.mark.parametrize('low', [0, 1, -5, 10])
