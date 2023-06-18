@@ -6,7 +6,7 @@ name: benchmarkocp
 
 on:
   push:
-    branches: [ "main", "versioning" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
