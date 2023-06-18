@@ -19,4 +19,5 @@ if __name__ == '__main__':
         author="Tenavi Nakamura-Zimmerer",
         author_email="tenavi.nakamura-zimmerer@nasa.gov",
         packages=['optimalcontrol'],
+        python_requires='>=3.7',
         install_requires=requirements)
