@@ -1,3 +1,7 @@
+This software is being developed independently of NASA. It is not endorsed or supported by NASA or the US government.
+
+---
+
 This software repository contains a collection of benchmark optimal feedback control problems. Some of these problems are described in
 
   * [Neural Network Optimal Feedback Control with Guaranteed Local Stability](https://doi.org/10.1109/OJCSYS.2022.3205863)

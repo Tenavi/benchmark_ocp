@@ -24,12 +24,7 @@ def saturate(u, lb=None, ub=None):
     if lb is None and ub is None:
         return u
 
-    bound_shape = (-1,) + (1,) * (np.ndim(u) - 1)
-
-    if lb is not None and np.ndim(lb) != np.ndim(u):
-        lb = np.reshape(lb, bound_shape)
-    if ub is not None and np.ndim(ub) != np.ndim(u):
-        ub = np.reshape(ub, bound_shape)
+    lb, ub = _reshape_bounds(u, lb, ub)
 
     return np.clip(u, lb, ub)
 
@@ -50,9 +45,11 @@ def find_saturated(u, lb=None, ub=None):
     Returns
     -------
     sat_idx : boolean array with same shape as `u`
-        `sat_idx[i,j] = True` if `u[i,j] <= lb[i]` or `u[i,j] >= ub[i]`. If
+        `sat_idx[i, j] = True` if `u[i, j] <= lb[i]` or `u[i, j] >= ub[i]`. If
         `lb` or `ub` is `None` then these are ignored.
     """
+    lb, ub = _reshape_bounds(u, lb, ub)
+
     if lb is not None and ub is not None:
         return np.any([ub <= u, u <= lb], axis=0)
     elif ub is not None:
@@ -61,6 +58,17 @@ def find_saturated(u, lb=None, ub=None):
         return u <= lb
     else:
         return np.full(np.shape(u), False)
+
+
+def _reshape_bounds(u, lb=None, ub=None):
+    bound_shape = (-1,) + (1,) * (np.ndim(u) - 1)
+
+    if lb is not None and np.ndim(lb) != np.ndim(u):
+        lb = np.reshape(lb, bound_shape)
+    if ub is not None and np.ndim(ub) != np.ndim(u):
+        ub = np.reshape(ub, bound_shape)
+
+    return lb, ub
 
 
 def check_int_input(n, argname, low=None):

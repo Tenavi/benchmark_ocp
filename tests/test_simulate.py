@@ -10,7 +10,8 @@ from ._utilities import make_LQ_params
 
 
 @pytest.mark.parametrize('method', ['RK45', 'BDF'])
-def test_integrate_closed_loop_lqr(method):
+@pytest.mark.parametrize('u_ub', (None, 0.5))
+def test_integrate_closed_loop_lqr(method, u_ub):
     """
     Basic test of an LQR-controlled linear system integrated over a fixed time
     horizon. Since the closed-loop system should be stable, checks that the
@@ -21,10 +22,14 @@ def test_integrate_closed_loop_lqr(method):
     t_span = [0., 60.]
     t_eval = np.linspace(t_span[0], t_span[-1], 3001)
 
+    u_lb = None if u_ub is None else -u_ub
+
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
-                                 x0_lb=-1., x0_ub=1., x0_sample_seed=456)
-    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
+                                 u_lb=u_lb, u_ub=u_ub, x0_lb=-1., x0_ub=1.,
+                                 x0_sample_seed=456)
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+                                   u_lb=u_lb, u_ub=u_ub)
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
@@ -52,7 +57,8 @@ def test_integrate_closed_loop_lqr(method):
 
 @pytest.mark.parametrize('norm', [1, 2, np.inf])
 @pytest.mark.parametrize('method', ['RK45', 'BDF'])
-def test_integrate_to_converge_lqr(norm, method):
+@pytest.mark.parametrize('u_ub', (None, 0.5))
+def test_integrate_to_converge_lqr(norm, method, u_ub):
     """
     Basic test of an LQR-controlled linear system integrated over an infinite
     (i.e. very long) time horizon. Since the closed-loop system should be
@@ -61,10 +67,14 @@ def test_integrate_to_converge_lqr(norm, method):
     n_states = 3
     n_controls = 2
 
+    u_lb = None if u_ub is None else -u_ub
+
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
-                                 x0_lb=-1., x0_ub=1., x0_sample_seed=456)
-    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf)
+                                 u_lb=u_lb, u_ub=u_ub, x0_lb=-1., x0_ub=1.,
+                                 x0_sample_seed=456)
+    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+                                   u_lb=u_lb, u_ub=u_ub)
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
