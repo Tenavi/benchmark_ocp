@@ -136,8 +136,8 @@ def test_saturate(n_controls, lb, ub):
             u_sat = utilities.saturate(u[:, k:k+1], lb_vec, ub_vec)
             np.testing.assert_array_equal(u_sat, u_sat_ref[:, k:k+1])
 
-            u_sat = utilities.saturate(u[:, k:k + 1], lb_mat, ub_mat)
-            np.testing.assert_array_equal(u_sat, u_sat_ref[:, k:k + 1])
+            u_sat = utilities.saturate(u[:, k:k+1], lb_mat, ub_mat)
+            np.testing.assert_array_equal(u_sat, u_sat_ref[:, k:k+1])
 
         # Test at all points
         u_sat = utilities.saturate(u, lb_vec, ub_vec)
@@ -145,6 +145,71 @@ def test_saturate(n_controls, lb, ub):
 
         u_sat = utilities.saturate(u, lb_mat, ub_mat)
         np.testing.assert_array_equal(u_sat, u_sat_ref)
+
+
+@pytest.mark.parametrize('n_controls', (1, 2))
+@pytest.mark.parametrize('lb', (None, -rng.uniform()))
+@pytest.mark.parametrize('ub', (None, rng.uniform()))
+def test_find_saturated(n_controls, lb, ub):
+    """Test that the function for finding saturated controls works given
+    different input shapes."""
+    n_points = 30
+    u_unsat = rng.uniform(low=-1.5, high=1.5, size=(n_controls, n_points))
+    u_sat = utilities.saturate(u_unsat, lb, ub)
+    sat_idx_ref = u_unsat != u_sat
+
+    # Saturation should be detected for both saturated and unsaturated controls
+    for u in (u_unsat, u_sat):
+        # Test float bounds at single points
+        for k in range(n_points):
+            for d in range(n_controls):
+                sat_idx = utilities.find_saturated(u[d, k], lb, ub)
+                assert sat_idx.shape == ()
+                assert sat_idx == sat_idx_ref[d, k]
+
+            sat_idx = utilities.find_saturated(u[:, k], lb, ub)
+            np.testing.assert_array_equal(sat_idx, sat_idx_ref[:, k])
+
+        # Test float bounds at all points
+        # one-dimensional control
+        for d in range(n_controls):
+            sat_idx = utilities.find_saturated(u[d], lb, ub)
+            np.testing.assert_array_equal(sat_idx, sat_idx_ref[d])
+
+        # two-dimensional control
+        sat_idx = utilities.find_saturated(u, lb, ub)
+        np.testing.assert_array_equal(sat_idx, sat_idx_ref)
+
+    # Test vector bounds and (n_controls, 1) matrix bounds
+    if lb is not None or ub is not None:
+        # Construct vector and matrix bounds
+        lb_vec = np.full(n_controls, lb) if lb is not None else None
+        ub_vec = np.full(n_controls, ub) if ub is not None else None
+
+        lb_mat = np.full((n_controls, 1), lb) if lb is not None else None
+        ub_mat = np.full((n_controls, 1), ub) if ub is not None else None
+
+        for u in (u_unsat, u_sat):
+            # Test at single points
+            for k in range(n_points):
+                sat_idx = utilities.find_saturated(u[:, k], lb_vec, ub_vec)
+                np.testing.assert_array_equal(sat_idx, sat_idx_ref[:, k])
+
+                sat_idx = utilities.find_saturated(u[:, k], lb_mat, ub_mat)
+                np.testing.assert_array_equal(sat_idx, sat_idx_ref[:, k])
+
+                sat_idx = utilities.find_saturated(u[:, k:k+1], lb_vec, ub_vec)
+                np.testing.assert_array_equal(sat_idx, sat_idx_ref[:, k:k+1])
+
+                sat_idx = utilities.find_saturated(u[:, k:k+1], lb_mat, ub_mat)
+                np.testing.assert_array_equal(sat_idx, sat_idx_ref[:, k:k+1])
+
+            # Test at all points
+            sat_idx = utilities.find_saturated(u, lb_vec, ub_vec)
+            np.testing.assert_array_equal(sat_idx, sat_idx_ref)
+
+            sat_idx = utilities.find_saturated(u, lb_mat, ub_mat)
+            np.testing.assert_array_equal(sat_idx, sat_idx_ref)
 
 
 @pytest.mark.parametrize('n_points', range(4))
