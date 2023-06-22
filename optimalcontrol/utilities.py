@@ -24,7 +24,7 @@ def saturate(u, lb=None, ub=None):
     if lb is None and ub is None:
         return u
 
-    lb, ub = _reshape_bounds(u, lb, ub)
+    lb, ub = _reshape_bounds(np.ndim(u), lb, ub)
 
     return np.clip(u, lb, ub)
 
@@ -48,7 +48,7 @@ def find_saturated(u, lb=None, ub=None):
         `sat_idx[i, j] = True` if `u[i, j] <= lb[i]` or `u[i, j] >= ub[i]`. If
         `lb` or `ub` is `None` then these are ignored.
     """
-    lb, ub = _reshape_bounds(u, lb, ub)
+    lb, ub = _reshape_bounds(np.ndim(u), lb, ub)
 
     if lb is not None and ub is not None:
         return np.any([ub <= u, u <= lb], axis=0)
@@ -60,12 +60,12 @@ def find_saturated(u, lb=None, ub=None):
         return np.full(np.shape(u), False)
 
 
-def _reshape_bounds(u, lb=None, ub=None):
-    bound_shape = (-1,) + (1,) * (np.ndim(u) - 1)
+def _reshape_bounds(ndim, lb=None, ub=None):
+    bound_shape = (-1,) + (1,) * (ndim - 1)
 
-    if lb is not None and np.ndim(lb) != np.ndim(u):
+    if lb is not None and np.ndim(lb) != ndim:
         lb = np.reshape(lb, bound_shape)
-    if ub is not None and np.ndim(ub) != np.ndim(u):
+    if ub is not None and np.ndim(ub) != ndim:
         ub = np.reshape(ub, bound_shape)
 
     return lb, ub
