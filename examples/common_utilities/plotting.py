@@ -1,3 +1,4 @@
+import os
 from itertools import combinations
 
 import numpy as np
@@ -11,6 +12,28 @@ matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 _mpl_markers = ['o', 'x', 'd', '*', '+', 'v', '^', '<', '>', 's', 'p', 'h', '8',
                 'X', 'P', '.', '1', '2', '3', '4']
+
+
+def save_fig_dict(figures, save_dir):
+    """
+
+    Parameters
+    ----------
+    figures :
+    save_dir : path_like
+    """
+    if not isinstance(figures, dict):
+        raise TypeError("figures must be a dict")
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    for fig_name, fig in figures.items():
+        if isinstance(fig, plt.Figure):
+            plt.figure(fig)
+            plt.savefig(os.path.join(save_dir, fig_name + '.pdf'))
+        else:
+            subdir = os.path.join(save_dir, fig_name)
+            save_fig_dict(fig, subdir)
 
 
 def plot_total_cost(optimal_costs, controller_costs=dict(),
@@ -299,7 +322,7 @@ def _check_labels(n_labels, backup_label, *labels):
         if n_labels == 1:
             labels = [f'${backup_label:s}$']
         else:
-            new_labels = tuple(f'${backup_label:s}_{i + 1:d}$'
+            new_labels = tuple(f'${backup_label:s}' + '_{' + f'{i + 1:d}' + '}$'
                                for i in range(n_labels))
             labels = labels + new_labels[len(labels):]
 

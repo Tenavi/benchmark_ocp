@@ -1,3 +1,4 @@
+from matplotlib import pyplot as plt
 import numpy as np
 from scipy.spatial.distance import cdist
 
@@ -5,9 +6,9 @@ from optimalcontrol.problem import OptimalControlProblem
 
 
 class BurgersPDE(OptimalControlProblem):
-    _required_parameters = {'n_states': 64, 'nu': 0.2, 'gamma': 0.1, 'R': 4.,
+    _required_parameters = {'n_states': 32, 'nu': 0.02, 'gamma': 0.1, 'R': 4.,
                             'kappa': 25.}
-    _optional_parameters = {'u_lb': -1., 'u_ub': 1., 'x0_sample_seed': None}
+    _optional_parameters = {'u_lb': None, 'u_ub': None, 'x0_sample_seed': None}
 
     @property
     def n_states(self):
@@ -363,3 +364,105 @@ def cheb(n):
     w[1:-1] = 2. * v/n
 
     return x_nodes, D, w
+
+
+def plot_closed_loop(sims, t_max=None, subtitle=None, fig_kwargs={},
+                     plot_kwargs={}):
+    """
+    Plot the states, controls, and running cost vs. time for a set of
+    trajectories.
+
+    Parameters
+    ----------
+    sims : length n_sims list of dicts
+        Closed loop simulations output by
+        `optimalcontrol.simulate.monte_carlo_fixed_time` or
+        `optimalcontrol.simulate.monte_carlo_to_converge`. Each element of
+        `sims` should be a dict with keys
+
+            * 't' : (n_points,) array
+                Time points.
+            * 'x' : (n_states, n_points) array
+                System states at times 't'.
+            * 'u' : (n_controls, n_points) array
+                Control inputs at times 't'.
+            * 'L' : (n_points,) array, optional
+                Running cost at times 't'.
+    t_max : float, optional
+        Maximum time horizon to plot.
+    subtitle : str, optional
+        If provided, this string appears in parentheses after the first plot
+        title.
+    fig_kwargs : dict, optional
+        Keyword arguments to pass during figure creation. See
+        `matplotlib.pyplot.figure`.
+    plot_kwargs : dict, default={'color': 'black', 'alpha': 0.5}
+        Keyword arguments to pass when generating line plots. See
+        `matplotlib.pyplot.plot`.
+
+    Returns
+    -------
+    fig : `matplotlib.figure.Figure`
+        Figure instance with a set of plots of each state, control, and the
+        running cost vs. time for all trajectories.
+    """
+    if t_max is None:
+        t_max = np.max([sim['t'][-1] for sim in sims])
+
+    n_states = np.shape(sims[0]['x'])[0]
+    n_controls = np.shape(sims[0]['u'])[0]
+
+    n_subplots = 1 + n_controls + ('L' in sims[0].keys())
+
+    xi, _, _ = cheb(n_states + 1)
+    xi = xi[1:-1]
+
+    plot_kwargs = {**plot_kwargs}
+
+    fig_kwargs = {'layout': 'constrained', **fig_kwargs}
+
+    figs = dict()
+
+    for i, sim in enumerate(sims):
+        fig = plt.figure(**fig_kwargs)
+        figs[f'sim{i:d}'] = fig
+
+        ax = fig.add_subplot(n_subplots, 1, 1, projection='3d')
+
+        if subtitle is not None:
+            ax.set_title(f'Closed-loop state ({subtitle})', fontsize=14)
+        else:
+            ax.set_title('Closed-loop state', fontsize=14)
+
+        t_mesh, xi_mesh = np.meshgrid(sim['t'], xi)
+
+        ax.plot_surface(t_mesh, xi_mesh, sim['x'], **plot_kwargs)
+
+        ax.set_xlim(0., t_max)
+
+        ax.set_xlabel('$t$', fontsize=12)
+        ax.set_ylabel(r'$\xi$', fontsize=12)
+        ax.set_zlabel(r'$\mathbf x$', fontsize=12)
+
+        for j in range(n_controls):
+            ax = fig.add_subplot(n_subplots, 1, 2 + j)
+
+            ax.plot(sim['t'], sim['u'][j])
+
+            ax.set_xlim(0., t_max)
+            ax.set_ylabel(f'$u_{j + 1:d}$', fontsize=12)
+
+            if j == 0:
+                ax.set_title('Feedback controls', fontsize=14)
+
+        if 'L' in sim.keys():
+            ax = fig.add_subplot(n_subplots, 1, n_subplots)
+
+            ax.plot(sim['t'], sim['L'])
+
+            ax.set_xlim(0., t_max)
+            ax.set_yscale('log')
+            ax.set_ylabel(r'$\mathcal L$', fontsize=12)
+            ax.set_title('Running cost', fontsize=14)
+
+    return figs
