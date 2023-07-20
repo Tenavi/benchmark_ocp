@@ -1,12 +1,16 @@
-from matplotlib import pyplot as plt
+import os
+
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.spatial.distance import cdist
+from scipy.interpolate import RegularGridInterpolator
+from tqdm import tqdm
 
 from optimalcontrol.problem import OptimalControlProblem
 
 
 class BurgersPDE(OptimalControlProblem):
-    _required_parameters = {'n_states': 32, 'nu': 0.02, 'gamma': 0.1, 'R': 4.,
+    _required_parameters = {'n_states': 32, 'nu': 0.02, 'gamma': 0.1, 'R': 1/2,
                             'kappa': 25.}
     _optional_parameters = {'u_lb': None, 'u_ub': None, 'x0_sample_seed': None}
 
@@ -366,11 +370,12 @@ def cheb(n):
     return x_nodes, D, w
 
 
-def plot_closed_loop(sims, t_max=None, subtitle=None, fig_kwargs={},
-                     plot_kwargs={}):
+def plot_closed_loop(sims, open_loop_sols, t_max=None, x_min=None, x_max=None,
+                     n_t_plot=100, n_xi_plot=100, subtitle=None, fig_kwargs={},
+                     plot_kwargs={}, save_dir=None):
     """
-    Plot the states, controls, and running cost vs. time for a set of
-    trajectories.
+    Plot states, controls, and running cost vs. time for a set of trajectories.
+    For the `BurgersPDE` problem, states are visualized as a heatmap.
 
     Parameters
     ----------
@@ -388,81 +393,132 @@ def plot_closed_loop(sims, t_max=None, subtitle=None, fig_kwargs={},
                 Control inputs at times 't'.
             * 'L' : (n_points,) array, optional
                 Running cost at times 't'.
-    t_max : float, optional
+    open_loop_sols : length n_sims list of dicts
+        Solutions of the open loop OCP for each initial condition in `sims`.
+        Each element of `open_loops_sols` should be a dict with the same keys
+        as `sims`.
+    t_max : float, default=`max([max(sim['t']) for sim in sims])`
         Maximum time horizon to plot.
+    x_min : float, default=`min([min(sim['x']) for sim in sims])`
+        Lower limit for the colormap in each plot.
+    x_max : float, default=`max([max(sim['x']) for sim in sims])`
+        Upper limit for the colormap in each plot.
+    n_t_plot : int, default=100
+        Number of time points in the state heatmap.
+    n_xi_plot : int, default=100
+        Number of spatial points in the state heatmap.
     subtitle : str, optional
         If provided, this string appears in parentheses after the first plot
         title.
     fig_kwargs : dict, optional
         Keyword arguments to pass during figure creation. See
         `matplotlib.pyplot.figure`.
-    plot_kwargs : dict, default={'color': 'black', 'alpha': 0.5}
-        Keyword arguments to pass when generating line plots. See
-        `matplotlib.pyplot.plot`.
+    plot_kwargs : dict, default=`{'cmap': 'hot', 'origin': 'lower', \
+                                  'aspect': 'auto', 'vmin': x_min, \
+                                  'vmax': x_max}`
+        Keyword arguments to pass when generating the heatmap. See
+        `matplotlib.pyplot.imshow`.
+    save_dir : path_like, optional
+        The directory where each figure should be saved. Figures will be saved
+        as 'save_dir/sim_k.pdf', where `k` is the index of each `sim` in `sims`.
 
     Returns
     -------
-    fig : `matplotlib.figure.Figure`
-        Figure instance with a set of plots of each state, control, and the
-        running cost vs. time for all trajectories.
+    figs : dict or None
+        If `save_dir` is None, returns a dict of `Figure` instances with a set
+        of plots of each state, control, and the running cost vs. time for all
+        trajectories.
     """
     if t_max is None:
         t_max = np.max([sim['t'][-1] for sim in sims])
+    if x_min is None:
+        x_min = np.min([np.min(sim['x']) for sim in sims])
+    if x_max is None:
+        x_max = np.max([np.max(sim['x']) for sim in sims])
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
 
     n_states = np.shape(sims[0]['x'])[0]
     n_controls = np.shape(sims[0]['u'])[0]
 
-    n_subplots = 1 + n_controls + ('L' in sims[0].keys())
+    n_subplots = 2 + n_controls
 
     xi, _, _ = cheb(n_states + 1)
     xi = xi[1:-1]
 
-    plot_kwargs = {**plot_kwargs}
+    t_grid, xi_grid = np.meshgrid(np.linspace(0., t_max, n_t_plot),
+                                  np.linspace(-1., 1., n_xi_plot))
 
-    fig_kwargs = {'layout': 'constrained', **fig_kwargs}
+    # Buffer for the extent of imshow to make pixels go all the way to the edge
+    eps = 3 / n_xi_plot
+
+    plot_kwargs = {'cmap': 'hot', 'origin': 'lower', 'aspect': 'auto',
+                   'vmin': x_min, 'vmax': x_max,
+                   'extent': [0, t_max, -1 - eps, 1 + eps],
+                   **plot_kwargs}
+
+    fig_kwargs = {'layout': 'constrained',
+                  'figsize': (6.4, (n_subplots + 1) * 1.5),
+                  'gridspec_kw': {'height_ratios': [2] + [1] * (n_subplots-1)},
+                  **fig_kwargs}
 
     figs = dict()
 
-    for i, sim in enumerate(sims):
-        fig = plt.figure(**fig_kwargs)
-        figs[f'sim{i:d}'] = fig
+    for i in tqdm(range(len(sims))):
+        sim, sol = sims[i], open_loop_sols[i]
 
-        ax = fig.add_subplot(n_subplots, 1, 1, projection='3d')
+        figs[f'sim{i:d}'], axes = plt.subplots(nrows=n_subplots, **fig_kwargs)
+
+        ax = axes[0]
 
         if subtitle is not None:
             ax.set_title(f'Closed-loop state ({subtitle})', fontsize=14)
         else:
             ax.set_title('Closed-loop state', fontsize=14)
 
-        t_mesh, xi_mesh = np.meshgrid(sim['t'], xi)
+        x_grid = RegularGridInterpolator((xi, sim['t']), sim['x'],
+                                         bounds_error=False)
+        x_grid = x_grid((xi_grid, t_grid))
+        cmap = axes[0].imshow(x_grid, **plot_kwargs)
 
-        ax.plot_surface(t_mesh, xi_mesh, sim['x'], **plot_kwargs)
+        cbar = figs[f'sim{i:d}'].colorbar(cmap, ax=ax, orientation='horizontal',
+                                          fraction=0.1, aspect=30)
+        cbar.set_label(r'$\mathbf x$', fontsize=12)
 
-        ax.set_xlim(0., t_max)
+        ax.set_ylim(-1, 1)
 
         ax.set_xlabel('$t$', fontsize=12)
         ax.set_ylabel(r'$\xi$', fontsize=12)
-        ax.set_zlabel(r'$\mathbf x$', fontsize=12)
 
         for j in range(n_controls):
-            ax = fig.add_subplot(n_subplots, 1, 2 + j)
+            ax = axes[1 + j]
 
-            ax.plot(sim['t'], sim['u'][j])
+            ax.plot(sol['t'], sol['u'][j], 'k', label='optimal')
+            ax.plot(sim['t'], sim['u'][j], label='closed loop')
 
             ax.set_xlim(0., t_max)
             ax.set_ylabel(f'$u_{j + 1:d}$', fontsize=12)
 
             if j == 0:
-                ax.set_title('Feedback controls', fontsize=14)
+                ax.set_title('Controls', fontsize=14)
+                ax.legend(fontsize=12)
 
-        if 'L' in sim.keys():
-            ax = fig.add_subplot(n_subplots, 1, n_subplots)
+        ax = axes[-1]
 
-            ax.plot(sim['t'], sim['L'])
+        ax.plot(sol['t'], sol['L'], 'k', label='optimal')
+        ax.plot(sim['t'], sim['L'], label='closed loop')
 
-            ax.set_xlim(0., t_max)
-            ax.set_yscale('log')
-            ax.set_ylabel(r'$\mathcal L$', fontsize=12)
-            ax.set_title('Running cost', fontsize=14)
+        ax.set_xlim(0., t_max)
+        ax.set_yscale('log')
+        ax.set_ylabel(r'$\mathcal L$', fontsize=12)
+        ax.set_title('Running cost', fontsize=14)
 
-    return figs
+        if save_dir is not None:
+            plt.savefig(os.path.join(save_dir, f'sim{i:d}.pdf'))
+            plt.close()
+
+    if save_dir is None:
+        return figs
+
+    return

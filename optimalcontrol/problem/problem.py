@@ -304,8 +304,7 @@ class OptimalControlProblem:
             Integrated cost at each time `t`.
         """
         L = self.running_cost(x, u).reshape(-1)
-        J = cumtrapz(L, t)
-        return np.concatenate(([0.], J))
+        return cumtrapz(L, t, initial=0.)
 
     def dynamics(self, x, u):
         """

@@ -94,12 +94,10 @@ print("\n" + "+" * 80 + "\n")
 nn_sims, status = simulate.monte_carlo_to_converge(
     ocp, nn_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
 
-for sim in nn_sims:
-    sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
-    sim['L'] = ocp.running_cost(sim['x'], sim['u'])
-for sim in lqr_data:
-    sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
-    sim['L'] = ocp.running_cost(sim['x'], sim['u'])
+for sims in (nn_sims, lqr_data):
+    for sim in sims:
+        sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
+        sim['L'] = ocp.running_cost(sim['x'], sim['u'])
 
 # Plot the results
 figs = {'training': dict(), 'test': dict()}
