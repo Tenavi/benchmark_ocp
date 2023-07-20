@@ -72,8 +72,14 @@ def test_cost_functions(ocp_name, n_samples):
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
-    u_lb = getattr(ocp.parameters, 'u_lb', -1.) * 2.
-    u_ub = getattr(ocp.parameters, 'u_ub', 1.) * 2.
+    try:
+        u_lb = 2. * getattr(ocp.parameters, 'u_lb', -1.)
+    except TypeError:
+        u_lb = -2.
+    try:
+        u_ub = 2. * getattr(ocp.parameters, 'u_ub', 1.)
+    except TypeError:
+        u_ub = 2.
     u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
 
     # Evaluate the cost functions and check that the shapes are correct
@@ -140,8 +146,14 @@ def test_dynamics(ocp_name, n_samples):
     # Get some random states and controls
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
-    u_lb = getattr(ocp.parameters, 'u_lb', -1.) * 2.
-    u_ub = getattr(ocp.parameters, 'u_ub', 1.) * 2.
+    try:
+        u_lb = 2. * getattr(ocp.parameters, 'u_lb', -1.)
+    except TypeError:
+        u_lb = -2.
+    try:
+        u_ub = 2. * getattr(ocp.parameters, 'u_ub', 1.)
+    except TypeError:
+        u_ub = 2.
     u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
 
     # Evaluate the vector field and check that the shape is correct

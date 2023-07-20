@@ -1,3 +1,4 @@
+import os
 from itertools import combinations
 
 import numpy as np
@@ -11,6 +12,37 @@ matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 _mpl_markers = ['o', 'x', 'd', '*', '+', 'v', '^', '<', '>', 's', 'p', 'h', '8',
                 'X', 'P', '.', '1', '2', '3', '4']
+
+
+def save_fig_dict(figures, save_dir):
+    """
+    Save each `matplotlib.figure.Figure` in a (possibly nested) dict of
+    `Figure`s as a pdf. Called recursively for each level of a provided
+    `figures` dict until these are all saved.
+
+    Parameters
+    ----------
+    figures : dict
+        Dict whose keys are strings specifying filenames and values are
+        `Figure` instances or further dicts of this format.
+    save_dir : path_like
+        The directory where `figures` should be saved. Each `key`, `value` pair
+        in `figures` will be saved as `f'save_dir/{key}.pdf'`, unless the value
+        is itself a dict in which case we call
+        `save_fig_dict(value, f'save_dir/{key}')`.
+    """
+    if not isinstance(figures, dict):
+        raise TypeError("figures must be a dict")
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    for fig_name, fig in figures.items():
+        if isinstance(fig, plt.Figure):
+            plt.figure(fig)
+            plt.savefig(os.path.join(save_dir, fig_name + '.pdf'))
+        else:
+            subdir = os.path.join(save_dir, fig_name)
+            save_fig_dict(fig, subdir)
 
 
 def plot_total_cost(optimal_costs, controller_costs=dict(),
@@ -158,8 +190,7 @@ def plot_closed_loop(sims, t_max=None, x_index=None, u_index=None,
                      x_labels=(), u_labels=(), subtitle=None,
                      fig_kwargs={}, plot_kwargs={}):
     """
-    Plot the states, controls, and running cost vs. time for a set of
-    trajectories.
+    Plot states, controls, and running cost vs. time for a set of trajectories.
 
     Parameters
     ----------
@@ -299,7 +330,7 @@ def _check_labels(n_labels, backup_label, *labels):
         if n_labels == 1:
             labels = [f'${backup_label:s}$']
         else:
-            new_labels = tuple(f'${backup_label:s}_{i + 1:d}$'
+            new_labels = tuple(f'${backup_label:s}' + '_{' + f'{i + 1:d}' + '}$'
                                for i in range(n_labels))
             labels = labels + new_labels[len(labels):]
 
