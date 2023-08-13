@@ -9,8 +9,6 @@ with open('README.md', 'r') as fh:
 with open('requirements.txt', 'r') as fh:
     requirements = fh.read().splitlines()
 
-# requirements.append('pylgr')
-
 if __name__ == '__main__':
     setuptools.setup(
         name='optimalcontrol',

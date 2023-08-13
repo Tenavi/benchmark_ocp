@@ -8,22 +8,12 @@ from optimalcontrol.simulate import integrate_fixed_time
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator
 
-from ._utilities import make_LQ_params
+from tests._utilities import make_LQ_params
 
 
-try:
-    import pylgr
-    methods = ['indirect', 'direct']
-except ImportError:
-    methods = ['indirect']
-    warnings.warn(
-        'Could not import pylgr library. Not testing open_loop.direct.',
-        ImportWarning)
-
-
-@pytest.mark.parametrize('method', methods)
+@pytest.mark.parametrize('method', ['direct', 'indirect'])
 @pytest.mark.parametrize('u_ub', (None, 1.))
-def test_solve_infinite_horizon(method, u_ub):
+def test_solve_infinite_horizon_lqr(method, u_ub):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be

@@ -1,24 +1,10 @@
-"""
-#### Warning:
-
-**The functions implemented in this module depend on the
-[`pylgr`](https://github.com/Tenavi/PyLGR) package, which is not yet available
-on `pip` and must be installed manually. `pylgr` is also under development and
-its performance is not guaranteed.**
-"""
-
-import numpy as np
 import warnings
 
+import numpy as np
+
+from . import pylgr
 from .solutions import OpenLoopSolution
 from ..utilities import resize_vector
-
-try:
-    import pylgr
-except ImportError:
-    warnings.warn(
-        'Could not import pylgr library. Direct methods are not available.',
-        ImportWarning)
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
