@@ -2,9 +2,9 @@ import warnings
 
 import numpy as np
 
-from . import pylgr
-from .solutions import OpenLoopSolution
-from ..utilities import resize_vector
+from . import _solve
+from optimalcontrol.open_loop.solutions import OpenLoopSolution
+from optimalcontrol.utilities import resize_vector
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
@@ -12,7 +12,7 @@ __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 
 class DirectSolution(OpenLoopSolution):
     def __init__(self, t, x, u, p, v, status, message, ps_sol=None):
-        if not isinstance(ps_sol, pylgr.solve.DirectSolution):
+        if not isinstance(ps_sol, _solve.DirectSolution):
             raise RuntimeError('ps_sol must be provided at initialization')
         self._ps_sol = ps_sol
         super().__init__(t, x, u, p, v, status, message)
@@ -71,7 +71,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-    raise NotImplementedError('pylgr has not yet implemented finite horizon')
+    raise NotImplementedError('pseudospectral has not yet implemented finite horizon')
 
 
 def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
@@ -143,7 +143,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     if n_add_nodes < 1:
         raise ValueError('n_add_nodes must be a positive int')
 
-    # Currently pylgr expects controls to have shape (n_controls, 1)
+    # Currently pseudospectral expects controls to have shape (n_controls, 1)
     u_lb = getattr(ocp.parameters, 'u_lb', None)
     u_ub = getattr(ocp.parameters, 'u_ub', None)
     if u_lb is not None:
@@ -151,10 +151,10 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     if u_ub is not None:
         u_ub = resize_vector(u_ub, ocp.n_controls)
 
-    ps_sol = pylgr.solve_ocp(ocp.dynamics, ocp.running_cost, t, x, u,
-                             U_lb=u_lb, U_ub=u_ub, dynamics_jac=ocp.jac,
-                             cost_grad=ocp.running_cost_grad, tol=tol,
-                             n_nodes=n_nodes, maxiter=max_iter, verbose=verbose)
+    ps_sol = _solve.solve_ocp(ocp.dynamics, ocp.running_cost, t, x, u,
+                                      U_lb=u_lb, U_ub=u_ub, dynamics_jac=ocp.jac,
+                                      cost_grad=ocp.running_cost_grad, tol=tol,
+                                      n_nodes=n_nodes, maxiter=max_iter, verbose=verbose)
 
     t = ps_sol.t.flatten()
     x = ps_sol.X

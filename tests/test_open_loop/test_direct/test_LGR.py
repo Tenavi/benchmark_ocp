@@ -4,7 +4,7 @@ import os
 import numpy as np
 import scipy.io
 
-from optimalcontrol.open_loop.pylgr import legendre_gauss_radau as LGR
+from optimalcontrol.open_loop.direct import legendre_gauss_radau as LGR
 
 TOL = 1e-10
 

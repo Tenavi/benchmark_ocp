@@ -3,8 +3,8 @@ import pytest
 import numpy as np
 from scipy.optimize._numdiff import approx_derivative
 
-from optimalcontrol.open_loop.pylgr import utilities
-from optimalcontrol.open_loop.pylgr import legendre_gauss_radau as LGR
+from optimalcontrol.open_loop.direct import utilities
+from optimalcontrol.open_loop.direct import legendre_gauss_radau as LGR
 
 TOL = 1e-10
 

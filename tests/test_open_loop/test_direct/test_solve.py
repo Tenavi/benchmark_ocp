@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.integrate import solve_ivp, solve_bvp
 
-from optimalcontrol.open_loop.pylgr import solve_ocp
+from optimalcontrol.open_loop.direct._solve import solve_ocp
 
 from .test_data import example_problems
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-from . import direct, indirect
+from . import indirect, direct
 
 
 def solve_fixed_time(ocp, t, x, u=None, p=None, v=None, method='indirect',
