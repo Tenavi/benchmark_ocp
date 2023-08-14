@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 import time
 
-from optimalcontrol import open_loop
+from optimalcontrol.open_loop import indirect
 from optimalcontrol.simulate import integrate_fixed_time
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator
@@ -11,9 +11,8 @@ from optimalcontrol.controls import LinearQuadraticRegulator
 from tests._utilities import make_LQ_params
 
 
-@pytest.mark.parametrize('method', ['direct', 'indirect'])
 @pytest.mark.parametrize('u_ub', (None, 1.))
-def test_solve_infinite_horizon_lqr(method, u_ub):
+def test_solve_infinite_horizon_lqr(u_ub):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
@@ -23,17 +22,9 @@ def test_solve_infinite_horizon_lqr(method, u_ub):
     n_states = 3
     n_controls = 2
     t1_tol = 1e-14
+    tol = 1e-03
 
     u_lb = None if u_ub is None else -1.
-
-    # Direct method is much less accurate than indirect, but the solution is
-    # still considered reasonable.
-    if method == 'direct':
-        kwargs = {'max_nodes': 100, 'tol': 1e-12, 'verbose': 1}
-        tol = 1e-02
-    elif method == 'indirect':
-        kwargs = {'max_nodes': 1000}
-        tol = 1e-06
 
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
@@ -52,11 +43,11 @@ def test_solve_infinite_horizon_lqr(method, u_ub):
 
     start_time = time.time()
 
-    ocp_sol = open_loop.solve_infinite_horizon(
-        ocp, t, x, u=u, p=p, method=method, t1_tol=t1_tol, **kwargs)
+    ocp_sol = indirect.solve_infinite_horizon(ocp, t, x, p=p, t1_tol=t1_tol,
+                                              max_nodes=1000)
 
     comp_time = time.time() - start_time
-    print(f'Solution time with {method} method: {comp_time:1.1f} sec')
+    print(f'Solution time: {comp_time:1.1f} sec')
 
     assert ocp_sol.status == 0
     assert ocp_sol.t[-1] > t_span[-1]
@@ -74,7 +65,6 @@ def test_solve_infinite_horizon_lqr(method, u_ub):
     # Verify that interpolation of solution is close to original guess, which
     # should already be optimal
     x_int, u_int, p_int, v_int = ocp_sol(t)
-    tol = np.sqrt(tol)
     np.testing.assert_allclose(x_int, x, atol=tol, rtol=tol)
     np.testing.assert_allclose(u_int, u, atol=tol, rtol=tol)
     np.testing.assert_allclose(p_int, p, atol=tol, rtol=tol)
@@ -82,13 +72,10 @@ def test_solve_infinite_horizon_lqr(method, u_ub):
 
     # If there aren't enough nodes, the algorithm should fail
     max_nodes = ocp_sol.t.shape[0] - 10
-    ocp_sol = open_loop.solve_infinite_horizon(
-        ocp, t, x, u=u, p=p, method=method, t1_tol=t1_tol, max_nodes=max_nodes)
+    ocp_sol = indirect.solve_infinite_horizon(ocp, t, x, p=p, t1_tol=t1_tol,
+                                              max_nodes=max_nodes)
 
-    if method == 'direct':
-        assert ocp_sol.status == 10
-    elif method == 'indirect':
-        assert ocp_sol.status == 1
+    assert ocp_sol.status == 1
     assert ocp_sol.t.shape[0] >= max_nodes
     L = ocp.running_cost(ocp_sol.x, ocp_sol.u)
     assert L[-1] > t1_tol

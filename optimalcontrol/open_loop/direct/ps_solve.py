@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 
-from . import _solve
+from . import ps_solution
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
 from optimalcontrol.utilities import resize_vector
 

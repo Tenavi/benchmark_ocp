@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.integrate import solve_ivp, solve_bvp
 
-from optimalcontrol.open_loop.direct._solve import solve_ocp
+from optimalcontrol.open_loop.direct.ps_solution import solve_ocp
 
 from .test_data import example_problems
 
@@ -49,60 +49,6 @@ def _get_BVP_sol(OCP, t_guess, X_guess, tol):
     opt_cost = np.trapz(opt_cost, x=t_opt)
 
     return t_opt, X_opt, U_opt, dVdX_opt, opt_cost
-
-def _plot_results(
-        t_ref, X_ref, U_ref, dVdX_ref, PS_sol, feas_sol, problem_name
-    ):
-    n_states = X_ref.shape[0]
-    n_controls = U_ref.shape[0]
-
-    # Get matplotlib default color order
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']*max(n_states, n_controls)
-
-    plt.figure()
-
-    plt.plot(t_ref, X_ref.T, 'k')
-    sol_X = np.atleast_2d(PS_sol.sol_X(t_ref))
-    for i in range(n_states):
-        plt.plot(t_ref, sol_X[i], '--', color=colors[i])
-
-    plt.gca().set_xlim(0.,t_ref.max())
-    plt.title(problem_name + ": interpolated states")
-
-    plt.figure()
-
-    for i in range(n_states):
-        plt.plot(PS_sol.t, PS_sol.X[i], '^', color=colors[i])
-        plt.plot(feas_sol.t, feas_sol.y[i], '--', color=colors[i])
-
-    plt.gca().set_xlim(0.,t_ref.max())
-    plt.gca().set_ylim(2.*PS_sol.X.min(), 2.*PS_sol.X.max())
-    plt.title(problem_name + ": propagated states")
-
-    plt.figure()
-
-    plt.plot(t_ref, U_ref.T, 'k')
-    sol_U = np.atleast_2d(PS_sol.sol_U(t_ref))
-    for i in range(n_controls):
-        plt.plot(PS_sol.t, PS_sol.U[i], '^', color=colors[i])
-        plt.plot(t_ref, sol_U[i], '--', color=colors[i])
-
-    plt.gca().set_xlim(0.,t_ref.max())
-    plt.title(problem_name + ": controls")
-
-    plt.figure()
-
-    plt.plot(t_ref, dVdX_ref.T, 'k')
-    sol_dVdX = np.atleast_2d(PS_sol.sol_dVdX(t_ref))
-    for i in range(n_states):
-        plt.plot(PS_sol.t, PS_sol.dVdX[i], '^', color=colors[i])
-        plt.plot(t_ref, sol_dVdX[i], '--', color=colors[i])
-
-    plt.gca().set_xlim(0.,t_ref.max())
-    plt.title(problem_name + ": costates")
-
-    plt.show()
 
 @pytest.mark.parametrize('U_max', [None,.25])
 @pytest.mark.parametrize('order', ['C','F'])
@@ -150,21 +96,6 @@ def test_LQR(U_max, order, n_nodes):
     _assert_converged(PS_sol, tol)
     assert PS_sol.V.flatten()[0] < opt_cost * 1.1
 
-    if plot_sims:
-        # Propagate system with open loop PS controls to assess feasibility
-        def closed_loop_dynamics(t, X):
-            U = example_problems.saturate(PS_sol.sol_U(t), OCP.U_lb, OCP.U_ub)
-            return OCP.dynamics(X, U)
-        feas_sol = solve_ivp(
-            closed_loop_dynamics, [0.,t1], X0.flatten(), atol=tol/1000, rtol=tol
-        )
-        problem_name = 'LQR'
-        if U_max is not None:
-            problem_name = 'Constrained LQR'
-        _plot_results(
-            t_opt, X_opt, U_opt, dVdX_opt, PS_sol, feas_sol, problem_name
-        )
-
 @pytest.mark.parametrize('order', ['C'])
 @pytest.mark.parametrize('n_nodes', [11,32])
 def test_van_der_pol(order, n_nodes):
@@ -209,18 +140,6 @@ def test_van_der_pol(order, n_nodes):
     _assert_converged(PS_sol, tol)
     if n_nodes >= 20:
         assert PS_sol.V.flatten()[0] < opt_cost * 1.1
-
-    if plot_sims:
-        # Propagate system with open loop PS controls to assess feasibility
-        def closed_loop_dynamics(t, X):
-            U = example_problems.saturate(PS_sol.sol_U(t), OCP.U_lb, OCP.U_ub)
-            return OCP.dynamics(X, U)
-        feas_sol = solve_ivp(
-            closed_loop_dynamics, [0.,t1], X0.flatten(), atol=tol/1000, rtol=tol
-        )
-        _plot_results(
-            t_opt, X_opt, U_opt, dVdX_opt, PS_sol, feas_sol, 'Van der Pol'
-        )
 
 @pytest.mark.parametrize('order', ['C'])
 @pytest.mark.parametrize('n_nodes', [11,32,40])
@@ -274,15 +193,3 @@ def test_satellite(order, n_nodes):
     _assert_converged(PS_sol, tol)
     if n_nodes >= 40:
         assert PS_sol.V.flatten()[0] < opt_cost * 1.1
-
-    if plot_sims:
-        # Propagate system with open loop PS controls to assess feasibility
-        def closed_loop_dynamics(t, X):
-            U = example_problems.saturate(PS_sol.sol_U(t), OCP.U_lb, OCP.U_ub)
-            return OCP.dynamics(X, U)
-        feas_sol = solve_ivp(
-            closed_loop_dynamics, [0.,t1], X0.flatten(), atol=tol/1000, rtol=tol
-        )
-        _plot_results(
-            t_opt, X_opt, U_opt, dVdX_opt, PS_sol, feas_sol, 'Satellite'
-        )

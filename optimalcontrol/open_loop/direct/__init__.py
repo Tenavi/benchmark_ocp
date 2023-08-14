@@ -1,1 +1,1 @@
-from .solve_pseudospectral import *
+from .ps_solve import *
