@@ -2,27 +2,14 @@ import warnings
 
 import numpy as np
 
-from . import ps_solution
-from optimalcontrol.open_loop.solutions import OpenLoopSolution
+from . import utilities
+from .legendre_gauss_radau import make_LGR
+from .optimize import minimize
+from .solutions import DirectSolution
 from optimalcontrol.utilities import resize_vector
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
-
-
-class DirectSolution(OpenLoopSolution):
-    def __init__(self, t, x, u, p, v, status, message, ps_sol=None):
-        if not isinstance(ps_sol, _solve.DirectSolution):
-            raise RuntimeError('ps_sol must be provided at initialization')
-        self._ps_sol = ps_sol
-        super().__init__(t, x, u, p, v, status, message)
-
-    def __call__(self, t):
-        x = np.atleast_2d(self._ps_sol.sol_X(t))
-        u = np.atleast_2d(self._ps_sol.sol_U(t))
-        p = np.atleast_2d(self._ps_sol.sol_dVdX(t))
-        v = self._ps_sol.sol_V(t).reshape(-1)
-        return x, u, p, v
 
 
 def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
@@ -71,12 +58,12 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-    raise NotImplementedError('pseudospectral has not yet implemented finite horizon')
+    raise NotImplementedError
 
 
 def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
-                           n_add_nodes=16, max_nodes=64, tol_scale=1.,
-                           t1_tol=1e-10, verbose=0):
+                           reshape_order='C', n_add_nodes=16, max_nodes=64,
+                           tol_scale=1., t1_tol=1e-10, verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
     an infinite horizon optimal control problem for a single initial condition.
@@ -108,6 +95,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
         Maximum number of SLSQP iterations.
+    reshape_order : {'C', 'F'}, default='C'
+        Use C ('C', row-major) or Fortran ('F', column-major) ordering for the
+        NLP decision variables. This setting can slightly affect performance.
     n_add_nodes : int, default=16
         Number of nodes to add to `n_nodes` if the running cost does not
         converge.
@@ -143,27 +133,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     if n_add_nodes < 1:
         raise ValueError('n_add_nodes must be a positive int')
 
-    # Currently pseudospectral expects controls to have shape (n_controls, 1)
-    u_lb = getattr(ocp.parameters, 'u_lb', None)
-    u_ub = getattr(ocp.parameters, 'u_ub', None)
-    if u_lb is not None:
-        u_lb = resize_vector(u_lb, ocp.n_controls)
-    if u_ub is not None:
-        u_ub = resize_vector(u_ub, ocp.n_controls)
-
-    ps_sol = _solve.solve_ocp(ocp.dynamics, ocp.running_cost, t, x, u,
-                                      U_lb=u_lb, U_ub=u_ub, dynamics_jac=ocp.jac,
-                                      cost_grad=ocp.running_cost_grad, tol=tol,
-                                      n_nodes=n_nodes, maxiter=max_iter, verbose=verbose)
-
-    t = ps_sol.t.flatten()
-    x = ps_sol.X
-    u = ps_sol.U
-    p = ps_sol.dVdX
-    v = ps_sol.V.flatten()
-
-    ocp_sol = DirectSolution(t, x, u, p, v, ps_sol.status, ps_sol.message,
-                             ps_sol=ps_sol)
+    ocp_sol = _solve_infinite_horizon(ocp, t, x, u, tol=tol, n_nodes=n_nodes,
+                                      reshape_order=reshape_order,
+                                      maxiter=max_iter, verbose=verbose)
 
     # Stop if algorithm succeeded and running cost is small enough
     if ocp_sol.check_convergence(ocp.running_cost, t1_tol, verbose=verbose > 0):
@@ -171,8 +143,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     # Stop if maximum nodes is reached
     if n_nodes >= max_nodes:
-        ocp_sol.message = (f'n_nodes exceeded max_nodes. Last status was '
-                           f'{ocp_sol.status}: {ocp_sol.message}')
+        ocp_sol.message = (f"n_nodes exceeded max_nodes. Last status was "
+                           f"{ocp_sol.status}: {ocp_sol.message}")
         ocp_sol.status = 10
         return ocp_sol
 
@@ -183,9 +155,72 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     tol = tol * tol_scale
 
     if verbose > 0:
-        print(f'Increasing n_nodes to {n_nodes:d}')
+        print(f"Increasing n_nodes to {n_nodes:d}")
 
-    return solve_infinite_horizon(ocp, t, x, u, n_nodes=n_nodes, tol=tol,
-                                  max_iter=max_iter, n_add_nodes=n_add_nodes,
-                                  max_nodes=max_nodes, tol_scale=tol_scale,
-                                  t1_tol=t1_tol, verbose=verbose)
+    return solve_infinite_horizon(
+        ocp, t, x, u, n_nodes=n_nodes, tol=tol, max_iter=max_iter,
+        reshape_order=reshape_order, n_add_nodes=n_add_nodes,
+        max_nodes=max_nodes, tol_scale=tol_scale, t1_tol=t1_tol,
+        verbose=verbose)
+
+
+def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
+                            reshape_order='C', verbose=0):
+
+    # Initialize LGR quadrature
+    tau, w_hat, D_hat = make_LGR(n_nodes)
+
+    # Time scaling for transformation to LGR points
+    r_tau = utilities.deriv_time_map(tau)
+    w = w_hat * r_tau
+    D = np.einsum('i,ij->ij', 1. / r_tau, D_hat)
+
+    # Map initial guess to LGR points
+    x0 = x[:, :1]
+    x, u = utilities.interp_guess(t, x, u, tau)
+
+    collect_vars, separate_vars = utilities.make_reshaping_funs(
+        ocp.n_states, ocp.n_controls, n_nodes, order=reshape_order)
+
+    # Quadrature integration of running cost
+    def cost_fun_wrapper(xu):
+        x, u = separate_vars(xu)
+
+        L = ocp.running_cost(x, u)
+        cost = np.sum(L * w)
+
+        dLdx, dLdu = ocp.running_cost_grad(x, u, L0=L)
+        jac = collect_vars(dLdx * w, dLdu * w)
+
+        return cost, jac
+
+    dyn_constr = utilities.make_dynamic_constraint(
+        ocp.dynamics, D, ocp.n_states, ocp.n_controls, separate_vars,
+        jac=ocp.jac, order=reshape_order)
+    init_cond_constr = utilities.make_initial_condition_constraint(
+        x0, ocp.n_controls, n_nodes, order=reshape_order)
+
+    u_lb = getattr(ocp.parameters, 'u_lb', None)
+    u_ub = getattr(ocp.parameters, 'u_ub', None)
+    if u_lb is not None:
+        u_lb = resize_vector(u_lb, ocp.n_controls)
+    if u_ub is not None:
+        u_ub = resize_vector(u_ub, ocp.n_controls)
+
+    bound_constr = utilities.make_bound_constraint(u_lb, u_ub, ocp.n_states,
+                                                   n_nodes, order=reshape_order)
+
+    if verbose:
+        print(f"\nNumber of LGR nodes: {n_nodes}")
+        print("-" * 80)
+
+    minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
+
+    minimize_result = minimize(fun=cost_fun_wrapper, x0=collect_vars(x, u),
+                               bounds=bound_constr,
+                               constraints=[dyn_constr, init_cond_constr],
+                               tol=tol, jac=True, options=minimize_opts)
+
+    return DirectSolution.from_minimize_result(
+        minimize_result, tau, w, reshape_order, separate_vars, ocp.total_cost,
+        u_ub=u_lb, u_lb=u_ub)

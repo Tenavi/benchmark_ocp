@@ -1,1 +1,1 @@
-from .ps_solve import *
+from .solve import *
