@@ -2,60 +2,11 @@ import numpy as np
 from scipy import optimize, sparse
 from scipy.interpolate import interp1d
 
-_order_err_msg = "order must be one of 'C' (C, row-major) or 'F' (Fortran, column-major)"
+_order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
+                  "(Fortran, column-major)")
 
-def time_map(t):
-    '''
-    Convert physical time t to the half-open interval [-1,1).
-    See Fariba and Ross 2008.
 
-    Parameters
-    ----------
-    t : (n_points,) array
-        Physical times, t >= 0.
-
-    Returns
-    -------
-    tau : (n_points,) array
-        Mapped time points, tau in [-1,1).
-    '''
-    return (t - 1.)/(t + 1.)
-
-def invert_time_map(tau):
-    '''
-    Convert points from half-open interval [-1,1) to physical time t.
-    See Fariba and Ross 2008.
-
-    Parameters
-    ----------
-    tau : (n_points,) array
-        Mapped time points, tau in [-1,1).
-
-    Returns
-    -------
-    t : (n_points,) array
-        Physical times, t >= 0.
-    '''
-    return (1. + tau)/(1. - tau)
-
-def deriv_time_map(tau):
-    '''
-    Derivative of the mapping from Radau points tau in [-1,1) to physical time
-    t, also called r(tau). Used for chain rule. See Fariba and Ross 2008.
-
-    Parameters
-    ----------
-    tau : (n_points,) array
-        Mapped time points, tau in [-1,1).
-
-    Returns
-    -------
-    r : (n_points,) array
-        Derivative of the mapping, dt/dtau (tau) = r(tau).
-    '''
-    return 2./(1. - tau)**2
-
-def interp_guess(t, X, U, tau):
+def interp_guess(t, x, u, tau, time_map):
     '''
     Interpolate initial guesses for the state X and control U in physical time
     to Radau points in [-1,1).
@@ -80,16 +31,13 @@ def interp_guess(t, X, U, tau):
         Interpolated control values U(tau).
     '''
     t_mapped = time_map(np.reshape(t, (-1,)))
-    X, U = np.atleast_2d(X), np.atleast_2d(U)
+    x, u = np.atleast_2d(x), np.atleast_2d(u)
 
-    X_poly = interp1d(
-        t_mapped, X, bounds_error=False, fill_value=X[:,-1]
-    )
-    U_poly = interp1d(
-        t_mapped, U, bounds_error=False, fill_value=U[:,-1]
-    )
+    x = interp1d(t_mapped, x, bounds_error=False, fill_value=x[:, -1])
+    u = interp1d(t_mapped, u, bounds_error=False, fill_value=u[:, -1])
 
-    return X_poly(tau), U_poly(tau)
+    return x(tau), u(tau)
+
 
 def make_reshaping_funs(n_states, n_controls, n_nodes, order='C'):
     '''
@@ -135,10 +83,9 @@ def make_reshaping_funs(n_states, n_controls, n_nodes, order='C'):
 
     return collect_vars, separate_vars
 
-def make_dynamic_constraint(
-        dynamics, D, n_states, n_controls, separate_vars, jac='2-point',
-        order='C'
-    ):
+
+def make_dynamic_constraint(dynamics, D, n_states, n_controls, separate_vars,
+                            jac='2-point', order='C'):
     '''
     Create a function to evaluate the dynamic constraint DX - F(X,U) = 0 and its
     Jacobian. The Jacobian is returned as a callable which employs sparse
@@ -294,16 +241,17 @@ def make_initial_condition_constraint(X0, n_controls, n_nodes, order='C'):
 
     return optimize.LinearConstraint(A=A, lb=X0_flat, ub=X0_flat)
 
-def make_bound_constraint(U_lb, U_ub, n_states, n_nodes, order='C'):
+
+def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='C'):
     '''
     Create the control saturation constraints for all controls. Returns None if
     both control bounds are None.
 
     Parameters
     ----------
-    U_lb : (n_controls,1) array or None
+    u_lb : (n_controls,1) array or None
         Lower bounds for the controls.
-    U_ub : (n_controls,1) array or None
+    u_ub : (n_controls,1) array or None
         Upper bounds for the controls.
     n_states : int
         Number of state variables.
@@ -315,32 +263,30 @@ def make_bound_constraint(U_lb, U_ub, n_states, n_nodes, order='C'):
     Returns
     -------
     None
-        Returned if both U_lb and U_ub are None.
+        Returned if both u_lb and u_ub are None.
     constraints : Bounds
         Instance of scipy.optimize.LinearBounds containing the control bounds
         mapped to the decision vector of states and controls. Returned only if
-        at least one of U_lb and U_ub is not None.
+        at least one of u_lb and u_ub is not None.
     '''
-    if U_lb is None and U_ub is None:
+    if u_lb is None and u_ub is None:
         return
 
-    if U_lb is None:
-        U_lb = np.full_like(U_ub, -np.inf)
-    elif U_ub is None:
-        U_ub = np.full_like(U_lb, np.inf)
+    if u_lb is None:
+        u_lb = np.full_like(u_ub, -np.inf)
+    elif u_ub is None:
+        u_ub = np.full_like(u_lb, np.inf)
 
-    U_lb = np.reshape(U_lb, (-1,1))
-    U_ub = np.reshape(U_ub, (-1,1))
-
-    n_controls = U_ub.shape[0]
+    u_lb = np.reshape(u_lb, (-1,1))
+    u_ub = np.reshape(u_ub, (-1,1))
 
     lb = np.concatenate((
         np.full(n_states*n_nodes, -np.inf),
-        np.tile(U_lb, (1,n_nodes)).flatten(order=order)
+        np.tile(u_lb, (1,n_nodes)).flatten(order=order)
     ))
     ub = np.concatenate((
         np.full(n_states*n_nodes, np.inf),
-        np.tile(U_ub, (1,n_nodes)).flatten(order=order)
+        np.tile(u_ub, (1,n_nodes)).flatten(order=order)
     ))
 
     return optimize.Bounds(lb=lb, ub=ub)

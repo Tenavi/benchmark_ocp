@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import special
 
+
 def _check_size_n(n_nodes):
     '''
     We only define the LGR quadrature for n_nodes >= 3. This utility function
@@ -25,6 +26,7 @@ def _check_size_n(n_nodes):
         raise ValueError('Number of nodes must be at least n_nodes >= 3.')
     return int(n_nodes)
 
+
 def legendre(x, n):
     '''
     Evaluates the nth order Legendre polynomial P_n (x) at a single point x in
@@ -44,6 +46,7 @@ def legendre(x, n):
     '''
     P, _ = special.lpn(n, x)
     return P[-1]
+
 
 def make_LGR_nodes(n_nodes):
     '''
@@ -67,6 +70,7 @@ def make_LGR_nodes(n_nodes):
     n = _check_size_n(n_nodes)
     tau, _ = special.roots_jacobi(n-1, alpha=0, beta=1)
     return np.concatenate(([-1.], tau))
+
 
 def make_LGR_weights(tau):
     '''
@@ -92,6 +96,7 @@ def make_LGR_weights(tau):
     for i in range(1,n):
         w[i] = (1. - tau[i])/(n * legendre(tau[i], n-1))**2
     return w
+
 
 def make_LGR_diff_matrix(tau):
     '''
@@ -130,6 +135,7 @@ def make_LGR_diff_matrix(tau):
                 D[i,j] = 1. / (2. * (1. - tau[i]))
     return D
 
+
 def make_LGR(n_nodes):
     '''
     Constructs LGR collocation points, integration weights, and differentiation
@@ -154,3 +160,57 @@ def make_LGR(n_nodes):
     w = make_LGR_weights(tau)
     D = make_LGR_diff_matrix(tau)
     return tau, w, D
+
+
+def time_map(t):
+    '''
+    Convert physical time t to the half-open interval [-1,1).
+    See Fariba and Ross 2008.
+
+    Parameters
+    ----------
+    t : (n_points,) array
+        Physical times, t >= 0.
+
+    Returns
+    -------
+    tau : (n_points,) array
+        Mapped time points, tau in [-1,1).
+    '''
+    return (t - 1.) / (t + 1.)
+
+
+def invert_time_map(tau):
+    '''
+    Convert points from half-open interval [-1,1) to physical time t.
+    See Fariba and Ross 2008.
+
+    Parameters
+    ----------
+    tau : (n_points,) array
+        Mapped time points, tau in [-1,1).
+
+    Returns
+    -------
+    t : (n_points,) array
+        Physical times, t >= 0.
+    '''
+    return (1. + tau) / (1. - tau)
+
+
+def deriv_time_map(tau):
+    '''
+    Derivative of the mapping from Radau points tau in [-1,1) to physical time
+    t, also called r(tau). Used for chain rule. See Fariba and Ross 2008.
+
+    Parameters
+    ----------
+    tau : (n_points,) array
+        Mapped time points, tau in [-1,1).
+
+    Returns
+    -------
+    r : (n_points,) array
+        Derivative of the mapping, dt/dtau (tau) = r(tau).
+    '''
+    return 2. / (1. - tau) ** 2

@@ -1,9 +1,7 @@
-import warnings
-
 import numpy as np
 
 from . import utilities
-from .legendre_gauss_radau import make_LGR
+from . import legendre_gauss_radau as lgr
 from .optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.utilities import resize_vector
@@ -135,7 +133,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     ocp_sol = _solve_infinite_horizon(ocp, t, x, u, tol=tol, n_nodes=n_nodes,
                                       reshape_order=reshape_order,
-                                      maxiter=max_iter, verbose=verbose)
+                                      max_iter=max_iter, verbose=verbose)
 
     # Stop if algorithm succeeded and running cost is small enough
     if ocp_sol.check_convergence(ocp.running_cost, t1_tol, verbose=verbose > 0):
@@ -166,18 +164,62 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
 def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                             reshape_order='C', verbose=0):
+    """
+    Compute the open-loop optimal solution of a finite horizon approximation of
+    an infinite horizon optimal control problem for a single initial condition.
 
+    This function applies a "direct method", which is to transform the optimal
+    control problem into a constrained optimization problem with Legendre-Gauss-
+    Radau pseudospectral collocation. The resulting optimization problem is
+    solved using is solved using sequential least squares quadratic programming
+    (SLSQP).
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `dynamics`, `jac`, and `integration_events` methods.
+    t : (n_points,) array
+        Time points at which the initial guess is supplied. Assumed to be
+        sorted from smallest to largest.
+    x : (n_states, n_points) array
+        Initial guess for the state trajectory at times `t`. The initial
+        condition is assumed to be contained in `x[:, 0]`.
+    u : (n_controls, n_points) array
+        Initial guess for the optimal control at times `t`.
+    n_nodes : int, default=32
+        Number of nodes to use in the pseudospectral discretization.
+    tol : float, default=1e-05
+        Convergence tolerance for the SLSQP optimizer.
+    max_iter : int, default=500
+        Maximum number of SLSQP iterations.
+    reshape_order : {'C', 'F'}, default='C'
+        Use C ('C', row-major) or Fortran ('F', column-major) ordering for the
+        NLP decision variables. This setting can slightly affect performance.
+    verbose : {0, 1, 2}, default=0
+        Level of algorithm's verbosity:
+
+            * 0 (default) : work silently.
+            * 1 : display a termination report.
+            * 2 : display progress during iterations.
+
+    Returns
+    -------
+    sol : `OpenLoopSolution`
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status==0`.
+    """
     # Initialize LGR quadrature
-    tau, w_hat, D_hat = make_LGR(n_nodes)
+    tau, w_hat, D_hat = lgr.make_LGR(n_nodes)
 
     # Time scaling for transformation to LGR points
-    r_tau = utilities.deriv_time_map(tau)
+    r_tau = lgr.deriv_time_map(tau)
     w = w_hat * r_tau
     D = np.einsum('i,ij->ij', 1. / r_tau, D_hat)
 
     # Map initial guess to LGR points
     x0 = x[:, :1]
-    x, u = utilities.interp_guess(t, x, u, tau)
+    x, u = utilities.interp_guess(t, x, u, tau, lgr.time_map)
 
     collect_vars, separate_vars = utilities.make_reshaping_funs(
         ocp.n_states, ocp.n_controls, n_nodes, order=reshape_order)

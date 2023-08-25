@@ -4,14 +4,16 @@ import numpy as np
 from scipy.optimize._numdiff import approx_derivative
 
 from optimalcontrol.open_loop.direct import utilities
-from optimalcontrol.open_loop.direct import legendre_gauss_radau as LGR
+from optimalcontrol.open_loop.direct import legendre_gauss_radau as lgr
+
 
 TOL = 1e-10
+
 
 def _generate_dynamics(n_x, n_u, poly_deg=5):
     A = np.random.randn(n_x, n_x+n_u)
     # Make random polynomials of X and U with no constant term or linear term
-    X_coefs = np.hstack((np.zeros((n_x,2)), np.random.randn(n_x, poly_deg-2)))
+    X_coefs = np.hstack((np.zeros((n_x, 2)), np.random.randn(n_x, poly_deg-2)))
     X_polys = [
         np.polynomial.polynomial.Polynomial(X_coefs[i], domain=[-10., 10.])
         for i in range(n_x)
@@ -60,18 +62,6 @@ def _generate_dynamics(n_x, n_u, poly_deg=5):
 
     return dynamics, jacobians
 
-def test_time_map():
-    t_orig = np.linspace(0.,10.)
-    tau = utilities.time_map(t_orig)
-    t = utilities.invert_time_map(tau)
-    assert np.allclose(t, t_orig)
-
-    r = utilities.deriv_time_map(tau)
-    for k in range(tau.shape[0]):
-        r_num = approx_derivative(
-            utilities.invert_time_map, tau[k], method='cs'
-        )
-        assert(np.isclose(r[k], r_num))
 
 @pytest.mark.parametrize('n', [10,15])
 @pytest.mark.parametrize('d', [1,2])
@@ -80,7 +70,7 @@ def test_interp_initial_guess(n, d):
     Test that the interpolation code recovers the original points if tau = t.
     '''
     t = np.linspace(0.,10.,n)
-    tau = utilities.time_map(t)
+    tau = lgr.time_map(t)
 
     X = np.cos(t) * t
     U = np.sin(-t)
@@ -91,7 +81,7 @@ def test_interp_initial_guess(n, d):
         X = np.vstack((X, X[0] + k))
         U = np.vstack((U, U[0] - k))
 
-    X_interp, U_interp = utilities.interp_guess(t, X, U, tau)
+    X_interp, U_interp = utilities.interp_guess(t, X, U, tau, lgr.time_map)
 
     assert np.allclose(X_interp, X)
     assert np.allclose(U_interp, U)
@@ -130,7 +120,7 @@ def test_dynamics_setup(order):
         n_x, n_u, n_t, order=order
     )
 
-    tau, w, D = LGR.make_LGR(n_t)
+    tau, w, D = lgr.make_LGR(n_t)
 
     # Generate random polynomials of degree n-1 for the state
     coef = np.random.randn(n_x, n_t)
@@ -172,7 +162,7 @@ def test_dynamics_setup_Jacobian(n_nodes, order):
         n_x, n_u, n_t, order=order
     )
 
-    tau, w, D = LGR.make_LGR(n_t)
+    tau, w, D = lgr.make_LGR(n_t)
 
     # Generate random states and controls
     X = np.random.randn(n_x, n_t)

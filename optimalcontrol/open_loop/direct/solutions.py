@@ -1,6 +1,6 @@
 from scipy.interpolate import BarycentricInterpolator, interp1d
 
-from .utilities import time_map, invert_time_map
+from .legendre_gauss_radau import time_map, invert_time_map
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
 
@@ -8,8 +8,6 @@ from optimalcontrol.open_loop.solutions import OpenLoopSolution
 class DirectSolution(OpenLoopSolution):
     def __init__(self, t, x, u, p, v, status, message, tau=None, u_lb=None,
                  u_ub=None):
-        self._ps_sol = ps_sol
-
         self._u_lb, self._u_ub = u_lb, u_ub
 
         if tau is None:
@@ -26,7 +24,8 @@ class DirectSolution(OpenLoopSolution):
         tau = time_map(t)
 
         x = self._x_interp(tau)
-        u = saturate(self._u_interp(tau), self._u_lb, self._u_ub)
+        u = self._u_interp(tau)
+        u = saturate(u, self._u_lb, self._u_ub)
         p = self._p_interp(tau)
 
         v = self._v_interp(t)

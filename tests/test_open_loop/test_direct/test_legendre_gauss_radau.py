@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import pytest
-import scipy.io
+from scipy.optimize._numdiff import approx_derivative
 
 from optimalcontrol.open_loop.direct import legendre_gauss_radau as lgr
 
@@ -143,3 +143,15 @@ def test_LGR_multivariate_differentiate(n, n_dims):
     LGR_derivative = np.matmul(P_mat, D.T)
 
     np.testing.assert_allclose(LGR_derivative, expected_derivative)
+
+
+def test_time_map():
+    t_orig = np.linspace(0.,10.)
+    tau = lgr.time_map(t_orig)
+    t = lgr.invert_time_map(tau)
+    assert np.allclose(t, t_orig)
+
+    r = lgr.deriv_time_map(tau)
+    for k in range(tau.shape[0]):
+        r_num = approx_derivative(lgr.invert_time_map, tau[k], method='cs')
+        assert(np.isclose(r[k], r_num))
