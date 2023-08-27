@@ -221,23 +221,21 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     x0 = x[:, :1]
     x, u = utilities.interp_guess(t, x, u, tau, lgr.time_map)
 
-    collect_vars, separate_vars = utilities.make_reshaping_funs(
-        ocp.n_states, ocp.n_controls, n_nodes, order=reshape_order)
-
     # Quadrature integration of running cost
     def cost_fun_wrapper(xu):
-        x, u = separate_vars(xu)
+        x, u = utilities.separate_vars(xu, ocp.n_states, ocp.n_controls,
+                                       order=reshape_order)
 
         L = ocp.running_cost(x, u)
         cost = np.sum(L * w)
 
         dLdx, dLdu = ocp.running_cost_grad(x, u, L0=L)
-        jac = collect_vars(dLdx * w, dLdu * w)
+        jac = utilities.collect_vars(dLdx * w, dLdu * w, order=reshape_order)
 
         return cost, jac
 
     dyn_constr = utilities.make_dynamic_constraint(
-        ocp.dynamics, D, ocp.n_states, ocp.n_controls, separate_vars,
+        ocp.dynamics, D, ocp.n_states, ocp.n_controls,
         jac=ocp.jac, order=reshape_order)
     init_cond_constr = utilities.make_initial_condition_constraint(
         x0, ocp.n_controls, n_nodes, order=reshape_order)
@@ -258,11 +256,11 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
 
-    minimize_result = minimize(fun=cost_fun_wrapper, x0=collect_vars(x, u),
-                               bounds=bound_constr,
-                               constraints=[dyn_constr, init_cond_constr],
-                               tol=tol, jac=True, options=minimize_opts)
+    minimize_result = minimize(
+        fun=cost_fun_wrapper,
+        x0=utilities.collect_vars(x, u, order=reshape_order),
+        bounds=bound_constr, constraints=[dyn_constr, init_cond_constr],
+        tol=tol, jac=True, options=minimize_opts)
 
     return DirectSolution.from_minimize_result(
-        minimize_result, tau, w, reshape_order, separate_vars, ocp.total_cost,
-        u_ub=u_lb, u_lb=u_ub)
+        minimize_result, ocp, tau, w, reshape_order, u_ub=u_lb, u_lb=u_ub)

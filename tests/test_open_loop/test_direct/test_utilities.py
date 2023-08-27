@@ -10,8 +10,9 @@ from optimalcontrol.open_loop.direct import legendre_gauss_radau as lgr
 TOL = 1e-10
 
 
-def _generate_dynamics(n_x, n_u, poly_deg=5):
-    A = np.random.randn(n_x, n_x+n_u)
+def _generate_dynamics(n_x, n_u, poly_deg=5, random_seed=None):
+    rng = np.random.default_rng(random_seed)
+    A = rng.normal(size=(n_x, n_x + n_u))
     # Make random polynomials of X and U with no constant term or linear term
     X_coefs = np.hstack((np.zeros((n_x, 2)), np.random.randn(n_x, poly_deg-2)))
     X_polys = [
@@ -86,184 +87,166 @@ def test_interp_initial_guess(n, d):
     assert np.allclose(X_interp, X)
     assert np.allclose(U_interp, U)
 
-@pytest.mark.parametrize('n_states', [1,3])
-@pytest.mark.parametrize('n_controls', [1,2])
-@pytest.mark.parametrize('order', ['F','C'])
-def test_reshaping_funs(n_states, n_controls, order):
-    n_nodes = 42
-    X = np.random.randn(n_states, n_nodes)
-    U = np.random.randn(n_controls, n_nodes)
 
-    collect_vars, separate_vars = utilities.make_reshaping_funs(
-        n_states, n_controls, n_nodes, order=order
-    )
+@pytest.mark.parametrize('n_states', [1, 3])
+@pytest.mark.parametrize('n_controls', [1, 2])
+@pytest.mark.parametrize('n_nodes', [16, 17])
+@pytest.mark.parametrize('order', ['F', 'C'])
+def test_reshaping_funs(n_states, n_controls, n_nodes, order):
+    rng = np.random.default_rng()
+    x = rng.normal(size=(n_states, n_nodes))
+    u = rng.normal(size=(n_controls, n_nodes))
 
-    XU = collect_vars(X, U)
-    assert XU.ndim == 1
-    assert XU.shape[0] == (n_states + n_controls) * n_nodes
+    xu = utilities.collect_vars(x, u, order=order)
+    assert xu.ndim == 1
+    assert xu.shape[0] == (n_states + n_controls) * n_nodes
 
-    _X, _U = separate_vars(XU)
-    assert np.allclose(_X, X)
-    assert np.allclose(_U, U)
+    _x, _u = utilities.separate_vars(xu, n_states, n_controls, order=order)
+    np.testing.assert_array_equal(_x, x)
+    np.testing.assert_array_equal(_u, u)
 
-@pytest.mark.parametrize('order', ['F','C'])
+
+@pytest.mark.parametrize('order', ['F', 'C'])
 def test_dynamics_setup(order):
-    '''
+    """
     Test that the dynamics constraints are instantiated properly. To this end,
     make a random polynomial which represents the true state. Check that the
     constraint function is zero when evaluated for this state, and not zero when
     evaluated on a significantly perturbed state.
-    '''
+    """
     n_x, n_u, n_t = 3, 2, 13
-
-    collect_vars, separate_vars = utilities.make_reshaping_funs(
-        n_x, n_u, n_t, order=order
-    )
+    rng = np.random.default_rng()
 
     tau, w, D = lgr.make_LGR(n_t)
 
     # Generate random polynomials of degree n-1 for the state
-    coef = np.random.randn(n_x, n_t)
-    Poly_X = [np.polynomial.polynomial.Polynomial(coef[d]) for d in range(n_x)]
+    coef = rng.normal(size=(n_x, n_t))
+    poly_x = [np.polynomial.polynomial.Polynomial(coef[d]) for d in range(n_x)]
     # control is ignored so can be anything
-    XU = collect_vars(
-        np.vstack([P(tau) for P in Poly_X]), np.random.randn(n_u, n_t)
-    )
+    xu = utilities.collect_vars(np.vstack([p(tau) for p in poly_x]),
+                                rng.normal(size=(n_u, n_t)), order=order)
 
     # The derivative is the polynomial derivative
-    def dXdt(X, U):
-        return np.vstack([P.deriv()(tau) for P in Poly_X])
+    def dxdt(x, u):
+        return np.vstack([p.deriv()(tau) for p in poly_x])
 
-    constr = utilities.make_dynamic_constraint(
-        dXdt, D, n_x, n_u, separate_vars, order=order
-    )
+    constr = utilities.make_dynamic_constraint(dxdt, D, n_x, n_u, order=order)
 
     assert constr.lb == constr.ub == 0.
 
     # Check that evaluating the constraint function for the true state returns 0
-    assert np.all(np.abs(constr.fun(XU)) < TOL)
+    np.testing.assert_allclose(constr.fun(xu), 0., atol=TOL)
     # Check that evaluating the constraint function for perturbed states does
     # not return 0
     with pytest.raises(AssertionError):
-        XU = XU + np.random.randn(XU.shape[0])*10.
-        assert np.all(np.abs(constr.fun(XU)) < TOL)
+        xu = xu + rng.normal(scale=10., size=xu.shape)
+        np.testing.assert_allclose(constr.fun(xu), 0., atol=TOL)
 
-@pytest.mark.parametrize('n_nodes', [3,4,7,8])
-@pytest.mark.parametrize('order', ['F','C'])
-def test_dynamics_setup_Jacobian(n_nodes, order):
-    '''
+
+@pytest.mark.parametrize('n_nodes', [3, 4, 7, 8])
+@pytest.mark.parametrize('order', ['F', 'C'])
+def test_dynamics_setup_jacobian(n_nodes, order):
+    """
     Use numerical derivatives to verify the sparse dynamics constraint Jacobian.
-    '''
-    np.random.seed(42)
-
+    """
     n_x, n_u, n_t = 3, 2, n_nodes
-
-    collect_vars, separate_vars = utilities.make_reshaping_funs(
-        n_x, n_u, n_t, order=order
-    )
+    rng = np.random.default_rng()
 
     tau, w, D = lgr.make_LGR(n_t)
 
     # Generate random states and controls
-    X = np.random.randn(n_x, n_t)
-    U = np.random.randn(n_u, n_t)
-    XU = collect_vars(X, U)
+    x = rng.normal(size=(n_x, n_t))
+    u = rng.normal(size=(n_u, n_t))
+    xu = utilities.collect_vars(x, u, order=order)
 
     # Generate some random dynamics
-    dXdt, jacobians = _generate_dynamics(n_x, n_u)
+    dxdt, jacobians = _generate_dynamics(n_x, n_u)
 
-    constr = utilities.make_dynamic_constraint(
-        dXdt, D, n_x, n_u, separate_vars, jac=jacobians, order=order
-    )
+    constr = utilities.make_dynamic_constraint(dxdt, D, n_x, n_u, jac=jacobians,
+                                               order=order)
 
-    constr_Jac = constr.jac(XU)
-    expected_Jac = approx_derivative(constr.fun, XU, method='cs')
+    constr_jac = constr.jac(xu)
+    expected_jac = approx_derivative(constr.fun, xu, method='cs')
 
-    assert constr_Jac.shape == (n_x*n_t, (n_x + n_u)*n_t)
-    assert np.allclose(constr_Jac.toarray(), expected_Jac)
+    assert expected_jac.shape == (n_x * n_t, (n_x + n_u) * n_t)
 
-@pytest.mark.parametrize('n_nodes', [3,4,7,8])
-@pytest.mark.parametrize('order', ['F','C'])
+    np.testing.assert_allclose(constr_jac.toarray(), expected_jac, atol=TOL)
+
+
+@pytest.mark.parametrize('n_nodes', [3, 4, 7, 8])
+@pytest.mark.parametrize('order', ['F', 'C'])
 def test_init_cond_setup(n_nodes, order):
-    '''
-    Check that the initial condition matrix multiplication returns the correct
-    points.
-    '''
+    """Check that the initial condition matrix multiplication returns the
+    correct points."""
     n_x, n_u, n_t = 3, 2, n_nodes
-
-    collect_vars, separate_vars = utilities.make_reshaping_funs(
-        n_x, n_u, n_t, order=order
-    )
+    rng = np.random.default_rng()
 
     # Generate random states and controls
-    X = np.random.randn(n_x, n_t)
-    U = np.random.randn(n_u, n_t)
-    X0 = X[:,:1]
-    XU = collect_vars(X, U)
+    x = rng.normal(size=(n_x, n_t))
+    u = rng.normal(size=(n_u, n_t))
+    xu = utilities.collect_vars(x, u, order=order)
+    x0 = x[:, :1]
 
-    constr = utilities.make_initial_condition_constraint(
-        X0, n_u, n_t, order=order
-    )
+    constr = utilities.make_initial_condition_constraint(x0, n_u, n_t,
+                                                         order=order)
 
-    assert np.all(constr.lb == X0.flatten())
-    assert np.all(constr.ub == X0.flatten())
-    assert constr.A.shape == (n_x, (n_x+n_u)*n_t)
+    np.testing.assert_array_equal(constr.lb, x0.flatten())
+    np.testing.assert_array_equal(constr.ub, x0.flatten())
+    assert constr.A.shape == (n_x, (n_x + n_u)*n_t)
     # Check that evaluating the multiplying the linear constraint matrix
     # times the full state-control vector returns the initial condtion
-    assert np.allclose(constr.A @ XU, X0.flatten())
+    np.testing.assert_allclose(constr.A @ xu, x0.flatten(), rtol=TOL)
 
-@pytest.mark.parametrize('n_nodes', [3,4,5])
-@pytest.mark.parametrize('order', ['F','C'])
-@pytest.mark.parametrize(
-    'U_lb', [None, -1., [-1.], [-1.,-2.], [-np.inf, -np.inf], [-np.inf,-2.]]
-)
-def test_bounds_setup(n_nodes, order, U_lb):
-    '''
+
+@pytest.mark.parametrize('n_nodes', [3, 4, 5])
+@pytest.mark.parametrize('order', ['F', 'C'])
+@pytest.mark.parametrize('u_lb', (None, -1., [-1.], [-1., -2.],
+                                  [-np.inf, -np.inf], [-np.inf, -2.]))
+def test_bounds_setup(n_nodes, order, u_lb):
+    """
     Test that Bounds are initialized correctly for all different kinds of
     possible control bounds.
-    '''
-    if U_lb is None:
-        U_ub = None
+    """
+    if u_lb is None:
+        u_ub = None
         n_u = 1
-    elif np.isinf(U_lb).all():
-        U_lb = None
-        U_ub = None
+    elif np.isinf(u_lb).all():
+        u_lb = None
+        u_ub = None
         n_u = 2
     else:
-        U_lb = np.reshape(U_lb, (-1,1))
-        U_ub = - U_lb
-        n_u = U_lb.shape[0]
+        u_lb = np.reshape(u_lb, (-1, 1))
+        u_ub = - u_lb
+        n_u = u_lb.shape[0]
 
     n_x, n_t = 3, n_nodes
+    rng = np.random.default_rng()
 
-    constr = utilities.make_bound_constraint(
-        U_lb, U_ub, n_x, n_t, order=order
-    )
+    constr = utilities.make_bound_constraint(u_lb, u_ub, n_x, n_t, order=order)
 
-    if U_lb is None and U_ub is None:
+    if u_lb is None and u_ub is None:
         assert constr is None
     else:
-        assert constr.lb.shape == constr.ub.shape == ((n_x+n_u)*n_t,)
+        assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
 
         # No state constraints
-        assert np.isinf(constr.lb[:n_x*n_nodes]).all()
-        assert np.isinf(constr.ub[:n_x*n_nodes]).all()
+        assert np.isinf(constr.lb[:n_x * n_nodes]).all()
+        assert np.isinf(constr.ub[:n_x * n_nodes]).all()
 
-        # Verify control constraints
-        collect_vars, _ = utilities.make_reshaping_funs(
-            n_x, n_u, n_t, order=order
-        )
-
-        if U_lb is None:
-            assert np.isinf(constr.lb[n_x*n_nodes:]).all()
+        if u_lb is None:
+            assert np.isinf(constr.lb[n_x * n_nodes:]).all()
         else:
-            U = np.tile(U_lb, (1,n_nodes))
-            XU = collect_vars(np.random.randn(n_x, n_t), U)
-            assert np.allclose(constr.lb[n_x*n_nodes:], XU[n_x*n_nodes:])
+            u = np.tile(u_lb, (1, n_nodes))
+            xu = utilities.collect_vars(rng.normal(size=(n_x, n_t)), u,
+                                        order=order)
+            np.testing.assert_allclose(constr.lb[n_x * n_nodes:],
+                                       xu[n_x * n_nodes:], atol=TOL)
 
-        if U_ub is None:
-            assert np.isinf(constr.ub[n_x*n_nodes:]).all()
+        if u_ub is None:
+            assert np.isinf(constr.ub[n_x * n_nodes:]).all()
         else:
-            U = np.tile(U_ub, (1,n_nodes))
-            XU = collect_vars(np.random.randn(n_x, n_t), U)
-            assert np.allclose(constr.ub[n_x*n_nodes:], XU[n_x*n_nodes:])
+            u = np.tile(u_ub, (1, n_nodes))
+            xu = utilities.collect_vars(rng.normal(size=(n_x, n_t)), u,
+                                        order=order)
+            np.testing.assert_allclose(constr.ub[n_x * n_nodes:],
+                                       xu[n_x * n_nodes:], atol=TOL)

@@ -1,8 +1,9 @@
 from scipy.interpolate import BarycentricInterpolator, interp1d
 
-from .legendre_gauss_radau import time_map, invert_time_map
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
+from .legendre_gauss_radau import time_map, invert_time_map
+from .utilities import separate_vars
 
 
 class DirectSolution(OpenLoopSolution):
@@ -33,16 +34,17 @@ class DirectSolution(OpenLoopSolution):
         return x, u, p, v
 
     @classmethod
-    def from_minimize_result(cls, minimize_result, tau, w, order, separate_vars,
-                             total_cost, u_ub=None, u_lb=None):
+    def from_minimize_result(cls, minimize_result, ocp, tau, w, order,
+                             u_ub=None, u_lb=None):
         t = invert_time_map(tau)
-        x, u = separate_vars(minimize_result.x)
+        x, u = separate_vars(minimize_result.x, ocp.n_states, ocp.n_controls,
+                             order=order)
 
         # Extract KKT multipliers and use to approximate costates
         p = minimize_result.kkt['eq'][0].reshape(x.shape, order=order)
         p = p / w.reshape(1, -1)
 
-        v = total_cost(t, x, u)
+        v = ocp.total_cost(t, x, u)
 
         return cls(t, x, u, p, v, minimize_result.status,
                    minimize_result.message, tau=tau, u_lb=u_lb, u_ub=u_ub)

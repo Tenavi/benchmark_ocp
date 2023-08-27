@@ -39,54 +39,67 @@ def interp_guess(t, x, u, tau, time_map):
     return x(tau), u(tau)
 
 
-def make_reshaping_funs(n_states, n_controls, n_nodes, order='C'):
-    '''
-    Generates a function which collects the state and control arrays into a
-    single vector and a function which reverts the process.
+def collect_vars(x, u, order='C'):
+    """
+    Gather separate state and control matrices arranged by (dimension, time)
+    into a single 1d array for optimization, with states first and controls
+    second.
 
     Parameters
     ----------
-    n_states : int
-        Number of state variables.
-    n_controls : int
-        Number of control variables.
-    n_nodes : int
-        Number of LGR collocation points.
+    x : (n_states, n_nodes) array
+        States arranged by (dimension, time).
+    u : (n_controls, n_nodes) array
+        Controls arranged by (dimension, time).
     order : {'C', 'F'}, default='C'
         Use C ('C', row-major) or Fortran ('F', column-major) ordering.
 
     Returns
     -------
-    collect_vars : callable
-        Function which returns XU = collect_vars(X, U), where X is an
-        (n_states, n_nodes) array, U is an (n_controls, n_nodes) array, and XU
-        is an ((n_states+n_controls)*n_nodes,) array.
-    separate_vars : callable
-        Function which returns X, U = separate_vars(XU), where XU
-        is an ((n_states+n_controls)*n_nodes,) array, X is an
-        (n_states, n_nodes) array, and U is an (n_controls, n_nodes) array.
-    '''
-    if order not in ['C', 'F']:
-        raise ValueError(_order_err_msg)
+    xu : 1d array
+        Array containing states `x` and controls `u`, with
+        `xu[:x.size] == x.flatten(order=order)` and
+        `xu[x.size:] == u.flatten(order=order)`.
+    """
+    return np.concatenate((x.flatten(order=order), u.flatten(order=order)))
 
+
+def separate_vars(xu, n_states, n_controls, order='C'):
+    """
+    Given a single 1d array containing states and controls at all time nodes,
+    assembled using `collect_vars`, separate the array into states and controls
+    and reshape these into 2d arrays arranged by (dimension, time).
+
+    Parameters
+    ----------
+    xu : 1d array
+        Array containing states `x` and controls `u`. `xu.size` must be integer-
+        divisible by `n_states + n_controls`, i.e.
+        `xu.size == (n_states + n_controls) * n_nodes` for an int `n_nodes`.
+    n_states : int
+        Number of states.
+    n_controls : int
+        Number of controls.
+    order : {'C', 'F'}, default='C'
+        Use C ('C', row-major) or Fortran ('F', column-major) ordering.
+
+    Returns
+    -------
+    x : (n_states, n_nodes) array
+        States extracted from `xu` arranged by (dimension, time).
+    u : (n_controls, n_nodes) array
+        Controls extracted from `xu` arranged by (dimension, time).
+    """
+    n_nodes = xu.size // (n_states + n_controls)
     nx = n_states * n_nodes
-
-    def collect_vars(X, U):
-        return np.concatenate((
-            X.flatten(order=order), U.flatten(order=order)
-        ))
-
-    def separate_vars(XU):
-        X = XU[:nx].reshape((n_states, n_nodes), order=order)
-        U = XU[nx:].reshape((n_controls, n_nodes), order=order)
-        return X, U
-
-    return collect_vars, separate_vars
+    x = xu[:nx].reshape((n_states, n_nodes), order=order)
+    u = xu[nx:].reshape((n_controls, n_nodes), order=order)
+    return x, u
 
 
-def make_dynamic_constraint(dynamics, D, n_states, n_controls, separate_vars,
-                            jac='2-point', order='C'):
-    '''
+def make_dynamic_constraint(dynamics, D, n_states, n_controls, jac='2-point',
+                            order='C'):
+    """
     Create a function to evaluate the dynamic constraint DX - F(X,U) = 0 and its
     Jacobian. The Jacobian is returned as a callable which employs sparse
     matrices. In particular, the constraints at time tau_i are independent from
@@ -102,10 +115,6 @@ def make_dynamic_constraint(dynamics, D, n_states, n_controls, separate_vars,
         Number of state variables.
     n_controls : int
         Number of control variables.
-    separate_vars : callable
-        Function which returns X, U = separate_vars(XU), where XU
-        is an ((n_states+n_controls)*n_nodes,) array, X is an
-        (n_states, n_nodes) array, and U is an (n_controls, n_nodes) array.
     jac : {callable, '3-point', '2-point', 'cs'}, default='2-point'
         Jacobian of the dynamics dXdt=F(X,U) with respect to states X and
         controls U. If callable, function dynamics_jac should take two arguments
@@ -122,16 +131,16 @@ def make_dynamic_constraint(dynamics, D, n_states, n_controls, separate_vars,
     constraints : NonlinearConstraint
         Instance of scipy.optimize.NonlinearConstraint containing the constraint
         function and its sparse Jacobian.
-    '''
+    """
     n_nodes = D.shape[0]
     DT = D.T
 
     # Dynamic constraint function evaluates to 0 when (X, U) is feasible
-    def constr_fun(XU):
-        X, U = separate_vars(XU)
-        F = dynamics(X, U)
-        DX = np.matmul(X, DT)
-        return (DX - F).flatten(order=order)
+    def constr_fun(xu):
+        x, u = separate_vars(xu, n_states, n_controls, order=order)
+        f = dynamics(x, u)
+        Dx = np.matmul(x, DT)
+        return (Dx - f).flatten(order=order)
 
     # Generates linear component of Jacobian
     if order == 'C':
@@ -142,66 +151,59 @@ def make_dynamic_constraint(dynamics, D, n_states, n_controls, separate_vars,
         raise ValueError(_order_err_msg)
 
     linear_constr = sparse.hstack((
-        linear_constr, np.zeros((n_states*n_nodes, n_controls*n_nodes))
-    ))
+        linear_constr, np.zeros((n_states*n_nodes, n_controls*n_nodes))))
 
     # Make constraint Jacobian function by summing linear and nonlinear parts
     if callable(jac):
-        def constr_jac(XU):
-            X, U = separate_vars(XU)
-            dFdX, dFdU = jac(X, U)
+        def constr_jac(xu):
+            x, u = separate_vars(xu, n_states, n_controls, order=order)
+            dfdx, dfdu = jac(x, u)
 
             if order == 'C':
-                dFdX = sparse.vstack([
-                    sparse.diags(
-                        diagonals=-dFdX[i],
-                        offsets=range(0, n_nodes*n_states, n_nodes),
-                        shape=(n_nodes, n_nodes*n_states)
-                    ) for i in range(n_states)
-                ])
-                dFdU = sparse.vstack([
-                    sparse.diags(
-                        diagonals=-dFdU[i],
-                        offsets=range(0, n_nodes*n_controls, n_nodes),
-                        shape=(n_nodes, n_nodes*n_controls)
-                    ) for i in range(n_states)
-                ])
+                dfdx = sparse.vstack([
+                    sparse.diags(diagonals=-dfdx[i],
+                                 offsets=range(0, n_nodes*n_states, n_nodes),
+                                 shape=(n_nodes, n_nodes*n_states))
+                    for i in range(n_states)])
+                dfdu = sparse.vstack([
+                    sparse.diags(diagonals=-dfdu[i],
+                                 offsets=range(0, n_nodes*n_controls, n_nodes),
+                                 shape=(n_nodes, n_nodes*n_controls))
+                    for i in range(n_states)])
             elif order == 'F':
-                dFdX = np.transpose(dFdX, (2,0,1))
-                dFdU = np.transpose(dFdU, (2,0,1))
-                dFdX = sparse.block_diag(-dFdX)
-                dFdU = sparse.block_diag(-dFdU)
+                dfdx = np.transpose(dfdx, (2, 0, 1))
+                dfdu = np.transpose(dfdu, (2, 0, 1))
+                dfdx = sparse.block_diag(-dfdx)
+                dfdu = sparse.block_diag(-dfdu)
 
-            Jac = sparse.hstack((dFdX, dFdU))
+            nonlin_jac = sparse.hstack((dfdx, dfdu))
 
-            return Jac + linear_constr
+            return nonlin_jac + linear_constr
     else:
         # Generate sparsity structure for finite differences
         if order == 'C':
             sparsity = sparse.identity(n_nodes)
-            sparsity = sparse.hstack([sparsity]*(n_states + n_controls))
-            sparsity = sparse.vstack([sparsity]*n_states)
+            sparsity = sparse.hstack([sparsity] * (n_states + n_controls))
+            sparsity = sparse.vstack([sparsity] * n_states)
         elif order == 'F':
             sparsity = sparse.hstack((
-                sparse.block_diag([np.ones((n_states, n_states))]*n_nodes),
-                sparse.block_diag([np.ones((n_states, n_controls))]*n_nodes)
-            ))
+                sparse.block_diag([np.ones((n_states, n_states))] * n_nodes),
+                sparse.block_diag([np.ones((n_states, n_controls))] * n_nodes)))
 
-        def dynamics_wrapper(XU):
-            X, U = separate_vars(XU)
-            F = dynamics(X, U)
-            return -F.flatten(order=order)
+        def dynamics_wrapper(xu):
+            x, u = separate_vars(xu, n_states, n_controls, order=order)
+            f = dynamics(x, u)
+            return -f.flatten(order=order)
 
-        def constr_jac(XU):
+        def constr_jac(xu):
             # Compute nonlinear components with finite differences
-            Jac = optimize._numdiff.approx_derivative(
-                dynamics_wrapper, XU, sparsity=sparsity, method=jac
-            )
-            return Jac + linear_constr
+            nonlin_jac = optimize._numdiff.approx_derivative(
+                dynamics_wrapper, xu, sparsity=sparsity, method=jac)
+            return nonlin_jac + linear_constr
 
-    return optimize.NonlinearConstraint(
-        fun=constr_fun, jac=constr_jac, lb=0., ub=0.
-    )
+    return optimize.NonlinearConstraint(fun=constr_fun, jac=constr_jac,
+                                        lb=0., ub=0.)
+
 
 def make_initial_condition_constraint(X0, n_controls, n_nodes, order='C'):
     '''
