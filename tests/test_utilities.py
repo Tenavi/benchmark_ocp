@@ -264,6 +264,5 @@ def test_approx_derivative(n_states, n_out, n_points):
 
     for method in ['2-point', '3-point', 'cs']:
         dfdx_approx = utilities.approx_derivative(vector_fun, x, method=method)
-        np.testing.assert_allclose(
-            dfdx_approx, dfdx_expected, rtol=1e-03, atol=1e-06
-        )
+        np.testing.assert_allclose(dfdx_approx, dfdx_expected,
+                                   rtol=1e-03, atol=1e-06)

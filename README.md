@@ -11,19 +11,25 @@ If you use this software, please cite the software package and/or one or more of
 
 ## Installation
 
-To install the `optimalcontrol` package (in developer mode) run `pip install -e .`
-from the command line. This package has been developed and tested with the
-following software dependencies:
+First create a python environment (using e.g. conda or pip) with
 
-    python>=3.7
+    python>=3.8
+
+Then to install the `optimalcontrol` package (in developer mode), run
+
+    pip install -e .
+
+This package has been developed and tested with the following software
+dependencies:
+    
     numpy>=1.17
-    scipy>=1.6
+    scipy>=1.8
     pytest
     jupyter
-    tqdm
+    matplotlib
     pandas
     scikit-learn>=1.0
-    matplotlib
+    tqdm
 
 ## Test
 

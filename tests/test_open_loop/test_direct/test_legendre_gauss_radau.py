@@ -95,12 +95,12 @@ def test_LGR_differentiate(n):
     # Generate a random polynomial of degree n-1
     degree = n - 1
     coef = rng.normal(size=degree + 1)
-    P = np.polynomial.polynomial.Polynomial(coef)
+    poly = np.polynomial.polynomial.Polynomial(coef)
 
     tau, w, D = lgr.make_LGR(n)
-    LGR_derivative = np.matmul(D, P(tau))
+    lgr_derivative = np.matmul(D, poly(tau))
 
-    np.testing.assert_allclose(LGR_derivative, P.deriv()(tau))
+    np.testing.assert_allclose(lgr_derivative, poly.deriv()(tau))
 
 
 @pytest.mark.parametrize('n_dims', [1, 2, 3])

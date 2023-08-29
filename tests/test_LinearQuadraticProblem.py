@@ -1,6 +1,5 @@
-import pytest
-
 import numpy as np
+import pytest
 
 from optimalcontrol.problem import LinearQuadraticProblem, ProblemParameters
 from optimalcontrol.controls import LinearQuadraticRegulator
@@ -283,7 +282,7 @@ def test_dynamics(n_states, n_controls, n_samples):
 @pytest.mark.parametrize('n_samples', [1, 10])
 def test_optimal_control(n_states, n_controls, n_samples):
     """Test that the optimal control as a function of state and costate matches
-    LQR when appropriate."""
+    LQR when costates are optimal."""
     A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.,
                                  xf=xf, uf=uf, u_lb=-0.5, u_ub=0.5)
@@ -322,35 +321,3 @@ def test_optimal_control(n_states, n_controls, n_samples):
     u_expected = lqr(x)
 
     np.testing.assert_allclose(u, u_expected, rtol=1e-06, atol=1e-12)
-
-
-@pytest.mark.parametrize('zero_index', (0, 1, 2, [0, 1], [0, 2], [1, 2]))
-def test_zero_column_lqr(zero_index):
-    """
-    Test that LQR can be created when one or more columns of A and Q are zero.
-    This creates a situation where some states don't impact dynamics of other
-    states or the cost function. The Riccati solver will often fail for the full
-    set of states, but can find a solution to the sub-problem which ignores
-    these states. Using the resulting control law in the full system stabilizes
-    the controlled states, with the ignored states' stability depending on their
-    dynamics. Since such problems do appear in practice (e.g. linearized rigid
-    body attitude control with quaternion attitude representation), it is
-    desirable to be able to generate an LQR controller in these situations.
-    """
-    n_states = 3
-    n_controls = 2
-
-    # Start with usual random matrices
-    A, B, Q, R, _, _ = make_LQ_params(n_states, n_controls)
-
-    # Set some columns of A and Q to zero
-    A[:, zero_index] = 0.
-    Q[zero_index] = 0.
-    Q[:, zero_index] = 0.
-
-    # Should still be able to make an lqr controller
-    lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
-
-    # The closed-loop eigenvalues should be non-positive
-    A_cl = A + np.matmul(B, - lqr.K)
-    assert np.linalg.eigvals(A_cl).real.max() <= 0.

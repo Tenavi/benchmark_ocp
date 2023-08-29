@@ -2,7 +2,7 @@ import numpy as np
 
 from . import utilities
 from . import legendre_gauss_radau as lgr
-from .optimize import minimize
+from ._optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.utilities import resize_vector
 
@@ -234,9 +234,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
         return cost, jac
 
-    dyn_constr = utilities.make_dynamic_constraint(
-        ocp.dynamics, D, ocp.n_states, ocp.n_controls,
-        jac=ocp.jac, order=reshape_order)
+    dyn_constr = utilities.make_dynamic_constraint(ocp, D, order=reshape_order)
     init_cond_constr = utilities.make_initial_condition_constraint(
         x0, ocp.n_controls, n_nodes, order=reshape_order)
 
