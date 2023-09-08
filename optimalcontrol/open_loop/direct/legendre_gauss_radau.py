@@ -2,79 +2,54 @@ import numpy as np
 from scipy import special
 
 
-def _check_size_n(n_nodes):
-    '''
-    We only define the LGR quadrature for n_nodes >= 3. This utility function
-    checks to make sure n_nodes is the right size.
-
-    Parameters
-    ----------
-    n_nodes : int
-        Number of collocation nodes.
-
-    Returns
-    -------
-    n_nodes : int
-        Number of collocation nodes, only returned if n_nodes >= 3.
-
-    Raises
-    ------
-    ValueError
-        If n_nodes < 3.
-    '''
-    if int(n_nodes) < 3:
-        raise ValueError('Number of nodes must be at least n_nodes >= 3.')
-    return int(n_nodes)
-
-
 def legendre(x, n):
-    '''
-    Evaluates the nth order Legendre polynomial P_n (x) at a single point x in
-    [-1,1]. Wraps the scipy.special.lpn function for convenience.
+    """
+    Evaluates the nth order Legendre polynomial $P_n(x)$ at a single point `x`
+    in [-1, 1]. Wraps `scipy.special.lpn` for convenience.
 
     Parameters
     ----------
     x : float
-        Evaluation point in [-1,1].
+        Evaluation point in [-1, 1].
     n : int
         Polynomial order.
 
     Returns
     -------
-    P : float
-        Evaluated Legendre polynomial P_n (x).
-    '''
-    P, _ = special.lpn(n, x)
-    return P[-1]
+    p : float
+        Evaluated Legendre polynomial, $P_n(x)$.
+    """
+    p, _ = special.lpn(n, x)
+    return p[-1]
 
 
-def make_LGR_nodes(n_nodes):
-    '''
+def make_lgr_nodes(n_nodes):
+    """
     Constructs collocation points for LGR quadrature. These are the roots of
-    P_n (tau) + P_{n-1} (tau), where P_n is the nth order Legendre polynomial
-    and n = n_nodes. One can show (see e.g.
+    $P_n(\tau) + P_{n-1}(\tau)$, where $P_n$ is the nth order Legendre
+    polynomial. One can show (see e.g.
     https://mathworld.wolfram.com/JacobiPolynomial.html) that
-    P_n (tau) + P_{n-1} (tau) = (1 + tau) P^(0,1)_n (tau), where P^(0,1)_n is
-    the nth order Jacobi polynomial with alpha = 0 and beta = 1.
+    $P_n(\tau) + P_{n-1}(\tau) = (1 + \tau) P^(0,1)_n (\tau)$, where $P^(0,1)_n$
+    is the nth order Jacobi polynomial with $\alpha = 0, \beta = 1$.
 
     Parameters
     ----------
     n_nodes : int
-        Number of collocation nodes. Must be n_nodes >= 3.
+        Number of collocation nodes, $n$. Must be `n_nodes >= 3`.
 
     Returns
     -------
     tau : (n_nodes,) array
-        LGR collocation nodes on [-1,1).
-    '''
+        LGR collocation nodes on [-1, 1).
+    """
     n = _check_size_n(n_nodes)
-    tau, _ = special.roots_jacobi(n-1, alpha=0, beta=1)
+    tau, _ = special.roots_jacobi(n - 1, alpha=0, beta=1)
     return np.concatenate(([-1.], tau))
 
 
-def make_LGR_weights(tau):
-    '''
-    Constructs the LGR quadrature weights w. These are given by
+def make_lgr_weights(tau):
+    """
+    Constructs the LGR quadrature weights `w`. These are given by
         w[0] = 2 / n**2,
         w[i] = (1 - tau[i]) / (n**2 + P_{n-1} (tau[i])),    i = 1, ..., n-1
     where n = n_nodes is the number of collocation points and P_{n-1} is the
@@ -89,7 +64,7 @@ def make_LGR_weights(tau):
     -------
     w : (n_nodes,) array
         LGR quadrature weights corresponding to the collocation points tau.
-    '''
+    """
     n = _check_size_n(tau.shape[0])
     w = np.empty_like(tau)
     w[0] = 2. / n**2
@@ -98,7 +73,7 @@ def make_LGR_weights(tau):
     return w
 
 
-def make_LGR_diff_matrix(tau):
+def make_lgr_diff_matrix(tau):
     '''
     Constructs the LGR differentiation_matrix D. The entries of D are given by
         D[i,j] = -(n-1)*(n+1)/4,    i = j = 0
@@ -136,10 +111,10 @@ def make_LGR_diff_matrix(tau):
     return D
 
 
-def make_LGR(n_nodes):
+def make_lgr(n_nodes):
     '''
     Constructs LGR collocation points, integration weights, and differentiation
-    matrix. See make_LGR_nodes, make_LGR_weights, make_LGR_diff_matrix and
+    matrix. See make_lgr_nodes, make_lgr_weights, make_lgr_diff_matrix and
     Fariba and Ross (2008) for details.
 
     Parameters
@@ -156,9 +131,9 @@ def make_LGR(n_nodes):
     D : (n_nodes, n_nodes) array
         LGR differentiation matrix corresponding to the collocation points tau.
     '''
-    tau = make_LGR_nodes(n_nodes)
-    w = make_LGR_weights(tau)
-    D = make_LGR_diff_matrix(tau)
+    tau = make_lgr_nodes(n_nodes)
+    w = make_lgr_weights(tau)
+    D = make_lgr_diff_matrix(tau)
     return tau, w, D
 
 
@@ -199,9 +174,9 @@ def invert_time_map(tau):
 
 
 def deriv_time_map(tau):
-    '''
-    Derivative of the mapping from Radau points tau in [-1,1) to physical time
-    t, also called r(tau). Used for chain rule. See Fariba and Ross 2008.
+    """
+    Derivative of the mapping `t = r(tau)` from Radau points `tau` in [-1,1) to
+    physical time `t`. Used for chain rule.
 
     Parameters
     ----------
@@ -212,5 +187,30 @@ def deriv_time_map(tau):
     -------
     r : (n_points,) array
         Derivative of the mapping, dt/dtau (tau) = r(tau).
-    '''
+    """
     return 2. / (1. - tau) ** 2
+
+
+def _check_size_n(n_nodes):
+    """
+    We only define the LGR quadrature for `n_nodes >= 3`. This utility function
+    checks to make sure `n_nodes` is the right size.
+
+    Parameters
+    ----------
+    n_nodes : int
+        Number of collocation nodes.
+
+    Returns
+    -------
+    n_nodes : int
+        Number of collocation nodes, only returned if `n_nodes >= 3`.
+
+    Raises
+    ------
+    ValueError
+        If `n_nodes < 3`.
+    """
+    if int(n_nodes) < 3:
+        raise ValueError("Number of nodes must be at least n_nodes >= 3.")
+    return int(n_nodes)

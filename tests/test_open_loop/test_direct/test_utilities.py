@@ -137,7 +137,7 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     state. We also test that the constraint Jacobian is approximated well using
     finite differences.
     """
-    tau, w, D = lgr.make_LGR(n_nodes)
+    tau, w, D = lgr.make_lgr(n_nodes)
 
     # If there are n_nodes - 1 coefficients, the polynomial is degree
     # n_nodes - 2, so the state is degree n_nodes - 1

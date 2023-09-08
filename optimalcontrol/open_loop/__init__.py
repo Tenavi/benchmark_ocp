@@ -33,15 +33,18 @@ More information and practical considerations are given in refs. [1-3] below.
 
 ##### References
 
-1. W. Kang, Q. Gong, T. Nakamura-Zimmerer, and F. Fahroo, *Algorithms of
-  data development for deep learning and feedback design: A survey,* Physica D:
-  Nonlinear Phenomena  (2021), pp. 132955.
-  https://doi.org/10.1016/j.physd.2021.132955
-2. I. M. Ross, *A Primer on Pontryagin’s Principle in Optimal Control,*
-  Collegiate Publishers, San Francisco, CA, 2nd ed., 2015.
+1. W. Kang, Q. Gong, T. Nakamura-Zimmerer, and F. Fahroo, *Algorithms of data
+    development for deep learning and feedback design: A survey*, Physica D:
+    Nonlinear Phenomena (2021), pp. 132955.
+    https://doi.org/10.1016/j.physd.2021.132955
+2. I. M. Ross, *A Primer on Pontryagin’s Principle in Optimal Control*,
+    Collegiate Publishers, San Francisco, CA, 2nd ed., 2015.
 3. I. M. Ross and M. Karpenko, *A review of pseudospectral optimal control: From
-  theory to flight,* Annual Reviews in Control, 36 (2012), pp. 182–197,
-  https://doi.org/10.1016/j.arcontrol.2012.09.002
+    theory to flight*, Annual Reviews in Control, 36 (2012), pp. 182–197.
+    https://doi.org/10.1016/j.arcontrol.2012.09.002
+4. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
+    nonlinear optimal control problems*, Journal of Guidance, Control, and
+    Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
 
 ---
 

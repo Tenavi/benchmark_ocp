@@ -8,29 +8,31 @@ _order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
 
 
 def interp_guess(t, x, u, tau, time_map):
-    '''
-    Interpolate initial guesses for the state X and control U in physical time
-    to Radau points in [-1,1).
+    """
+    Interpolate initial guesses for the state and control in physical time to
+    collocation points.
 
     Parameters
     ----------
     t : (n_points,) array
-        Time points for initial guess. Must be a strictly increasing sequence of
-        real numbers with t[0]=0 and t[-1]=t1 > 0.
-    X : (n_states, n_points) array
-        Initial guess for the state values X(t).
-    U : (n_controls, n_points) array
-        Initial guess for the control values U(X(t)).
+        Time points for initial guess.
+    x : (n_states, n_points) array
+        Initial guess for the state values x(t).
+    u : (n_controls, n_points) array
+        Initial guess for the control values u(x(t)).
     tau : (n_nodes,) array
-        Radau points computed by legendre_gauss_radau.make_LGR_nodes.
+        Radau points computed by `legendre_gauss_radau.make_lgr_nodes`.
+    time_map : callable
+        Function to map physical time to collocation points, e.g.
+        `legendre_gauss_radau.time_map`.
 
     Returns
     -------
-    X : (n_states, n_nodes) array
-        Interpolated state values X(tau).
-    U : (n_controls, n_points) array
-        Interpolated control values U(tau).
-    '''
+    x : (n_states, n_nodes) array
+        Interpolated state values x(tau).
+    u : (n_controls, n_points) array
+        Interpolated control values u(tau).
+    """
     t_mapped = time_map(np.reshape(t, (-1,)))
     x, u = np.atleast_2d(x), np.atleast_2d(u)
 
@@ -74,9 +76,9 @@ def separate_vars(xu, n_states, n_controls, order='C'):
     Parameters
     ----------
     xu : 1d array
-        Array containing states `x` and controls `u`. `xu.size` must be integer-
+        Array containing states `x` and controls `u`. `xu.size` must be
         divisible by `n_states + n_controls`, i.e.
-        `xu.size == (n_states + n_controls) * n_nodes` for an int `n_nodes`.
+        `xu.size == (n_states + n_controls) * n_nodes` for some int `n_nodes`.
     n_states : int
         Number of states.
     n_controls : int
@@ -100,10 +102,11 @@ def separate_vars(xu, n_states, n_controls, order='C'):
 
 def make_dynamic_constraint(ocp, D, order='C'):
     """
-    Create a function to evaluate the dynamic constraint DX - F(X,U) = 0 and its
-    Jacobian. The Jacobian is returned as a callable which employs sparse
-    matrices. In particular, the constraints at time tau_i are independent from
-    constraints at time tau_j and some of the constraint Jacobians are constant.
+    Create a function to evaluate the dynamic constraint,
+    `D @ x - ocp.dynamics(x, u) == 0`, and its Jacobian. The Jacobian is
+    returned as a callable which employs sparse matrices. In particular, the
+    constraints at time `tau[i]` are independent of constraints at time
+    `tau[j]`, and some constraint Jacobians are constant.
 
     Parameters
     ----------
@@ -173,7 +176,7 @@ def make_dynamic_constraint(ocp, D, order='C'):
 def make_initial_condition_constraint(x0, n_controls, n_nodes, order='C'):
     """
     Create a function which evaluates the initial condition constraint
-    `x(0) - x0==0`. This is a linear constraint which is expressed by matrix
+    `x(0) - x0 == 0`. This is a linear constraint which is expressed by matrix
     multiplication.
 
     Parameters
