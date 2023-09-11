@@ -2,7 +2,7 @@ from scipy.interpolate import BarycentricInterpolator, interp1d
 
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
-from .legendre_gauss_radau import time_map, invert_time_map
+from .radau import time_map, invert_time_map
 from .utilities import separate_vars
 
 

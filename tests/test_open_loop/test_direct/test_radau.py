@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from scipy.optimize._numdiff import approx_derivative
 
-from optimalcontrol.open_loop.direct import legendre_gauss_radau as lgr
+from optimalcontrol.open_loop.direct import radau
 
 
 rng = np.random.default_rng()
@@ -30,15 +30,15 @@ for fn in os.listdir(test_data_path):
 
 
 @pytest.mark.parametrize('n', [-1, 0, 1, 2])
-@pytest.mark.parametrize('fun', [lgr.make_lgr_nodes, lgr.make_lgr])
+@pytest.mark.parametrize('fun', [radau.make_lgr_nodes, radau.make_lgr])
 def test_make_lgr_small_n(n, fun):
     with pytest.raises(ValueError):
         fun(n)
 
 
 @pytest.mark.parametrize('n', [0, 1, 2])
-@pytest.mark.parametrize('fun', [lgr.make_lgr_weights,
-                                 lgr.make_lgr_diff_matrix])
+@pytest.mark.parametrize('fun', [radau.make_lgr_weights,
+                                 radau.make_lgr_diff_matrix])
 def test_make_lgr_small_tau(n, fun):
     tau = rng.uniform(size=n)
     with pytest.raises(ValueError):
@@ -47,7 +47,7 @@ def test_make_lgr_small_tau(n, fun):
 
 @pytest.mark.parametrize('n', lgr_diff_reference.keys())
 def test_make_lgr(n):
-    tau, w, D = lgr.make_lgr(n)
+    tau, w, D = radau.make_lgr(n)
     np.testing.assert_allclose(tau, lgr_diff_reference[n]['tau'])
     np.testing.assert_allclose(w, lgr_diff_reference[n]['w'])
     np.testing.assert_allclose(D, lgr_diff_reference[n]['D'])
@@ -59,7 +59,7 @@ def test_lgr_basic_int_diff(n):
     Tests some basic identities: `w @ x == 0`, `D @ x == ones`,
     `D @ (x ** 2) == 2 * x`, and `w @ (D @ x) == 2`.
     """
-    tau, w, D = lgr.make_lgr(n)
+    tau, w, D = radau.make_lgr(n)
 
     np.testing.assert_allclose(np.dot(w, tau), 0., atol=1e-10)
     np.testing.assert_allclose(np.matmul(D, tau), np.ones_like(tau))
@@ -79,8 +79,8 @@ def test_lgr_integrate(n):
     P = np.polynomial.polynomial.Polynomial(coef)
     expected_integral = P.integ(lbnd=-1.)(1.)
 
-    tau = lgr.make_lgr_nodes(n)
-    w = lgr.make_lgr_weights(tau)
+    tau = radau.make_lgr_nodes(n)
+    w = radau.make_lgr_weights(tau)
     lgr_integral = np.dot(w, P(tau))
 
     np.testing.assert_allclose(lgr_integral, expected_integral)
@@ -97,7 +97,7 @@ def test_lgr_differentiate(n):
     coef = rng.normal(size=degree + 1)
     poly = np.polynomial.polynomial.Polynomial(coef)
 
-    tau, w, D = lgr.make_lgr(n)
+    tau, w, D = radau.make_lgr(n)
     lgr_derivative = np.matmul(D, poly(tau))
 
     np.testing.assert_allclose(lgr_derivative, poly.deriv()(tau))
@@ -115,8 +115,8 @@ def test_lgr_multivariate_integrate(n, n_dims):
     P = [np.polynomial.polynomial.Polynomial(coef[d]) for d in range(n_dims)]
     expected_integral = [P[d].integ(lbnd=-1.)(1.) for d in range(n_dims)]
 
-    tau = lgr.make_lgr_nodes(n)
-    w = lgr.make_lgr_weights(tau)
+    tau = radau.make_lgr_nodes(n)
+    w = radau.make_lgr_weights(tau)
     P_mat = np.vstack([P[d](tau) for d in range(n_dims)])
     lgr_integral = np.matmul(P_mat, w)
 
@@ -136,7 +136,7 @@ def test_lgr_multivariate_differentiate(n, n_dims):
     coef = rng.normal(size=(n_dims, degree + 1))
     P = [np.polynomial.polynomial.Polynomial(coef[d]) for d in range(n_dims)]
 
-    tau, w, D = lgr.make_lgr(n)
+    tau, w, D = radau.make_lgr(n)
     P_mat = np.vstack([P[d](tau) for d in range(n_dims)])
 
     expected_derivative = [P[d].deriv()(tau) for d in range(n_dims)]
@@ -147,11 +147,11 @@ def test_lgr_multivariate_differentiate(n, n_dims):
 
 def test_time_map():
     t_orig = np.linspace(0.,10.)
-    tau = lgr.time_map(t_orig)
-    t = lgr.invert_time_map(tau)
+    tau = radau.time_map(t_orig)
+    t = radau.invert_time_map(tau)
     assert np.allclose(t, t_orig)
 
-    r = lgr.deriv_time_map(tau)
+    r = radau.deriv_time_map(tau)
     for k in range(tau.shape[0]):
-        r_num = approx_derivative(lgr.invert_time_map, tau[k], method='cs')
+        r_num = approx_derivative(radau.invert_time_map, tau[k], method='cs')
         assert(np.isclose(r[k], r_num))

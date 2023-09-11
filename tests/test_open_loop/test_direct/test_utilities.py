@@ -4,7 +4,7 @@ from scipy.optimize._numdiff import approx_derivative
 
 from optimalcontrol.problem import OptimalControlProblem
 from optimalcontrol.open_loop.direct import utilities
-from optimalcontrol.open_loop.direct import legendre_gauss_radau as lgr
+from optimalcontrol.open_loop.direct import radau as lgr
 
 
 TOL = 1e-10

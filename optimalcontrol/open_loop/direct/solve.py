@@ -1,7 +1,6 @@
 import numpy as np
 
-from . import utilities
-from . import legendre_gauss_radau as lgr
+from . import utilities, radau
 from ._optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.utilities import resize_vector
@@ -210,16 +209,16 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         `sol.status==0`.
     """
     # Initialize LGR quadrature
-    tau, w_hat, D_hat = lgr.make_LGR(n_nodes)
+    tau, w_hat, D_hat = radau.make_lgr(n_nodes)
 
     # Time scaling for transformation to LGR points
-    r_tau = lgr.deriv_time_map(tau)
+    r_tau = radau.deriv_time_map(tau)
     w = w_hat * r_tau
     D = np.einsum('i,ij->ij', 1. / r_tau, D_hat)
 
     # Map initial guess to LGR points
     x0 = x[:, :1]
-    x, u = utilities.interp_guess(t, x, u, tau, lgr.time_map)
+    x, u = utilities.interp_guess(t, x, u, tau, radau.time_map)
 
     # Quadrature integration of running cost
     def cost_fun_wrapper(xu):
