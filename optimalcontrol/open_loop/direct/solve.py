@@ -212,7 +212,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     tau, w_hat, D_hat = radau.make_lgr(n_nodes)
 
     # Time scaling for transformation to LGR points
-    r_tau = radau.deriv_time_map(tau)
+    r_tau = radau.inverse_time_map_deriv(tau)
     w = w_hat * r_tau
     D = np.einsum('i,ij->ij', 1. / r_tau, D_hat)
 

@@ -1,26 +1,54 @@
+"""
+This submodule includes functions to construct the Legendre Gauss Radau (LGR)
+collocation points, differentiation matrix, and integration weights, and map
+from physical time in [0, inf) to the half-open interval [-1, 1). The
+implementation follows the methodology proposed in refs. [1, 2].
+
+References
+----------
+1. I. M. Ross, Q. Gong, F. Fahroo, and W. Kang, *Practical stabilization through
+    real-time optimal control*, in American Control Conference, 2006, pp.
+    304-309. https://doi.org/10.1109/ACC.2006.1655372
+2. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
+    nonlinear optimal control problems*, Journal of Guidance, Control, and
+    Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
+"""
+
 import numpy as np
-from scipy import special
+from scipy.special import legendre, roots_jacobi
 
 
-def legendre(x, n):
+def make_lgr(n_nodes):
     """
-    Evaluates the nth order Legendre polynomial $P_n(x)$ at a single point `x`
-    in [-1, 1]. Wraps `scipy.special.lpn` for convenience.
+    Constructs LGR collocation points, integration weights, and differentiation
+    matrix. See `make_lgr_nodes`, `make_lgr_weights`, and `make_lgr_diff_matrix`
+    for details.
 
     Parameters
     ----------
-    x : float
-        Evaluation point in [-1, 1].
-    n : int
-        Polynomial order.
+    n_nodes : int
+        Number of collocation nodes. Must be `n_nodes >= 3`.
 
     Returns
     -------
-    p : float
-        Evaluated Legendre polynomial, $P_n(x)$.
+    tau : (n_nodes,) array
+        LGR collocation nodes on [-1, 1).
+    w : (n_nodes,) array
+        LGR quadrature weights corresponding to the collocation points `tau`.
+    D : (n_nodes, n_nodes) array
+        LGR differentiation matrix corresponding to the collocation points
+        `tau`.
     """
-    p, _ = special.lpn(n, x)
-    return p[-1]
+    n_nodes = _check_size_n(n_nodes)
+
+    tau = make_lgr_nodes(n_nodes)
+
+    legendre_eval = legendre(n_nodes - 1)(tau)
+
+    w = make_lgr_weights(tau, legendre_eval=legendre_eval)
+    D = make_lgr_diff_matrix(tau, legendre_eval=legendre_eval)
+
+    return tau, w, D
 
 
 def make_lgr_nodes(n):
@@ -44,11 +72,11 @@ def make_lgr_nodes(n):
         LGR collocation nodes on [-1, 1).
     """
     n = _check_size_n(n)
-    tau, _ = special.roots_jacobi(n - 1, alpha=0, beta=1)
+    tau, _ = roots_jacobi(n - 1, alpha=0, beta=1)
     return np.concatenate(([-1.], tau))
 
 
-def make_lgr_weights(tau):
+def make_lgr_weights(tau, legendre_eval=None):
     """
     Constructs the LGR quadrature weights, `w`. The entries of `w` are given by
     ```
@@ -56,16 +84,18 @@ def make_lgr_weights(tau):
     ```
     and
     ```
-    w[i] = (1 - tau[i]) / (n ** 2 + legendre(tau[i])),
+    w[i] = (1 - tau[i]) / (n ** 2 + legendre(n - 1)(tau[i])),
     ```
     for `i = 1, ..., n - 1` where `n = n_nodes = tau.shape[0]` is the number of
-    collocation points and `legendre(*, n - 1)` is the (`n - 1`)th order
-    Legendre polynomial, $P_{n-1}$.
+    collocation points and `legendre(n - 1)` is the (`n - 1`)th order Legendre
+    polynomial, $P_{n-1}$.
 
     Parameters
     ----------
     tau : (n_nodes,) array
         LGR collocation nodes on [-1, 1).
+    legendre_eval : (n_nodes,) array, optional
+        Pre-computed values for `scipy.special.legendre(n_nodes - 1)(tau)`.
 
     Returns
     -------
@@ -73,14 +103,18 @@ def make_lgr_weights(tau):
         LGR quadrature weights corresponding to the collocation points `tau`.
     """
     n = _check_size_n(tau.shape[0])
+
+    if legendre_eval is None:
+        legendre_eval = legendre(n - 1)(tau)
+
     w = np.empty_like(tau)
     w[0] = 2. / n ** 2
     for i in range(1, n):
-        w[i] = (1. - tau[i]) / (n * legendre(tau[i], n - 1))**2
+        w[i] = (1. - tau[i]) / (n * legendre_eval[i])**2
     return w
 
 
-def make_lgr_diff_matrix(tau):
+def make_lgr_diff_matrix(tau, legendre_eval=None):
     """
     Constructs the LGR differentiation_matrix, `D`. The entries of `D` are given
     by
@@ -93,18 +127,20 @@ def make_lgr_diff_matrix(tau):
     ```
     for `1 <= i == j <= n - 1`, and
     ```
-    D[i, j] = (legendre(tau[i], n - 1) / legendre(tau[j], n - 1)
-               * (1 - tau[j]) / (1 - tau[i])
-               * 1 / (tau[i] - tau[j]))
+    numerator = legendre(n - 1)(tau[i]) * (1 - tau[j])
+    denominator = legendre(n - 1)(tau[j]) * (1 - tau[i]) * (tau[i] - tau[j])
+    D[i, j] = numerator / denominator
     ```
     otherwise, where `n = n_nodes = tau.shape[0]` is the number of collocation
-    points and `legendre(*, n - 1)` is the (`n - 1`)th order Legendre
-    polynomial, $P_{n-1}$.
+    points and `legendre(n - 1)` is the (`n - 1`)th order Legendre polynomial,
+    $P_{n-1}$.
 
     Parameters
     ----------
     tau : (n_nodes,) array
         LGR collocation nodes on [-1, 1).
+    legendre_eval : (n_nodes,) array, optional
+        Pre-computed values of `scipy.special.legendre(n_nodes - 1)(tau)`.
 
     Returns
     -------
@@ -113,15 +149,17 @@ def make_lgr_diff_matrix(tau):
         `tau`.
     """
     n = _check_size_n(tau.shape[0])
+
+    if legendre_eval is None:
+        legendre_eval = legendre(n - 1)(tau)
+
     D = np.empty((n, n))
     for i in range(n):
-        poly_i = legendre(tau[i], n - 1)
         for j in range(n):
-            poly_j = legendre(tau[j], n - 1)
             if i != j:
-                numerator = poly_i * (1. - tau[j])
-                denominator = poly_j * (1. - tau[i]) * (tau[i] - tau[j])
-                D[i, j] = numerator / denominator
+                num = legendre_eval[i] * (1. - tau[j])
+                den = legendre_eval[j] * (1. - tau[i]) * (tau[i] - tau[j])
+                D[i, j] = num / den
             elif i == j == 0:
                 D[i, j] = -(n - 1) * (n + 1) / 4.
             else:
@@ -129,82 +167,62 @@ def make_lgr_diff_matrix(tau):
     return D
 
 
-def make_lgr(n_nodes):
-    '''
-    Constructs LGR collocation points, integration weights, and differentiation
-    matrix. See make_lgr_nodes, make_lgr_weights, make_lgr_diff_matrix and
-    Fariba and Ross (2008) for details.
-
-    Parameters
-    ----------
-    n_nodes : int
-        Number of collocation nodes. Must be n_nodes >= 3.
-
-    Returns
-    -------
-    tau : (n_nodes,) array
-        LGR collocation nodes on [-1,1).
-    w : (n_nodes,) array
-        LGR quadrature weights corresponding to the collocation points tau.
-    D : (n_nodes, n_nodes) array
-        LGR differentiation matrix corresponding to the collocation points tau.
-    '''
-    tau = make_lgr_nodes(n_nodes)
-    w = make_lgr_weights(tau)
-    D = make_lgr_diff_matrix(tau)
-    return tau, w, D
-
-
 def time_map(t):
-    '''
-    Convert physical time t to the half-open interval [-1,1).
-    See Fariba and Ross 2008.
+    """
+    Convert physical time `t` to the half-open interval [-1, 1) by the map
+    ```
+    tau = (t - 1) / (t + 1)
+    ```
 
     Parameters
     ----------
     t : (n_points,) array
-        Physical times, t >= 0.
+        Physical time, `t >= 0`.
 
     Returns
     -------
     tau : (n_points,) array
-        Mapped time points, tau in [-1,1).
-    '''
+        Mapped time points in [-1, 1).
+    """
     return (t - 1.) / (t + 1.)
 
 
-def invert_time_map(tau):
-    '''
-    Convert points from half-open interval [-1,1) to physical time t.
-    See Fariba and Ross 2008.
+def inverse_time_map(tau):
+    """
+    Convert points `tau` from half-open interval [-1, 1) to physical time by the
+    map
+    ```
+    t = (1 + tau) / (1 - tau)
+    ```
 
     Parameters
     ----------
     tau : (n_points,) array
-        Mapped time points, tau in [-1,1).
+        Mapped time points in [-1, 1).
 
     Returns
     -------
     t : (n_points,) array
-        Physical times, t >= 0.
-    '''
+        Physical time, `t >= 0`.
+    """
     return (1. + tau) / (1. - tau)
 
 
-def deriv_time_map(tau):
-    """
-    Derivative of the mapping `t = r(tau)` from Radau points `tau` in [-1,1) to
+def inverse_time_map_deriv(tau):
+    r"""
+    Derivative of the `inverse_time_map` from Radau points `tau` in [-1, 1) to
     physical time `t`. Used for chain rule.
 
     Parameters
     ----------
     tau : (n_points,) array
-        Mapped time points, tau in [-1,1).
+        Mapped time points in [-1, 1).
 
     Returns
     -------
     r : (n_points,) array
-        Derivative of the mapping, dt/dtau (tau) = r(tau).
+        Derivative of the inverse time map,
+        $r(\tau) = dt/d\tau = 2 / (1 - \tau)^2$.
     """
     return 2. / (1. - tau) ** 2
 

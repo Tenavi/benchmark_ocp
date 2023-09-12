@@ -2,7 +2,7 @@ from scipy.interpolate import BarycentricInterpolator, interp1d
 
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
-from .radau import time_map, invert_time_map
+from .radau import time_map, inverse_time_map
 from .utilities import separate_vars
 
 
@@ -36,7 +36,7 @@ class DirectSolution(OpenLoopSolution):
     @classmethod
     def from_minimize_result(cls, minimize_result, ocp, tau, w, order,
                              u_ub=None, u_lb=None):
-        t = invert_time_map(tau)
+        t = inverse_time_map(tau)
         x, u = separate_vars(minimize_result.x, ocp.n_states, ocp.n_controls,
                              order=order)
 

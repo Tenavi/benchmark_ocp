@@ -148,10 +148,10 @@ def test_lgr_multivariate_differentiate(n, n_dims):
 def test_time_map():
     t_orig = np.linspace(0.,10.)
     tau = radau.time_map(t_orig)
-    t = radau.invert_time_map(tau)
+    t = radau.inverse_time_map(tau)
     assert np.allclose(t, t_orig)
 
-    r = radau.deriv_time_map(tau)
+    r = radau.inverse_time_map_deriv(tau)
     for k in range(tau.shape[0]):
-        r_num = approx_derivative(radau.invert_time_map, tau[k], method='cs')
+        r_num = approx_derivative(radau.inverse_time_map, tau[k], method='cs')
         assert(np.isclose(r[k], r_num))
