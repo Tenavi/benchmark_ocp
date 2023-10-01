@@ -45,8 +45,8 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     Parameters
     ----------
     ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `bvp_dynamics` and `optimal_control` methods.
+        The optimal control problem to solve. Must implement `bvp_dynamics` and
+        `optimal_control` methods.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
@@ -129,8 +129,8 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     Parameters
     ----------
     ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `bvp_dynamics` and `optimal_control` methods.
+        The optimal control problem to solve. Must implement `bvp_dynamics` and
+        `optimal_control` methods.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.

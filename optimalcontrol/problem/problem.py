@@ -38,6 +38,7 @@ class OptimalControlProblem:
         self.parameters = ProblemParameters(
             required=self._required_parameters.keys(),
             update_fun=type(self)._parameter_update_fun)
+        """`ProblemParameters`. Cost function and system dynamics parameters."""
         self.parameters.update(**problem_parameters)
 
     @property

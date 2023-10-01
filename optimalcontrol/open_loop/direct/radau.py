@@ -1,19 +1,3 @@
-"""
-This submodule includes functions to construct the Legendre Gauss Radau (LGR)
-collocation points, differentiation matrix, and integration weights, and map
-from physical time in [0, inf) to the half-open interval [-1, 1). The
-implementation follows the methodology proposed in refs. [1, 2].
-
-References
-----------
-1. I. M. Ross, Q. Gong, F. Fahroo, and W. Kang, *Practical stabilization through
-    real-time optimal control*, in American Control Conference, 2006, pp.
-    304-309. https://doi.org/10.1109/ACC.2006.1655372
-2. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
-    nonlinear optimal control problems*, Journal of Guidance, Control, and
-    Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
-"""
-
 import numpy as np
 from scipy.special import legendre, roots_jacobi
 

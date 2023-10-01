@@ -7,41 +7,6 @@ _order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
                   "(Fortran, column-major)")
 
 
-def interp_guess(t, x, u, tau, time_map):
-    """
-    Interpolate initial guesses for the state and control in physical time to
-    collocation points.
-
-    Parameters
-    ----------
-    t : (n_points,) array
-        Time points for initial guess.
-    x : (n_states, n_points) array
-        Initial guess for the state values x(t).
-    u : (n_controls, n_points) array
-        Initial guess for the control values u(x(t)).
-    tau : (n_nodes,) array
-        Radau points computed by `legendre_gauss_radau.make_lgr_nodes`.
-    time_map : callable
-        Function to map physical time to collocation points, e.g.
-        `legendre_gauss_radau.time_map`.
-
-    Returns
-    -------
-    x : (n_states, n_nodes) array
-        Interpolated state values x(tau).
-    u : (n_controls, n_points) array
-        Interpolated control values u(tau).
-    """
-    t_mapped = time_map(np.reshape(t, (-1,)))
-    x, u = np.atleast_2d(x), np.atleast_2d(u)
-
-    x = interp1d(t_mapped, x, bounds_error=False, fill_value=x[:, -1])
-    u = interp1d(t_mapped, u, bounds_error=False, fill_value=u[:, -1])
-
-    return x(tau), u(tau)
-
-
 def collect_vars(x, u, order='C'):
     """
     Gather separate state and control matrices arranged by (dimension, time)
@@ -255,3 +220,38 @@ def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='C'):
                          np.tile(u_ub, (1, n_nodes)).flatten(order=order)))
 
     return Bounds(lb=lb, ub=ub)
+
+
+def interp_guess(t, x, u, tau, time_map):
+    """
+    Interpolate initial guesses for the state and control in physical time to
+    collocation points.
+
+    Parameters
+    ----------
+    t : (n_points,) array
+        Time points for initial guess.
+    x : (n_states, n_points) array
+        Initial guess for the state values x(t).
+    u : (n_controls, n_points) array
+        Initial guess for the control values u(x(t)).
+    tau : (n_nodes,) array
+        Radau points computed by `legendre_gauss_radau.make_lgr_nodes`.
+    time_map : callable
+        Function to map physical time to collocation points, e.g.
+        `legendre_gauss_radau.time_map`.
+
+    Returns
+    -------
+    x : (n_states, n_nodes) array
+        Interpolated state values x(tau).
+    u : (n_controls, n_points) array
+        Interpolated control values u(tau).
+    """
+    t_mapped = time_map(np.reshape(t, (-1,)))
+    x, u = np.atleast_2d(x), np.atleast_2d(u)
+
+    x = interp1d(t_mapped, x, bounds_error=False, fill_value=x[:, -1])
+    u = interp1d(t_mapped, u, bounds_error=False, fill_value=u[:, -1])
+
+    return x(tau), u(tau)

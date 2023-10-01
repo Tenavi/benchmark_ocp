@@ -16,7 +16,8 @@ _epsilon = np.sqrt(np.finfo(float).eps)
 
 def minimize(fun, x0, args=(), jac=None, bounds=None, constraints=(), tol=None,
              options=None):
-    """Minimization of scalar function of one or more variables.
+    """
+    Minimization of scalar function of one or more variables.
 
     Wrapper and modification of `scipy.optimize.optimize` implementing shortcuts
     to the 'SLSQP' method and extracting the KKT multipliers.

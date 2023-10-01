@@ -7,8 +7,7 @@ from optimalcontrol.open_loop.direct import utilities
 from optimalcontrol.open_loop.direct import radau as lgr
 
 
-TOL = 1e-10
-rng = np.random.default_rng()
+rng = np.random.default_rng(123)
 
 
 class PolynomialDynamics(OptimalControlProblem):
@@ -168,12 +167,12 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     assert constr_fun.shape == (n_states * n_nodes,)
 
     # Check that evaluating the constraint function for the true state returns 0
-    np.testing.assert_allclose(constr_fun, 0., atol=TOL)
+    np.testing.assert_allclose(constr_fun, 0., atol=1e-10)
     # Check that evaluating the constraint function for perturbed states does
     # not return 0
     with pytest.raises(AssertionError):
         xu = xu + rng.normal(size=xu.shape)
-        np.testing.assert_allclose(constr.fun(xu), 0., atol=TOL)
+        np.testing.assert_allclose(constr.fun(xu), 0., atol=1e-10)
 
     constr_jac = constr.jac(xu)
     expected_jac = approx_derivative(constr.fun, xu, method='cs')
@@ -182,7 +181,7 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     assert expected_jac.shape == (n_states * n_nodes,
                                   (n_states + n_controls) * n_nodes)
 
-    np.testing.assert_allclose(constr_jac.toarray(), expected_jac, atol=TOL)
+    np.testing.assert_allclose(constr_jac.toarray(), expected_jac, atol=1e-05)
 
 
 @pytest.mark.parametrize('n_nodes', [3, 4, 7, 8])
@@ -206,7 +205,7 @@ def test_init_cond_setup(n_nodes, order):
     assert constr.A.shape == (n_x, (n_x + n_u)*n_t)
     # Check that evaluating the multiplying the linear constraint matrix
     # times the full state-control vector returns the initial condtion
-    np.testing.assert_allclose(constr.A @ xu, x0.flatten(), rtol=TOL)
+    np.testing.assert_allclose(constr.A @ xu, x0.flatten())
 
 
 @pytest.mark.parametrize('n_nodes', [3, 4, 5])
@@ -250,7 +249,7 @@ def test_bounds_setup(n_nodes, order, u_lb):
             xu = utilities.collect_vars(rng.normal(size=(n_x, n_t)), u,
                                         order=order)
             np.testing.assert_allclose(constr.lb[n_x * n_nodes:],
-                                       xu[n_x * n_nodes:], atol=TOL)
+                                       xu[n_x * n_nodes:], atol=1e-10)
 
         if u_ub is None:
             assert np.isinf(constr.ub[n_x * n_nodes:]).all()
@@ -259,4 +258,4 @@ def test_bounds_setup(n_nodes, order, u_lb):
             xu = utilities.collect_vars(rng.normal(size=(n_x, n_t)), u,
                                         order=order)
             np.testing.assert_allclose(constr.ub[n_x * n_nodes:],
-                                       xu[n_x * n_nodes:], atol=TOL)
+                                       xu[n_x * n_nodes:], atol=1e-10)

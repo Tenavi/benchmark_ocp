@@ -3,33 +3,24 @@ class OpenLoopSolution:
     Object containing the solution to an open loop optimal control problem for
     one initial condition. The solution is stored at the time points chosen by
     the solver, as well as an interpolant appropriate for the solution type.
-
-    Attributes
-    ----------
-    t : (n_points,) array
-        Time points returned by the open loop solver.
-    x : (n_states, n_points) array
-        Values of the optimal state trajectory at times `t`.
-    u : (n_controls, n_points) array
-        Values of the optimal control at times `t`.
-    p : (n_states, n_points) array
-        Values of the costate at times `t`.
-    v : (n_points,) array
-        The value function evaluated at the points `x`.
-    status : int
-        Reason for solver termination. `status==0` indicates success, other
-        values indicated various failure modes. See `message` for details.
-    message : string
-        Human-readable description of `status`.
     """
     def __init__(self, t, x, u, p, v, status, message, **kwargs):
         self.t = t
+        """(n_points,) array. Time points returned by the open loop solver."""
         self.x = x
+        """(n_states, n_points) array. The optimal state trajectory."""
         self.u = u
+        """(n_controls, n_points) array. The optimal control profile."""
         self.p = p
+        """(n_states, n_points) array. The costate trajectory."""
         self.v = v
+        """(n_points,) array. The value function evaluated at the points `x`."""
         self.status = status
+        """int. Reason for solver termination. `status==0` indicates success;
+        other values indicate various failure modes. See `message` for details.
+        """
         self.message = message
+        """str. Human-readable description of `status`."""
 
     def __call__(self, t):
         """
