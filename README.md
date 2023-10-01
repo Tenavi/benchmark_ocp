@@ -19,7 +19,7 @@ Then to install the `optimalcontrol` package (in developer mode), run
 
     pip install -e .
 
-This package has been developed and tested with the following software
+This package and the examples have been developed and tested with the following software
 dependencies:
     
     numpy>=1.17

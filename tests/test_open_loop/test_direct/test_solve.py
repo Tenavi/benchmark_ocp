@@ -41,6 +41,7 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     assert_matches_reference(ocp_sol, t, x, u, atol=atol, rtol=rtol)
 
+    # Check that the solution is correct at collocation nodes
     t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1_init, t_eval=ocp_sol.t)
 
     assert_matches_reference(ocp_sol, t, x, u, p=p if u_bound is None else None,
