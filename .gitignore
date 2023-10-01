@@ -7,3 +7,5 @@ __pycache__/
 *.pickle
 *.csv
 *.pdf
+
+!tests/test_open_loop/test_direct/lgr_diff_data/*.csv

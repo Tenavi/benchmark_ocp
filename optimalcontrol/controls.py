@@ -167,7 +167,6 @@ class LinearQuadraticRegulator(Controller):
 
             if not hasattr(self, 'P'):
                 self.P = self.solve_care(A, B, Q, R)
-                #self.P = solve_continuous_are(A, B, Q, R)
 
             self._RB = np.linalg.solve(R, np.transpose(B))
             self.K = np.matmul(self._RB, self.P)
@@ -293,6 +292,29 @@ class LinearQuadraticRegulator(Controller):
 
         dudx[zero_idx] = 0.
         return dudx
+
+
+class ConstantControl(Controller):
+    """A `Controller` subclass which returns a single constant value for all
+    states, used for some unit tests and for simulating uncontrolled systems."""
+    def __init__(self, u):
+        """
+        Parameters
+        ----------
+        u : (n_controls, 1) array
+            The constant value to return for all state inputs.
+        """
+        self.n_controls = np.size(u)
+        self.u = np.reshape(u, (self.n_controls, 1))
+
+    def __call__(self, x):
+        if np.ndim(x) < 2:
+            return self.u.flatten()
+
+        return np.tile(self.u, (1, np.shape(x)[1]))
+
+    def jac(self, x, u0=None):
+        return np.zeros((self.n_controls,) + np.shape(x))
 
 
 def from_pickle(filepath):

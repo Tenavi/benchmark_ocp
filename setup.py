@@ -9,8 +9,6 @@ with open('README.md', 'r') as fh:
 with open('requirements.txt', 'r') as fh:
     requirements = fh.read().splitlines()
 
-# requirements.append('pylgr')
-
 if __name__ == '__main__':
     setuptools.setup(
         name='optimalcontrol',
@@ -21,5 +19,5 @@ if __name__ == '__main__':
         author='Tenavi Nakamura-Zimmerer',
         author_email='tenavi.nakamura-zimmerer@nasa.gov',
         packages=['optimalcontrol'],
-        python_requires='>=3.7',
+        python_requires='>=3.8',
         install_requires=requirements)

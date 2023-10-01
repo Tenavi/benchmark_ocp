@@ -1,6 +1,6 @@
 import numpy as np
 
-from . import direct, indirect
+from . import indirect, direct
 
 
 def solve_fixed_time(ocp, t, x, u=None, p=None, v=None, method='indirect',
@@ -27,8 +27,7 @@ def solve_fixed_time(ocp, t, x, u=None, p=None, v=None, method='indirect',
     Parameters
     ----------
     ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `bvp_dynamics` and `optimal_control` methods.
+        The optimal control problem to solve.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
@@ -109,8 +108,7 @@ def solve_infinite_horizon(ocp, t, x, u=None, p=None, v=None, method='indirect',
     Parameters
     ----------
     ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `bvp_dynamics` and `optimal_control` methods.
+        The optimal control problem to solve.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.

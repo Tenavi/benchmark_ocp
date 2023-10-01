@@ -11,28 +11,31 @@ If you use this software, please cite the software package and/or one or more of
 
 ## Installation
 
-To install the `optimalcontrol` package (in developer mode) run `pip install -e .`
-from the command line. This package has been developed and tested with the
-following software dependencies:
+First create a python environment (using e.g. conda or pip) with
 
-    python>=3.7
-    numpy>=1.21.6
-    scipy>=1.7.3
+    python>=3.8
+
+Then to install the `optimalcontrol` package (in developer mode), run
+
+    pip install -e .
+
+This package and the examples have been developed and tested with the following software
+dependencies:
+    
+    numpy>=1.17
+    scipy>=1.8
     pytest
     jupyter
-    tqdm>=4.65.0
-    pandas>=1.3.5
-    scikit-learn>=1.0.2
-    matplotlib>=3.5.3
-    pylgr
+    matplotlib
+    pandas
+    scikit-learn>=1.0
+    tqdm
 
-The `pylgr` package can be downloaded at https://github.com/Tenavi/PyLGR.
-
-### Test
+## Test
 
 Run `pytest tests -s -v` from the root directory.
 
-### Generate documentation
+## Generate documentation
 
 Install `pdoc` and run
 
