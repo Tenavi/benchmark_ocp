@@ -17,16 +17,16 @@ lgr_diff_reference = dict()
 
 for fn in os.listdir(test_data_path):
     if fn.endswith('.csv'):
-        n = fn[1:-4]
-        lgr_diff_reference[n] = dict()
+        n_nodes = fn[1:-4]
+        lgr_diff_reference[n_nodes] = dict()
 
         lgr_diff_data = pd.read_csv(os.path.join(test_data_path, fn))
 
         for key in ['tau', 'w']:
-            lgr_diff_reference[n][key] = lgr_diff_data[key]
+            lgr_diff_reference[n_nodes][key] = lgr_diff_data[key]
 
         cols = [c for c in lgr_diff_data.columns if c[0] == 'D']
-        lgr_diff_reference[n]['D'] = lgr_diff_data[cols]
+        lgr_diff_reference[n_nodes]['D'] = lgr_diff_data[cols]
 
 
 @pytest.mark.parametrize('n', [-1, 0, 1, 2])
@@ -129,8 +129,6 @@ def test_lgr_multivariate_differentiate(n, n_dims):
     """
     Test differentiation of degree `n - 1` polynomials in `n_dims` dimensions.
     """
-    n = 10
-
     # Generate a random polynomial of degree n-1
     degree = n - 1
     coef = rng.normal(size=(n_dims, degree + 1))
@@ -146,7 +144,7 @@ def test_lgr_multivariate_differentiate(n, n_dims):
 
 
 def test_time_map():
-    t_orig = np.linspace(0.,10.)
+    t_orig = np.linspace(0., 10.)
     tau = radau.time_map(t_orig)
     t = radau.inverse_time_map(tau)
     assert np.allclose(t, t_orig)

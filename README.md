@@ -9,6 +9,8 @@ This software repository contains a collection of benchmark optimal feedback con
 
 If you use this software, please cite the software package and/or one or more of the above works. Please reach out with any questions, or if you encounter bugs or other problems.
 
+---
+
 ## Installation
 
 First create a python environment (using e.g. conda or pip) with
@@ -31,9 +33,13 @@ dependencies:
     scikit-learn>=1.0
     tqdm
 
+---
+
 ## Test
 
 Run `pytest tests -s -v` from the root directory.
+
+---
 
 ## Generate documentation
 

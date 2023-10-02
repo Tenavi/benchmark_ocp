@@ -103,14 +103,18 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
         else:
             fail_time += end_time - start_time
 
-        data.append(
-            {'t': sol.t, 'x': sol.x, 'u': sol.u, 'p': sol.p, 'v': sol.v})
+        data.append({'t': sol.t,
+                     'x': sol.x,
+                     'u': sol.u,
+                     'p': sol.p,
+                     'v': sol.v,
+                     'L': ocp.running_cost(sol.x, sol.u)})
 
         if verbose:
             for header in headers:
                 print(header)
-        overwrite = not verbose and i+1 < len(guesses)
-        print(row.format(n_succeed, i+1, len(guesses)),
+        overwrite = not verbose and i + 1 < len(guesses)
+        print(row.format(n_succeed, i + 1, len(guesses)),
               end='\r' if overwrite else None)
 
     print("\nTotal solution time:")
