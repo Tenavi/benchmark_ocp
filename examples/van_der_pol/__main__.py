@@ -161,6 +161,7 @@ for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
                 if new_sol.v[0] < sol['v'][0]:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
                           f"warm start with {type(controller).__name__:s}")
+                    new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
                     for key in sol.keys():
                         sol[key] = getattr(new_sol, key)
 
@@ -181,6 +182,9 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                           f'{type(poly_control).__name__:s}': poly_costs,
                           f'{type(nn_control).__name__:s}': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
+
+    figs[data_name]['data'] = plotting.plot_closed_loop(
+        data[data_idx], t_max=config.t_int, subtitle='optimal, ' + data_name)
 
     for controller, sims in zip((lqr, poly_control, nn_control),
                                 (lqr_sims, poly_sims, nn_sims)):

@@ -169,6 +169,7 @@ for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
                 if new_sol.v[0] < sol['v'][0]:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
                           f"warm start with {type(controller).__name__:s}")
+                    new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
                     for key in sol.keys():
                         sol[key] = getattr(new_sol, key)
 

@@ -289,7 +289,8 @@ def _monte_carlo(ocp, controller, x0_pool, fun, *args, **kwargs):
     sims = []
     status = np.zeros(n_sims, dtype=int)
 
-    print(f"Simulating closed-loop system for {n_sims:d} initial conditions...")
+    print(f"Simulating closed-loop system for {n_sims:d} initial conditions "
+          f"({type(controller).__name__:s})...")
     for i in tqdm(range(n_sims)):
         t, x, status[i] = fun(ocp, controller, x0_pool[i], *args, **kwargs)
         sims.append({'t': t, 'x': x, 'u': controller(x)})
