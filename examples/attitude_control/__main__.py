@@ -32,7 +32,7 @@ rng = np.random.default_rng(random_seed + 2)
 ocp = AttitudeControl(attitude_sample_seed=random_seed,
                       rate_sample_seed=random_seed + 1, **config.params)
 
-q_final = euler_to_quaternion(*ocp.parameters.final_attitude)
+q_final = euler_to_quaternion(ocp.parameters.final_attitude)
 
 xf = np.concatenate((q_final, np.zeros(3))).reshape(-1, 1)
 uf = np.zeros((ocp.n_controls, 1))
@@ -197,6 +197,18 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                           f'{type(poly_control).__name__:s}': poly_costs,
                           f'{type(nn_control).__name__:s}': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
+
+    data_copy = data[data_idx].copy()
+    for sim in data_copy:
+        q, w = sim['x'][:4], np.rad2deg(sim['x'][4:])
+        if config.plot_euler:
+            sim['x'] = np.vstack((quaternion_to_euler(q, degrees=True), w))
+        else:
+            sim['x'] = np.vstack((q, w))
+
+    figs[data_name]['data'] = plotting.plot_closed_loop(
+        data_copy, t_max=2 * config.t_int, x_labels=x_labels, u_labels=u_labels,
+        subtitle='optimal, ' + data_name)
 
     for controller, sims in zip((lqr, poly_control, nn_control),
                                 (lqr_sims, poly_sims, nn_sims)):
