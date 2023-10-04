@@ -71,6 +71,7 @@ def quaternion_to_euler(quat, degrees=False, normalize=True,
 
 def euler_to_quaternion(angles, degrees=False):
     """
+    Convert Euler angles to quaternion representation.
 
     Parameters
     ----------
@@ -85,11 +86,10 @@ def euler_to_quaternion(angles, degrees=False):
     -------
     quat : (4, n_angles) or (4,) array
         `angles` in quaternion representation. `quat[:3]` contains the vector
-        portion of the quaternion, and `quat[3]` contains the scalar portion,
-        which is set to be positive.
+        portion of the quaternion, and `quat[3]` contains the scalar portion.
     """
     angles = Rotation.from_euler('ZYX', np.asarray(angles).T, degrees=degrees)
-    return angles.as_quat(canonical=True).T
+    return angles.as_quat().T
 
 
 class AttitudeControl(OptimalControlProblem):
