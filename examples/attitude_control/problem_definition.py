@@ -8,85 +8,88 @@ from optimalcontrol.utilities import resize_vector
 from optimalcontrol.sampling import UniformSampler
 
 
-def cross_product_matrix(omega):
+def cross_product_matrix(w):
     """
+    Construct the cross product matrix or matrices from one or more vectors.
 
     Parameters
     ----------
-    omega
+    w : (3, n_vectors) or (3,) array
+        Vector(s) to construct cross product matrices for.
 
     Returns
     -------
-
+    w_x : (3, 3, n_vectors) or (3, 3) array
+        If `w` is a 1d array, then `w_x` is a 2d array with entries
+        ```
+        w_x = [[ 0,    -w[2], w[1]  ],
+               [ w[2], 0,     -w[0] ],
+               [ -w[1], w[0], 0     ]]
+        ```
+        If `w` is a 2d array, then `w_x[:, :, i]` is the cross product matrix
+        (see above) for `w[:, i]`.
     """
-    zeros = np.zeros_like(omega[0])
-    return np.array([[zeros, -omega[2], omega[1]],
-                     [omega[2], zeros, -omega[0]],
-                     [-omega[1], omega[0], zeros]])
+    zeros = np.zeros_like(w[0])
+    return np.array([[zeros, -w[2], w[1]],
+                     [w[2], zeros, -w[0]],
+                     [-w[1], w[0], zeros]])
 
 
 def quaternion_to_euler(quat, degrees=False, normalize=True,
                         ignore_warnings=True):
     """
+    Convert angles in quaternion representation to Euler angles.
 
     Parameters
     ----------
-    quat
-    degrees
-    normalize
-    ignore_warnings
+    quat : (4, n_angles) or (4,) array
+        Angles in quaternion representation. `quat[:3]` are assumed to contain
+        the vector portion of the quaternion, and `quat[3]` is asssumed to
+        contain the scalar portion.
+    degrees : bool, default=False
+        If `degrees=False` (default), output Euler angles in radians. If True,
+        convert these to degrees.
+    normalize : bool, default=True
+        If `normalize=True` (default), quaternions are scaled to have unit norm
+        before converting to Euler angles.
+    ignore_warnings : bool, default=True
+        Set `ignore_warnings=True` (default) to suppress a `UserWarning` about
+        gimbal lock, if it occurs.
 
     Returns
     -------
-    angles
+    angles : (3, n_angles) or (3,) array
+        `quat` converted to Euler angle representation. `angles[0]` contains
+        yaw, `angles[1]` contains pitch, and `angles[2]` contains roll.
     """
     with warnings.catch_warnings():
         if ignore_warnings:
             warnings.simplefilter('ignore', category=UserWarning)
-        angles = Rotation(quat.T, normalize=normalize)
+        angles = Rotation(np.asarray(quat).T, normalize=normalize)
         return angles.as_euler('ZYX', degrees=degrees).T
 
 
-def euler_to_quaternion(yaw, pitch, roll, degrees=False):
+def euler_to_quaternion(angles, degrees=False):
     """
+    Convert Euler angles to quaternion representation.
 
     Parameters
     ----------
-    yaw
-    pitch
-    roll
-    degrees
+    angles : (3, n_angles) or (3,) array
+        Euler angles to convert to quaternion representation. `angles[0]`
+        is assumed to contain yaw, `angles[1]` pitch, and `angles[2]` roll.
+    degrees : bool, default=False
+        If `degrees=False` (default), assumes `angles` are in radians. If True,
+        assumes `angles` are in degrees.
 
     Returns
     -------
-    quat
+    quat : (4, n_angles) or (4,) array
+        `angles` in quaternion representation. `quat[:3]` contains the vector
+        portion of the quaternion, and `quat[3]` contains the scalar portion.
     """
-    angles = np.asarray([yaw, pitch, roll], dtype=float) / 2.
-    if degrees:
-        angles = np.deg2rad(angles)
-
-    cos = np.cos(angles)
-    sin = np.sin(angles)
-
-    yaw_pitch = np.vstack((cos[0] * cos[1],   # cos(yaw/2) * cos(pitch/2)
-                           cos[0] * sin[1],   # cos(yaw/2) * sin(pitch/2)
-                           sin[0] * cos[1],   # sin(yaw/2) * cos(pitch/2)
-                           sin[0] * sin[1]))  # sin(yaw/2) * sin(pitch/2)
-
-    roll = np.vstack((cos[-1], sin[-1]))      # cos(roll/2) * sin(roll/2)
-
-    # Get combinations of yaw, pitch, and roll
-    yaw_pitch_roll = np.einsum('ik,jk->ijk', yaw_pitch, roll)
-
-    q = np.vstack((yaw_pitch_roll[0, 1] - yaw_pitch_roll[3, 0],
-                   yaw_pitch_roll[1, 0] + yaw_pitch_roll[2, 1],
-                   yaw_pitch_roll[2, 0] - yaw_pitch_roll[1, 1],
-                   yaw_pitch_roll[0, 0] + yaw_pitch_roll[3, 1]))
-
-    if angles.ndim == 1:
-        return q[:, 0]
-
-    return q
+    angles = Rotation.from_euler('ZYX', np.asarray(angles).T, degrees=degrees)
+    return angles.as_quat().T
 
 
 class AttitudeControl(OptimalControlProblem):
@@ -122,7 +125,7 @@ class AttitudeControl(OptimalControlProblem):
                 obj.final_attitude = np.abs(obj.final_attitude).reshape(3)
             except ValueError:
                 raise ValueError("final_attitude must be a (3,) array")
-            obj._q_final = euler_to_quaternion(*obj.final_attitude)
+            obj._q_final = euler_to_quaternion(obj.final_attitude)
             obj._q_final = obj._q_final[:-1].reshape(3, 1)
 
         if 'initial_max_attitude' in new_params:
@@ -233,7 +236,7 @@ class AttitudeControl(OptimalControlProblem):
         # Sample Euler angles in radians and convert to quaternions
         angles = self.parameters._a0_sampler(n_samples=n_samples,
                                              distance=attitude_distance)
-        q = euler_to_quaternion(*angles)
+        q = euler_to_quaternion(angles)
         # Set scalar quaternion positive
         q[-1] = np.abs(q[-1])
 

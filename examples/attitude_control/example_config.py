@@ -17,8 +17,8 @@ params = {}
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
-n_train = 60
-n_test = 40
+n_train = 30
+n_test = 30
 
 # Distance in radians and radians/s (by default in l-infinity and l2 norm) of
 # initial condition samples

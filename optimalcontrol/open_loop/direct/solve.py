@@ -162,34 +162,27 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                             reshape_order='C', verbose=0):
     # Initialize LGR quadrature
-    tau, w_hat, D_hat = radau.make_lgr(n_nodes)
+    tau, w, D = radau.make_lgr(n_nodes)
 
     # Time scaling for transformation to LGR points
     r_tau = radau.inverse_time_map_deriv(tau)
-    w = w_hat * r_tau
-    D = np.einsum('i,ij->ij', 1. / r_tau, D_hat)
+    w = w * r_tau
+    D = np.einsum('i,ij->ij', 1. / r_tau, D)
 
     # Map initial guess to LGR points
     x0 = x[:, :1]
     x, u = utilities.interp_guess(t, x, u, tau, radau.time_map)
+    xu = utilities.collect_vars(x, u, order=reshape_order)
 
     # Quadrature integration of running cost
-    def cost_fun_wrapper(xu):
-        x, u = utilities.separate_vars(xu, ocp.n_states, ocp.n_controls,
-                                       order=reshape_order)
+    cost_fun = utilities.make_objective_fun(ocp, w, order=reshape_order)
 
-        L = ocp.running_cost(x, u)
-        cost = np.sum(L * w)
-
-        dLdx, dLdu = ocp.running_cost_grad(x, u, L0=L)
-        jac = utilities.collect_vars(dLdx * w, dLdu * w, order=reshape_order)
-
-        return cost, jac
-
+    # Dynamic and initial condition constraints
     dyn_constr = utilities.make_dynamic_constraint(ocp, D, order=reshape_order)
     init_cond_constr = utilities.make_initial_condition_constraint(
         x0, ocp.n_controls, n_nodes, order=reshape_order)
 
+    # Control bounds
     u_lb = getattr(ocp.parameters, 'u_lb', None)
     u_ub = getattr(ocp.parameters, 'u_ub', None)
     if u_lb is not None:
@@ -206,11 +199,9 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
 
-    minimize_result = minimize(
-        fun=cost_fun_wrapper,
-        x0=utilities.collect_vars(x, u, order=reshape_order),
-        bounds=bound_constr, constraints=[dyn_constr, init_cond_constr],
-        tol=tol, jac=True, options=minimize_opts)
+    minimize_result = minimize(cost_fun, xu, bounds=bound_constr,
+                               constraints=[dyn_constr, init_cond_constr],
+                               tol=tol, jac=True, options=minimize_opts)
 
     return DirectSolution.from_minimize_result(minimize_result, ocp, tau, w,
                                                order=reshape_order)

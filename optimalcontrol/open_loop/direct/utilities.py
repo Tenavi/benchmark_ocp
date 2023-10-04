@@ -7,7 +7,7 @@ _order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
                   "(Fortran, column-major)")
 
 
-def collect_vars(x, u, order='C'):
+def collect_vars(x, u, order='F'):
     """
     Gather separate state and control matrices arranged by (dimension, time)
     into a single 1d array for optimization, with states first and controls
@@ -19,8 +19,8 @@ def collect_vars(x, u, order='C'):
         States arranged by (dimension, time).
     u : (n_controls, n_nodes) array
         Controls arranged by (dimension, time).
-    order : {'C', 'F'}, default='C'
-        Use C ('C', row-major) or Fortran ('F', column-major) ordering.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
 
     Returns
     -------
@@ -32,7 +32,7 @@ def collect_vars(x, u, order='C'):
     return np.concatenate((x.flatten(order=order), u.flatten(order=order)))
 
 
-def separate_vars(xu, n_states, n_controls, order='C'):
+def separate_vars(xu, n_states, n_controls, order='F'):
     """
     Given a single 1d array containing states and controls at all time nodes,
     assembled using `collect_vars`, separate the array into states and controls
@@ -48,8 +48,8 @@ def separate_vars(xu, n_states, n_controls, order='C'):
         Number of states.
     n_controls : int
         Number of controls.
-    order : {'C', 'F'}, default='C'
-        Use C ('C', row-major) or Fortran ('F', column-major) ordering.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
 
     Returns
     -------
@@ -65,7 +65,42 @@ def separate_vars(xu, n_states, n_controls, order='C'):
     return x, u
 
 
-def make_dynamic_constraint(ocp, D, order='C'):
+def make_objective_fun(ocp, w, order='F'):
+    """
+    Create a function to evaluate the quadrature-integrated running cost,
+    `dot(w, ocp.running_cost(x, u))`, and its Jacobian.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `dynamics` and `jac` methods.
+    w : (n_nodes,) array
+        LGR quadrature weights.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
+
+    Returns
+    -------
+    obj_fun : callable
+        Function of the combined decision variables `xu` returning the
+        integrated running cost and its Jacobian with respect to `xu`.
+    """
+    def obj_fun(xu):
+        x, u = separate_vars(xu, ocp.n_states, ocp.n_controls, order=order)
+
+        L = ocp.running_cost(x, u)
+        dLdx, dLdu = ocp.running_cost_grad(x, u, L0=L)
+
+        cost = np.dot(L, w)
+        jac = collect_vars(dLdx * w, dLdu * w, order=order)
+
+        return cost, jac
+
+    return obj_fun
+
+
+def make_dynamic_constraint(ocp, D, order='F'):
     """
     Create a function to evaluate the dynamic constraint,
     `D @ x - ocp.dynamics(x, u) == 0`, and its Jacobian. The Jacobian is
@@ -80,8 +115,8 @@ def make_dynamic_constraint(ocp, D, order='C'):
         `dynamics` and `jac` methods.
     D : (n_nodes, n_nodes) array
         LGR differentiation matrix.
-    order : {'C', 'F'}, default='C'
-        Use C ('C', row-major) or Fortran ('F', column-major) ordering.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
 
     Returns
     -------
@@ -91,32 +126,33 @@ def make_dynamic_constraint(ocp, D, order='C'):
     """
     n_t = D.shape[0]
     n_x, n_u = ocp.n_states, ocp.n_controls
-    DT = D.T
 
     # Dynamic constraint function evaluates to 0 when (x, u) is feasible
     def constr_fun(xu):
         x, u = separate_vars(xu, n_x, n_u, order=order)
         f = ocp.dynamics(x, u)
-        Dx = np.matmul(x, DT)
+        Dx = np.matmul(x, D.T)
         return (Dx - f).flatten(order=order)
 
     # Generates linear component of Jacobian
-    if order == 'C':
-        linear_constr = sparse.kron(sparse.identity(n_x), D)
-    elif order == 'F':
-        linear_constr = sparse.kron(D, sparse.identity(n_x))
+    if order == 'F':
+        linear_part = sparse.kron(D, sparse.identity(n_x))
+    elif order == 'C':
+        linear_part = sparse.kron(sparse.identity(n_x), D)
     else:
         raise ValueError(_order_err_msg)
-
-    linear_constr = sparse.hstack((linear_constr,
-                                   np.zeros((n_x * n_t, n_u * n_t))))
 
     # Make constraint Jacobian function by summing linear and nonlinear parts
     def constr_jac(xu):
         x, u = separate_vars(xu, n_x, n_u, order=order)
         dfdx, dfdu = ocp.jac(x, u)
 
-        if order == 'C':
+        if order == 'F':
+            dfdx = np.transpose(-dfdx, (2, 0, 1))
+            dfdu = np.transpose(-dfdu, (2, 0, 1))
+            dfdx = sparse.block_diag(dfdx)
+            dfdu = sparse.block_diag(dfdu)
+        elif order == 'C':
             dfdx = sparse.vstack([sparse.diags(diagonals=-dfdx[i],
                                                offsets=range(0, n_t * n_x, n_t),
                                                shape=(n_t, n_t * n_x))
@@ -125,20 +161,13 @@ def make_dynamic_constraint(ocp, D, order='C'):
                                                offsets=range(0, n_t * n_u, n_t),
                                                shape=(n_t, n_t * n_u))
                                   for i in range(n_x)])
-        elif order == 'F':
-            dfdx = np.transpose(-dfdx, (2, 0, 1))
-            dfdu = np.transpose(-dfdu, (2, 0, 1))
-            dfdx = sparse.block_diag(dfdx)
-            dfdu = sparse.block_diag(dfdu)
 
-        nonlin_jac = sparse.hstack((dfdx, dfdu))
-
-        return nonlin_jac + linear_constr
+        return sparse.hstack((dfdx + linear_part, dfdu))
 
     return NonlinearConstraint(fun=constr_fun, jac=constr_jac, lb=0., ub=0.)
 
 
-def make_initial_condition_constraint(x0, n_controls, n_nodes, order='C'):
+def make_initial_condition_constraint(x0, n_controls, n_nodes, order='F'):
     """
     Create a function which evaluates the initial condition constraint
     `x(0) - x0 == 0`. This is a linear constraint which is expressed by matrix
@@ -152,8 +181,8 @@ def make_initial_condition_constraint(x0, n_controls, n_nodes, order='C'):
         Number of control variables.
     n_nodes : int
         Number of LGR collocation points.
-    order : str, default='C'
-        Use C ('C', row-major) or Fortran ('F', column-major) ordering.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
 
     Returns
     -------
@@ -165,19 +194,19 @@ def make_initial_condition_constraint(x0, n_controls, n_nodes, order='C'):
     n_states = x0.shape[0]
 
     # Generates sparse matrix for multiplying combined state
-    if order == 'C':
+    if order == 'F':
+        A = sparse.eye(m=n_states, n=(n_states + n_controls) * n_nodes)
+    elif order == 'C':
         A = sparse.eye(m=1, n=n_nodes)
         A = sparse.kron(sparse.identity(n_states), A)
         A = sparse.hstack((A, np.zeros((n_states, n_controls * n_nodes))))
-    elif order == 'F':
-        A = sparse.eye(m=n_states, n=(n_states + n_controls) * n_nodes)
     else:
         raise ValueError(_order_err_msg)
 
     return LinearConstraint(A=A, lb=x0, ub=x0)
 
 
-def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='C'):
+def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='F'):
     """
     Create the control saturation constraints for all controls. Returns None if
     both control bounds are None.
@@ -192,8 +221,8 @@ def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='C'):
         Number of state variables.
     n_nodes : int
         Number of LGR collocation points.
-    order : str, default='C'
-        Use C ('C', row-major) or Fortran ('F', column-major) ordering.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
 
     Returns
     -------
