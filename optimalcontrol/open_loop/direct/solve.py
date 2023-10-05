@@ -1,15 +1,12 @@
-import numpy as np
-
 from . import setup_nlp, radau
 from ._optimize import minimize
 from .solutions import DirectSolution
-from optimalcontrol.utilities import resize_vector
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 
 
-def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
+def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
                      verbose=0):
     """
     ### NOT YET IMPLEMENTED
@@ -36,7 +33,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
-    n_nodes : int, default=32
+    n_nodes : int, default=16
         Number of nodes to use in the pseudospectral discretization.
     tol : float, default=1e-05
         Convergence tolerance for the SLSQP optimizer.
@@ -57,7 +54,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     raise NotImplementedError
 
 
-def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
+def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
                            reshape_order='F', n_add_nodes=16, max_nodes=64,
                            tol_scale=1., t1_tol=1e-10, verbose=0):
     """
@@ -84,7 +81,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
-    n_nodes : int, default=32
+    n_nodes : int, default=16
         Number of nodes to use in the pseudospectral discretization.
     tol : float, default=1e-05
         Convergence tolerance for the SLSQP optimizer.
@@ -159,39 +156,18 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         verbose=verbose)
 
 
-def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
+def _solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
                             reshape_order='F', verbose=0):
-    # Initialize LGR quadrature
-    tau, w, D = radau.make_lgr(n_nodes)
-
-    # Time scaling for transformation to LGR points
-    r_tau = radau.inverse_time_map_deriv(tau)
-    w = w * r_tau
-    D = np.einsum('i,ij->ij', 1. / r_tau, D)
+    tau, w, D = radau.make_scaled_lgr(n_nodes)
+    cost_fun, dyn_constr, bound_constr = setup_nlp.setup(
+        ocp, tau, w, D, order=reshape_order)
 
     # Map initial guess to LGR points
-    x0 = x[:, :1]
     x, u = setup_nlp.interp_guess(t, x, u, tau, radau.time_map)
     xu = setup_nlp.collect_vars(x, u, order=reshape_order)
 
-    # Quadrature integration of running cost
-    cost_fun = setup_nlp.make_objective_fun(ocp, w, order=reshape_order)
-
-    # Dynamic and initial condition constraints
-    dyn_constr = setup_nlp.make_dynamic_constraint(ocp, D, order=reshape_order)
     x0_constr = setup_nlp.make_initial_condition_constraint(
-        x0, ocp.n_controls, n_nodes, order=reshape_order)
-
-    # Control bounds
-    u_lb = getattr(ocp.parameters, 'u_lb', None)
-    u_ub = getattr(ocp.parameters, 'u_ub', None)
-    if u_lb is not None:
-        u_lb = resize_vector(u_lb, ocp.n_controls)
-    if u_ub is not None:
-        u_ub = resize_vector(u_ub, ocp.n_controls)
-
-    bound_constr = setup_nlp.make_bound_constraint(u_lb, u_ub, ocp.n_states,
-                                                   n_nodes, order=reshape_order)
+        x[:, :1], ocp.n_controls, n_nodes, order=reshape_order)
 
     if verbose:
         print(f"\nNumber of LGR nodes: {n_nodes}")

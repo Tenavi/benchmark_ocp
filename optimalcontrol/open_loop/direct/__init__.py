@@ -20,7 +20,7 @@ follows the methodology proposed in refs. [1, 2].
     and integration weights, and map from physical time in [0, inf) to the
     half-open interval [-1, 1).
 
-* [`utilities`](direct/utilities):
+* [`setup_nlp`](direct/setup_nlp):
     Functions used to set up a finite-dimensional constrained optimization
     problem from an infinite-dimensional `OptimalControlProblem` and a
     collocation scheme generated using the `radau` submodule.

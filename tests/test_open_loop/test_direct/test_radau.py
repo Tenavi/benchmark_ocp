@@ -17,7 +17,7 @@ lgr_diff_reference = dict()
 
 for fn in os.listdir(test_data_path):
     if fn.endswith('.csv'):
-        n_nodes = fn[1:-4]
+        n_nodes = int(fn[1:-4])
         lgr_diff_reference[n_nodes] = dict()
 
         lgr_diff_data = pd.read_csv(os.path.join(test_data_path, fn))
@@ -45,7 +45,7 @@ def test_make_lgr_small_tau(n, fun):
         fun(tau)
 
 
-@pytest.mark.parametrize('n', lgr_diff_reference.keys())
+@pytest.mark.parametrize('n', sorted(lgr_diff_reference.keys()))
 def test_make_lgr(n):
     tau, w, D = radau.make_lgr(n)
     np.testing.assert_allclose(tau, lgr_diff_reference[n]['tau'])

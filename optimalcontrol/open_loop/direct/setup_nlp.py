@@ -3,66 +3,65 @@ from scipy import sparse
 from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint
 from scipy.interpolate import interp1d
 
+from optimalcontrol.utilities import resize_vector
+
+
 _order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
                   "(Fortran, column-major)")
 
 
-def collect_vars(x, u, order='F'):
+def setup(ocp, tau, w, D, order='F'):
     """
-    Gather separate state and control matrices arranged by (dimension, time)
-    into a single 1d array for optimization, with states first and controls
-    second.
+    Wrapper function which calls other functions in this module to build a
+    collocated objective function, dynamic constraints, and control constraints.
 
     Parameters
     ----------
-    x : (n_states, n_nodes) array
-        States arranged by (dimension, time).
-    u : (n_controls, n_nodes) array
-        Controls arranged by (dimension, time).
+    ocp : OptimalControlProblem
+        The optimal control problem to solve.
+    tau : (n_nodes,) array
+        LGR collocation nodes on [-1, 1).
+    w : (n_nodes,) array
+        LGR quadrature weights corresponding to the collocation points `tau`.
+    D : (n_nodes, n_nodes) array
+        LGR differentiation matrix corresponding to the collocation points
+        `tau`.
     order : {'C', 'F'}, default='F'
         Use C (row-major) or Fortran (column-major) ordering.
 
     Returns
     -------
-    xu : 1d array
-        Array containing states `x` and controls `u`, with
-        `xu[:x.size] == x.flatten(order=order)` and
-        `xu[x.size:] == u.flatten(order=order)`.
+    obj_fun : callable
+        Function of the combined decision variables `xu` returning the
+        integrated running cost and its Jacobian with respect to `xu`. See
+        `make_objective_fun`.
+    dynamic_constraint : `scipy.optimize.NonlinearConstraint`
+        Instance of `NonlinearConstraint` containing the constraint function and
+        its sparse Jacobian. See `make_dynamic_constraint`.
+    bound_constraint : `scipy.optimize.Bounds` or None
+        Instance of `Bounds` containing the control bounds mapped to the
+        decision vector of states and controls. Returned only if at least one of
+        `ocp.parameters.u_lb` and `ocp.parameters.u_ub` is not None. See
+        `make_bound_constraint`.
     """
-    return np.concatenate((x.flatten(order=order), u.flatten(order=order)))
+    # Quadrature integration of running cost
+    cost_fun = make_objective_fun(ocp, w, order=order)
 
+    # Dynamic and initial condition constraints
+    dyn_constr = make_dynamic_constraint(ocp, D, order=order)
 
-def separate_vars(xu, n_states, n_controls, order='F'):
-    """
-    Given a single 1d array containing states and controls at all time nodes,
-    assembled using `collect_vars`, separate the array into states and controls
-    and reshape these into 2d arrays arranged by (dimension, time).
+    # Control bounds
+    u_lb = getattr(ocp.parameters, 'u_lb', None)
+    u_ub = getattr(ocp.parameters, 'u_ub', None)
+    if u_lb is not None:
+        u_lb = resize_vector(u_lb, ocp.n_controls)
+    if u_ub is not None:
+        u_ub = resize_vector(u_ub, ocp.n_controls)
 
-    Parameters
-    ----------
-    xu : 1d array
-        Array containing states `x` and controls `u`. `xu.size` must be
-        divisible by `n_states + n_controls`, i.e.
-        `xu.size == (n_states + n_controls) * n_nodes` for some int `n_nodes`.
-    n_states : int
-        Number of states.
-    n_controls : int
-        Number of controls.
-    order : {'C', 'F'}, default='F'
-        Use C (row-major) or Fortran (column-major) ordering.
+    bound_constr = make_bound_constraint(u_lb, u_ub, ocp.n_states, tau.shape[0],
+                                         order=order)
 
-    Returns
-    -------
-    x : (n_states, n_nodes) array
-        States extracted from `xu` arranged by (dimension, time).
-    u : (n_controls, n_nodes) array
-        Controls extracted from `xu` arranged by (dimension, time).
-    """
-    n_nodes = xu.size // (n_states + n_controls)
-    nx = n_states * n_nodes
-    x = xu[:nx].reshape((n_states, n_nodes), order=order)
-    u = xu[nx:].reshape((n_controls, n_nodes), order=order)
-    return x, u
+    return cost_fun, dyn_constr, bound_constr
 
 
 def make_objective_fun(ocp, w, order='F'):
@@ -72,9 +71,8 @@ def make_objective_fun(ocp, w, order='F'):
 
     Parameters
     ----------
-    ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics` and `jac` methods.
+    ocp : OptimalControlProblem
+        The optimal control problem to solve.
     w : (n_nodes,) array
         LGR quadrature weights.
     order : {'C', 'F'}, default='F'
@@ -110,9 +108,8 @@ def make_dynamic_constraint(ocp, D, order='F'):
 
     Parameters
     ----------
-    ocp : `OptimalControlProblem`
-        An instance of an `OptimalControlProblem` subclass implementing
-        `dynamics` and `jac` methods.
+    ocp : OptimalControlProblem
+        The optimal control problem to solve.
     D : (n_nodes, n_nodes) array
         LGR differentiation matrix.
     order : {'C', 'F'}, default='F'
@@ -120,7 +117,7 @@ def make_dynamic_constraint(ocp, D, order='F'):
 
     Returns
     -------
-    constraints : `scipy.optimize.NonlinearConstraint`
+    dynamic_constraint : `scipy.optimize.NonlinearConstraint`
         Instance of `NonlinearConstraint` containing the constraint function and
         its sparse Jacobian.
     """
@@ -225,7 +222,7 @@ def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='F'):
 
     Returns
     -------
-    constraints : `scipy.optimize.Bounds` or None
+    bound_constraint : `scipy.optimize.Bounds` or None
         Instance of `Bounds` containing the control bounds mapped to the
         decision vector of states and controls. Returned only if at least one of
         `u_lb` and `u_ub` is not None.
@@ -248,6 +245,64 @@ def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='F'):
                          np.tile(u_ub, (1, n_nodes)).flatten(order=order)))
 
     return Bounds(lb=lb, ub=ub)
+
+
+def collect_vars(x, u, order='F'):
+    """
+    Gather separate state and control matrices arranged by (dimension, time)
+    into a single 1d array for optimization, with states first and controls
+    second.
+
+    Parameters
+    ----------
+    x : (n_states, n_nodes) array
+        States arranged by (dimension, time).
+    u : (n_controls, n_nodes) array
+        Controls arranged by (dimension, time).
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
+
+    Returns
+    -------
+    xu : 1d array
+        Array containing states `x` and controls `u`, with
+        `xu[:x.size] == x.flatten(order=order)` and
+        `xu[x.size:] == u.flatten(order=order)`.
+    """
+    return np.concatenate((x.flatten(order=order), u.flatten(order=order)))
+
+
+def separate_vars(xu, n_states, n_controls, order='F'):
+    """
+    Given a single 1d array containing states and controls at all time nodes,
+    assembled using `collect_vars`, separate the array into states and controls
+    and reshape these into 2d arrays arranged by (dimension, time).
+
+    Parameters
+    ----------
+    xu : 1d array
+        Array containing states `x` and controls `u`. `xu.size` must be
+        divisible by `n_states + n_controls`, i.e.
+        `xu.size == (n_states + n_controls) * n_nodes` for some int `n_nodes`.
+    n_states : int
+        Number of states.
+    n_controls : int
+        Number of controls.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
+
+    Returns
+    -------
+    x : (n_states, n_nodes) array
+        States extracted from `xu` arranged by (dimension, time).
+    u : (n_controls, n_nodes) array
+        Controls extracted from `xu` arranged by (dimension, time).
+    """
+    n_nodes = xu.size // (n_states + n_controls)
+    nx = n_states * n_nodes
+    x = xu[:nx].reshape((n_states, n_nodes), order=order)
+    u = xu[nx:].reshape((n_controls, n_nodes), order=order)
+    return x, u
 
 
 def interp_guess(t, x, u, tau, time_map):

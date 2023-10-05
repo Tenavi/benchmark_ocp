@@ -35,6 +35,38 @@ def make_lgr(n_nodes):
     return tau, w, D
 
 
+def make_scaled_lgr(n_nodes):
+    """
+    Constructs LGR collocation points, integration weights, and differentiation
+    matrix. The weights are scaled by `inverse_time_map_deriv(tau)`, the
+    derivative of the mapping from physical time to LGR points, and the
+    differentiation matrix is scaled by `1 / inverse_time_map_deriv(tau)`.
+
+    Parameters
+    ----------
+    n_nodes : int
+        Number of collocation nodes. Must be `n_nodes >= 3`.
+
+    Returns
+    -------
+    tau : (n_nodes,) array
+        LGR collocation nodes on [-1, 1).
+    w : (n_nodes,) array
+        LGR quadrature weights corresponding to the collocation points `tau`,
+        scaled by `inverse_time_map_deriv(tau)`.
+    D : (n_nodes, n_nodes) array
+        LGR differentiation matrix corresponding to the collocation points
+        `tau`, scaled by `1 / inverse_time_map_deriv(tau)`.
+    """
+    tau, w, D = make_lgr(n_nodes)
+
+    r_tau = inverse_time_map_deriv(tau)
+    w = w * r_tau
+    D = np.einsum('i,ij->ij', 1. / r_tau, D)
+
+    return tau, w, D
+
+
 def make_lgr_nodes(n):
     r"""
     Constructs collocation points for LGR quadrature. These are the roots of
