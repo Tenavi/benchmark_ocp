@@ -1,6 +1,6 @@
 import numpy as np
 
-from . import utilities, radau
+from . import setup_nlp, radau
 from ._optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.utilities import resize_vector
@@ -58,7 +58,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
 
 def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
-                           reshape_order='C', n_add_nodes=16, max_nodes=64,
+                           reshape_order='F', n_add_nodes=16, max_nodes=64,
                            tol_scale=1., t1_tol=1e-10, verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -90,9 +90,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
         Maximum number of SLSQP iterations.
-    reshape_order : {'C', 'F'}, default='C'
-        Use C ('C', row-major) or Fortran ('F', column-major) ordering for the
-        NLP decision variables. This setting can slightly affect performance.
+    reshape_order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering for the NLP
+        decision variables. This setting can slightly affect performance.
     n_add_nodes : int, default=16
         Number of nodes to add to `n_nodes` if the running cost does not
         converge.
@@ -160,7 +160,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
 
 def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
-                            reshape_order='C', verbose=0):
+                            reshape_order='F', verbose=0):
     # Initialize LGR quadrature
     tau, w, D = radau.make_lgr(n_nodes)
 
@@ -171,15 +171,15 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     # Map initial guess to LGR points
     x0 = x[:, :1]
-    x, u = utilities.interp_guess(t, x, u, tau, radau.time_map)
-    xu = utilities.collect_vars(x, u, order=reshape_order)
+    x, u = setup_nlp.interp_guess(t, x, u, tau, radau.time_map)
+    xu = setup_nlp.collect_vars(x, u, order=reshape_order)
 
     # Quadrature integration of running cost
-    cost_fun = utilities.make_objective_fun(ocp, w, order=reshape_order)
+    cost_fun = setup_nlp.make_objective_fun(ocp, w, order=reshape_order)
 
     # Dynamic and initial condition constraints
-    dyn_constr = utilities.make_dynamic_constraint(ocp, D, order=reshape_order)
-    init_cond_constr = utilities.make_initial_condition_constraint(
+    dyn_constr = setup_nlp.make_dynamic_constraint(ocp, D, order=reshape_order)
+    x0_constr = setup_nlp.make_initial_condition_constraint(
         x0, ocp.n_controls, n_nodes, order=reshape_order)
 
     # Control bounds
@@ -190,7 +190,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     if u_ub is not None:
         u_ub = resize_vector(u_ub, ocp.n_controls)
 
-    bound_constr = utilities.make_bound_constraint(u_lb, u_ub, ocp.n_states,
+    bound_constr = setup_nlp.make_bound_constraint(u_lb, u_ub, ocp.n_states,
                                                    n_nodes, order=reshape_order)
 
     if verbose:
@@ -200,7 +200,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
 
     minimize_result = minimize(cost_fun, xu, bounds=bound_constr,
-                               constraints=[dyn_constr, init_cond_constr],
+                               constraints=[dyn_constr, x0_constr],
                                tol=tol, jac=True, options=minimize_opts)
 
     return DirectSolution.from_minimize_result(minimize_result, ocp, tau, w,

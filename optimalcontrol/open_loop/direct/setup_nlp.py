@@ -103,7 +103,7 @@ def make_objective_fun(ocp, w, order='F'):
 def make_dynamic_constraint(ocp, D, order='F'):
     """
     Create a function to evaluate the dynamic constraint,
-    `D @ x - ocp.dynamics(x, u) == 0`, and its Jacobian. The Jacobian is
+    `ocp.dynamics(x, u) - D @ x== 0`, and its Jacobian. The Jacobian is
     returned as a callable which employs sparse matrices. In particular, the
     constraints at time `tau[i]` are independent of constraints at time
     `tau[j]`, and some constraint Jacobians are constant.
@@ -132,13 +132,13 @@ def make_dynamic_constraint(ocp, D, order='F'):
         x, u = separate_vars(xu, n_x, n_u, order=order)
         f = ocp.dynamics(x, u)
         Dx = np.matmul(x, D.T)
-        return (Dx - f).flatten(order=order)
+        return (f - Dx).flatten(order=order)
 
     # Generates linear component of Jacobian
     if order == 'F':
-        linear_part = sparse.kron(D, sparse.identity(n_x))
+        linear_part = sparse.kron(-D, sparse.identity(n_x))
     elif order == 'C':
-        linear_part = sparse.kron(sparse.identity(n_x), D)
+        linear_part = sparse.kron(sparse.identity(n_x), -D)
     else:
         raise ValueError(_order_err_msg)
 
@@ -146,18 +146,17 @@ def make_dynamic_constraint(ocp, D, order='F'):
     def constr_jac(xu):
         x, u = separate_vars(xu, n_x, n_u, order=order)
         dfdx, dfdu = ocp.jac(x, u)
-
         if order == 'F':
-            dfdx = np.transpose(-dfdx, (2, 0, 1))
-            dfdu = np.transpose(-dfdu, (2, 0, 1))
+            dfdx = np.transpose(dfdx, (2, 0, 1))
+            dfdu = np.transpose(dfdu, (2, 0, 1))
             dfdx = sparse.block_diag(dfdx)
             dfdu = sparse.block_diag(dfdu)
         elif order == 'C':
-            dfdx = sparse.vstack([sparse.diags(diagonals=-dfdx[i],
+            dfdx = sparse.vstack([sparse.diags(diagonals=dfdx[i],
                                                offsets=range(0, n_t * n_x, n_t),
                                                shape=(n_t, n_t * n_x))
                                   for i in range(n_x)])
-            dfdu = sparse.vstack([sparse.diags(diagonals=-dfdu[i],
+            dfdu = sparse.vstack([sparse.diags(diagonals=dfdu[i],
                                                offsets=range(0, n_t * n_u, n_t),
                                                shape=(n_t, n_t * n_u))
                                   for i in range(n_x)])
@@ -273,14 +272,14 @@ def interp_guess(t, x, u, tau, time_map):
     Returns
     -------
     x : (n_states, n_nodes) array
-        Interpolated state values x(tau).
+        Interpolated state values, `x(tau)`.
     u : (n_controls, n_points) array
-        Interpolated control values u(tau).
+        Interpolated control values, `u(tau)`.
     """
     t_mapped = time_map(np.reshape(t, (-1,)))
     x, u = np.atleast_2d(x), np.atleast_2d(u)
 
-    x = interp1d(t_mapped, x, bounds_error=False, fill_value=x[:, -1])
-    u = interp1d(t_mapped, u, bounds_error=False, fill_value=u[:, -1])
+    x = interp1d(t_mapped, x, bounds_error=False, fill_value=x[..., -1])
+    u = interp1d(t_mapped, u, bounds_error=False, fill_value=u[..., -1])
 
     return x(tau), u(tau)

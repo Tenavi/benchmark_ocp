@@ -3,7 +3,7 @@ from scipy.interpolate import BarycentricInterpolator, interp1d
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
 from .radau import time_map, inverse_time_map
-from .utilities import separate_vars
+from .setup_nlp import separate_vars
 
 
 class DirectSolution(OpenLoopSolution):
@@ -68,7 +68,7 @@ class DirectSolution(OpenLoopSolution):
 
         # Extract KKT multipliers and use to approximate costates
         p = minimize_result.kkt['eq'][0].reshape(x.shape, order=order)
-        p = p / w.reshape(1, -1)
+        p = - p / w.reshape(1, -1)
 
         v = ocp.total_cost(t, x, u)[::-1]
 

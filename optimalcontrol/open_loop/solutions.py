@@ -1,3 +1,5 @@
+import numpy as np
+
 class OpenLoopSolution:
     """
     Object containing the solution to an open loop optimal control problem for
@@ -5,21 +7,21 @@ class OpenLoopSolution:
     the solver, as well as an interpolant appropriate for the solution type.
     """
     def __init__(self, t, x, u, p, v, status, message, **kwargs):
-        self.t = t
+        self.t = np.asarray(t)
         """(n_points,) array. Time points returned by the open loop solver."""
-        self.x = x
+        self.x = np.asarray(x)
         """(n_states, n_points) array. The optimal state trajectory."""
-        self.u = u
+        self.u = np.asarray(u)
         """(n_controls, n_points) array. The optimal control profile."""
-        self.p = p
+        self.p = np.asarray(p)
         """(n_states, n_points) array. The costate trajectory."""
-        self.v = v
+        self.v = np.asarray(v)
         """(n_points,) array. The value function evaluated at the points `x`."""
-        self.status = status
+        self.status = int(status)
         """int. Reason for solver termination. `status==0` indicates success;
         other values indicate various failure modes. See `message` for details.
         """
-        self.message = message
+        self.message = str(message)
         """str. Human-readable description of `status`."""
 
     def __call__(self, t):
