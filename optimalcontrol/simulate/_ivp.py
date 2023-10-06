@@ -1,15 +1,15 @@
 import warnings
+
 import numpy as np
 
-from scipy.integrate._ivp.ivp import METHODS, MESSAGES
-from scipy.integrate._ivp.ivp import OdeResult, OdeSolution
-from scipy.integrate._ivp.ivp import prepare_events, find_active_events
+from scipy.integrate._ivp.ivp import (METHODS, MESSAGES, OdeResult, OdeSolution,
+                                      prepare_events, find_active_events,
+                                      handle_events)
 
 
-def solve_ivp(
-        fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
-        events=None, vectorized=False, args=None, **options
-    ):
+def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
+              events=None, exact_event_times=False, vectorized=False, args=None,
+              **options):
     """Solve an initial value problem for a system of ODEs.
 
     Modification of `scipy.integrate.solve_ivp` to check events only after each
@@ -90,10 +90,8 @@ def solve_ivp(
         Events to track. If None (default), no events will be tracked. Each
         function must have the signature ``event(t, y)`` and return a float. The
         solver looks for a sign change over each time step, so if multiple zero
-        crossings occur within one step, events may be missed. Note that unlike
-        scipy.integrate.solve_ivp, the event time is not refined exactly with
-        any root-finding. Each `event` function might also have the following
-        attribute:
+        crossings occur within one step, events may be missed. Each `event`
+        function might also have the following attribute:
             terminal: bool, optional
                 Whether to terminate integration if this event occurs.
                 Implicitly False if not assigned.
@@ -104,6 +102,11 @@ def solve_ivp(
                 direction will trigger event. Implicitly 0 if not assigned.
         You can assign attributes like ``event.terminal = True`` to any
         function in Python.
+    exact_event_times : bool, default=False
+        If `exact_event_times=False` (default), then unlike
+        `scipy.integrate.solve_ivp`, the event time is not refined exactly with
+        any root-finding. If True, then the normal root-finding behavior is
+        enacted.
     vectorized : bool, optional
         Whether `fun` is implemented in a vectorized fashion. Default is False.
     args : tuple, optional
@@ -208,6 +211,8 @@ def solve_ivp(
     """
     t0, tf = map(float, t_span)
 
+    exact_event_times = bool(exact_event_times)
+
     if args is not None:
         # Wrap the user's fun (and jac, if given) in lambdas to hide the
         # additional parameters.  Pass in the original fun as a keyword
@@ -242,9 +247,9 @@ def solve_ivp(
 
     with warnings.catch_warnings():
         # Silence warning about unused options
-        warnings.filterwarnings(
-            'ignore', message='The following arguments have no effect'
-        )
+        warnings.filterwarnings('ignore', message="The following arguments "
+                                                  "have no effect for a chosen "
+                                                  "solver: `jac`")
         solver = method(fun, t0, y0, tf, vectorized=vectorized, **options)
 
     if t_eval is None:
@@ -303,11 +308,31 @@ def solve_ivp(
 
             # This part is changed from the standard scipy.integrate.solve_ivp
             if active_events.size > 0:
-                for e in active_events:
-                    t_events[e].append(t)
-                    y_events[e].append(y)
+                if sol is None:
+                    sol = solver.dense_output()
 
-                status = int(np.any(is_terminal[active_events]))
+                if exact_event_times:
+                    with warnings.catch_warnings():
+                        # Silence warning about 1d array to scalar conversion
+                        warnings.filterwarnings('ignore',
+                                                category=DeprecationWarning)
+                        root_indices, roots, terminate = handle_events(
+                            sol, events, active_events, is_terminal, t_old, t)
+
+                    for e, te in zip(root_indices, roots):
+                        t_events[e].append(te)
+                        y_events[e].append(sol(te))
+
+                    if terminate:
+                        status = 1
+                        t = roots[-1]
+                        y = sol(t)
+                else:
+                    for e in active_events:
+                        t_events[e].append(t)
+                        y_events[e].append(y)
+
+                    status = int(np.any(is_terminal[active_events]))
 
             g = g_new
 
