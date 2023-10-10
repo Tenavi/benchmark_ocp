@@ -89,7 +89,7 @@ def make_lgr_nodes(n):
     """
     n = _check_size_n(n)
     tau, _ = roots_jacobi(n - 1, alpha=0, beta=1)
-    return np.concatenate(([-1.], tau))
+    return np.concatenate((np.array([-1.]), tau))
 
 
 def make_lgr_weights(tau, legendre_eval=None):
@@ -177,7 +177,7 @@ def make_lgr_diff_matrix(tau, legendre_eval=None):
                 den = legendre_eval[j] * (1. - tau[i]) * (tau[i] - tau[j])
                 D[i, j] = num / den
             elif i == j == 0:
-                D[i, j] = -(n - 1) * (n + 1) / 4.
+                D[i, j] = - (n - 1) * (n + 1) / 4.
             else:
                 D[i, j] = 1. / (2. * (1. - tau[i]))
     return D
@@ -200,6 +200,7 @@ def time_map(t):
     tau : (n_points,) array
         Mapped time points in [-1, 1).
     """
+    t = np.asarray(t)
     return (t - 1.) / (t + 1.)
 
 
@@ -221,6 +222,7 @@ def inverse_time_map(tau):
     t : (n_points,) array
         Physical time, `t >= 0`.
     """
+    tau = np.asarray(tau)
     return (1. + tau) / (1. - tau)
 
 
@@ -240,7 +242,7 @@ def inverse_time_map_deriv(tau):
         Derivative of the inverse time map,
         $r(\tau) = dt/d\tau = 2 / (1 - \tau)^2$.
     """
-    return 2. / (1. - tau) ** 2
+    return 2. / (1. - np.asarray(tau)) ** 2
 
 
 def _check_size_n(n_nodes):
@@ -263,6 +265,7 @@ def _check_size_n(n_nodes):
     ValueError
         If `n_nodes < 3`.
     """
-    if int(n_nodes) < 3:
+    n_nodes = int(n_nodes)
+    if n_nodes < 3:
         raise ValueError("Number of nodes must be at least n_nodes >= 3.")
-    return int(n_nodes)
+    return n_nodes

@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 from scipy.integrate import solve_bvp
-from scipy.interpolate import interp1d
+from scipy.interpolate import make_interp_spline
 
 from .solutions import OpenLoopSolution
 
@@ -108,7 +108,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
         except RuntimeWarning as w:
             status = 3
             message = str(w)
-            sol = interp1d(t, xp, bounds_error=True)
+            sol = make_interp_spline(t, xp, k=1, axis=1)
 
     return IndirectSolution(t, x, u, p, v, status, message, cont_sol=sol,
                             u_fun=ocp.optimal_control)

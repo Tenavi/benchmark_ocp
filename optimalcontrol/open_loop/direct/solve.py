@@ -163,7 +163,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
         ocp, tau, w, D, order=reshape_order)
 
     # Map initial guess to LGR points
-    x, u = setup_nlp.interp_guess(t, x, u, tau, radau.time_map)
+    x, u = setup_nlp.interp_guess(t, x, u, tau, radau.inverse_time_map)
     xu = setup_nlp.collect_vars(x, u, order=reshape_order)
 
     x0_constr = setup_nlp.make_initial_condition_constraint(

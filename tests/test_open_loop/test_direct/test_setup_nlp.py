@@ -69,9 +69,7 @@ class PolynomialDynamics(OptimalControlProblem):
 
     def dynamics(self, x, u):
         tau = x[0]
-
         dxdt = [np.ones_like(tau)] + [p(tau) for p in self.parameters._poly_x]
-
         dxdt = np.stack(dxdt, axis=0)
 
         if np.ndim(x) < 2:
@@ -80,13 +78,15 @@ class PolynomialDynamics(OptimalControlProblem):
         return dxdt
 
 
-@pytest.mark.parametrize('n', [10, 15])
+@pytest.mark.parametrize('n', [11, 12])
 @pytest.mark.parametrize('d', [1, 2])
 def test_interp_initial_guess(n, d):
     """
-    Test that the interpolation code recovers the original points if tau = t.
+    Test that the interpolation code recovers the original points if tau = t,
+    and that extrapolation uses the last values in the guess.
     """
-    t = np.linspace(0., 10., n)
+    t1 = 10.
+    t = np.linspace(0., t1, n)
     tau = radau.time_map(t)
 
     x = np.cos(t) * t
@@ -94,19 +94,30 @@ def test_interp_initial_guess(n, d):
 
     x = np.atleast_2d(x)
     u = np.atleast_2d(u)
-    for k in range(d-1):
+    for k in range(d - 1):
         x = np.vstack((x, x[0] + k))
         u = np.vstack((u, u[0] - k))
 
-    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau, radau.time_map)
+    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau,
+                                                radau.inverse_time_map)
 
-    assert np.allclose(x_interp, x)
-    assert np.allclose(u_interp, u)
+    np.testing.assert_allclose(x_interp, x, atol=1e-12)
+    np.testing.assert_allclose(u_interp, u, atol=1e-12)
+
+    tau_extra = radau.time_map(np.linspace(t1, 2. * t1, n - 1))
+
+    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau_extra,
+                                                radau.inverse_time_map)
+
+    for k in range(tau_extra.shape[0]):
+        np.testing.assert_allclose(x_interp[:, k], x[:, -1], atol=1e-12)
+        np.testing.assert_allclose(u_interp[:, k], u[:, -1], atol=1e-12)
 
 
-@pytest.mark.parametrize('n_states', [1, 3])
-@pytest.mark.parametrize('n_controls', [1, 2])
-@pytest.mark.parametrize('n_nodes', [16, 17])
+
+@pytest.mark.parametrize('n_states', [1, 2, 3])
+@pytest.mark.parametrize('n_controls', [1, 2, 3])
+@pytest.mark.parametrize('n_nodes', [12, 13])
 @pytest.mark.parametrize('order', ['F', 'C'])
 def test_reshaping_funs(n_states, n_controls, n_nodes, order):
     x = rng.normal(size=(n_states, n_nodes))

@@ -1,4 +1,4 @@
-from scipy.interpolate import BarycentricInterpolator, interp1d
+from scipy.interpolate import BarycentricInterpolator, make_interp_spline
 
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
@@ -17,7 +17,7 @@ class DirectSolution(OpenLoopSolution):
         self._x_interp = BarycentricInterpolator(tau, x, axis=-1)
         self._u_interp = BarycentricInterpolator(tau, u, axis=-1)
         self._p_interp = BarycentricInterpolator(tau, p, axis=-1)
-        self._v_interp = interp1d(t, v)
+        self._v_interp = make_interp_spline(t, v, k=1)
 
         super().__init__(t, x, u, p, v, status, message)
 

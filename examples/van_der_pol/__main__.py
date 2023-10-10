@@ -3,7 +3,7 @@ import time
 import argparse as ap
 
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import make_interp_spline
 from matplotlib import pyplot as plt
 
 from optimalcontrol import simulate, utilities, analysis
@@ -57,8 +57,9 @@ for i, sim in enumerate(lqr_sims):
     # interpolate initial and final conditions
     if status[i] != 0:
         x0 = x0_pool[:, i:i+1]
-        x_interp = interp1d([0., config.t_int],
-                            np.hstack((x0, ocp.parameters.xf)))
+        x_interp = make_interp_spline([0., config.t_int],
+                                      np.hstack((x0, ocp.parameters.xf)),
+                                      k=1, axis=1)
         sim['t'] = np.linspace(0., config.t_int, 100)
         sim['x'] = x_interp(sim['t'])
         sim['u'] = lqr(sim['x'])

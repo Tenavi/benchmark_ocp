@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 import pytest
-from scipy.interpolate import interp1d
+from scipy.interpolate import make_interp_spline
 from scipy.integrate import solve_ivp as scipy_solve_ivp
 
 from optimalcontrol.simulate import integrate_fixed_time, integrate_to_converge
@@ -27,11 +27,12 @@ def test_solve_ivp_events(method, eps):
         return c * x
 
     # Solution with slightly perturbed parameters
-    ref_sol = interp1d(t_eval, x0 * np.exp((c + eps) * t_eval))
+    ref_sol = make_interp_spline(t_eval, x0 * np.exp((c + eps) * t_eval),
+                                 k=1, axis=-1)
 
     # Want integration to stop when square error is greater than eps ** 2
     def integration_event(t, x):
-        return (ref_sol(t) - x) ** 2 - eps ** 2
+        return (ref_sol(t).T - x) ** 2 - eps ** 2
 
     # The event condition starts negative, integration should stop when this
     # becomes positive

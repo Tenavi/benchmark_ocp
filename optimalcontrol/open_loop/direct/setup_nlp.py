@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint
-from scipy.interpolate import interp1d
+from scipy.interpolate import make_interp_spline
 
 from optimalcontrol.utilities import resize_vector
 
@@ -305,10 +305,12 @@ def separate_vars(xu, n_states, n_controls, order='F'):
     return x, u
 
 
-def interp_guess(t, x, u, tau, time_map):
+def interp_guess(t, x, u, tau, inverse_time_map):
     """
-    Interpolate initial guesses for the state and control in physical time to
-    collocation points.
+    Linearly interpolate initial guesses for the state and control in physical
+    time to collocation points. Points which need to be extrapolated beyond
+    `inverse_time_map(tau) > t[-1]` simply use the final values for `x[:, -1]`
+    and `u[:, -1]`.
 
     Parameters
     ----------
@@ -317,24 +319,33 @@ def interp_guess(t, x, u, tau, time_map):
     x : (n_states, n_points) array
         Initial guess for the state values x(t).
     u : (n_controls, n_points) array
-        Initial guess for the control values u(x(t)).
+        Initial guess for the control values u(t).
     tau : (n_nodes,) array
-        Radau points computed by `legendre_gauss_radau.make_lgr_nodes`.
-    time_map : callable
-        Function to map physical time to collocation points, e.g.
-        `legendre_gauss_radau.time_map`.
+        Radau points computed by `radau.make_lgr_nodes`.
+    inverse_time_map : callable
+        Function to map collocation points to physical time, e.g.
+        `radau.time_map`.
 
     Returns
     -------
-    x : (n_states, n_nodes) array
-        Interpolated state values, `x(tau)`.
-    u : (n_controls, n_points) array
-        Interpolated control values, `u(tau)`.
+    x_interp : (n_states, n_nodes) array
+        Interpolated states, `x(inverse_time_map(tau))`.
+    u_interp : (n_controls, n_points) array
+        Interpolated controls, `u(inverse_time_map(tau))`.
     """
-    t_mapped = time_map(np.reshape(t, (-1,)))
+    t = np.reshape(t, (-1,))
     x, u = np.atleast_2d(x), np.atleast_2d(u)
 
-    x = interp1d(t_mapped, x, bounds_error=False, fill_value=x[..., -1])
-    u = interp1d(t_mapped, u, bounds_error=False, fill_value=u[..., -1])
+    x_interp = make_interp_spline(t, x, k=1, axis=-1)
+    u_interp = make_interp_spline(t, u, k=1, axis=-1)
 
-    return x(tau), u(tau)
+    tau_mapped = inverse_time_map(np.reshape(tau, (-1,)))
+    extra_idx = tau_mapped > t[-1]
+
+    x_interp = x_interp(tau_mapped)
+    u_interp = u_interp(tau_mapped)
+
+    x_interp[:, extra_idx] = x[:, -1:]
+    u_interp[:, extra_idx] = u[:, -1:]
+
+    return x_interp, u_interp

@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class OpenLoopSolution:
     """
     Object containing the solution to an open loop optimal control problem for
