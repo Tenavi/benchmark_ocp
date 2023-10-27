@@ -110,7 +110,7 @@ class BurgersPDE(OptimalControlProblem):
             x0 *= distance / self.distances(x0, 0.)
 
         if n_samples == 1:
-            return x0.flatten()
+            return x0[:, 0]
         return x0
 
     def distances(self, xa, xb, squared=False):

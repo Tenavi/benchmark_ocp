@@ -596,23 +596,23 @@ class OptimalControlProblem:
             try:
                 x = np.reshape(x, (self.n_states, -1))
             except:
-                raise ValueError('x must be an array of shape (n_states,) or '
-                                 '(n_states, n_points)')
-        elif not isinstance(x, np.ndarray):
-            x = np.array(x)
+                raise ValueError("x must be an array of shape (n_states,) or "
+                                 "(n_states, n_points)")
+        else:
+            x = np.asarray(x)
 
         if np.ndim(u) != 2 or np.shape(u)[0] != self.n_controls:
             try:
                 u = np.reshape(u, (self.n_controls, -1))
             except:
-                raise ValueError('u must be an array of shape (n_controls,) or '
-                                 '(n_controls, n_points)')
-        elif not isinstance(u, np.ndarray):
-            u = np.array(u)
+                raise ValueError("u must be an array of shape (n_controls,) or "
+                                 "(n_controls, n_points)")
+        else:
+            u = np.asarray(u)
 
         n_x, n_u = x.shape[1], u.shape[1]
         if n_x != n_u:
-            raise ValueError(f'x.shape[1] = f{n_x} != u.shape[1] = {n_u}')
+            raise ValueError(f"x.shape[1] = f{n_x} != u.shape[1] = {n_u}")
 
         return x, u, squeeze
 

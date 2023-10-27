@@ -103,7 +103,7 @@ class SupervisedController(controls.Controller):
         u = utilities.saturate(u.T, self.u_lb, self.u_ub)
 
         if np.ndim(x) < 2:
-            return u.flatten()
+            return u[:, 0]
 
         return u
 

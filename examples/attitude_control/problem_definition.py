@@ -250,7 +250,7 @@ class AttitudeControl(OptimalControlProblem):
         q, _, w = self._break_state(x)
 
         if np.ndim(x) < 2:
-            q_err = q - self.parameters._q_final.flatten()
+            q_err = q - self.parameters._q_final[:, 0]
         else:
             q_err = q - self.parameters._q_final
 
@@ -397,7 +397,7 @@ class AttitudeControl(OptimalControlProblem):
         p_q, p_q0, p_w = self._break_state(p)
 
         if np.ndim(x) < 2:
-            q_err = q - self.parameters._q_final.flatten()
+            q_err = q - self.parameters._q_final[:, 0]
         else:
             q_err = q - self.parameters._q_final
 

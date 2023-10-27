@@ -154,7 +154,7 @@ class VanDerPol(OptimalControlProblem):
     def dynamics(self, x, u):
         u = self._saturate(u)
         if np.ndim(x) < 2 and np.ndim(u) > 1:
-            u = u.flatten()
+            u = u[:, 0]
 
         x1 = x[:1]
         x2 = x[1:]

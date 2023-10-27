@@ -162,5 +162,5 @@ class UniformSampler(StateSampler):
             x += self.xf
 
         if n_samples == 1:
-            return x.flatten()
+            return x[:, 0]
         return x
