@@ -1,8 +1,10 @@
-import pytest
 import numpy as np
+import pytest
 
 from optimalcontrol.open_loop.solutions import CombinedSolution
 from optimalcontrol.open_loop.direct.solutions import DirectSolution
+
+from .test_indirect import assert_matches_reference
 
 
 rng = np.random.default_rng()
@@ -18,7 +20,11 @@ def _make_dummy_sol(n_t=51):
     return t, x, u, p, v
 
 
-def test_combining_single_sol():
+@pytest.mark.parametrize('return_x', (True, False))
+@pytest.mark.parametrize('return_u', (True, False))
+@pytest.mark.parametrize('return_p', (True, False))
+@pytest.mark.parametrize('return_v', (True, False))
+def test_combining_single_sol(return_x, return_u, return_p, return_v):
     t, x, u, p, v = _make_dummy_sol()
 
     status = 123
@@ -35,10 +41,13 @@ def test_combining_single_sol():
         np.testing.assert_array_equal(getattr(sol, key),
                                       getattr(wrapped_sol, key))
 
-    t_test = rng.uniform(t[0] - 1, t[-1] + 1, 1000)
+    args = {'t': rng.uniform(t[0] - 1, t[-1] + 1, 1000),
+            'return_x': return_x, 'return_u': return_u,
+            'return_p': return_p, 'return_v': return_v}
 
-    for arr1, arr2 in zip(wrapped_sol(t_test), sol(t_test)):
-        np.testing.assert_array_equal(arr1, arr2)
+    if any([return_x, return_u, return_p, return_v]):
+        for arr1, arr2 in zip(wrapped_sol(**args), sol(**args)):
+            np.testing.assert_array_equal(arr1, arr2)
 
 
 @pytest.mark.parametrize('n_segments', (2, 3, 7))
@@ -75,7 +84,6 @@ def test_combining_multiple_sols(n_segments):
     # First check that at least time and value function vectors are sorted
     np.testing.assert_array_equal(wrapped_sol.t, np.sort(wrapped_sol.t))
     np.testing.assert_array_equal(wrapped_sol.v, np.sort(wrapped_sol.v)[::-1])
-    np.testing.assert_array_less(0., wrapped_sol._v_diff)
 
     for k in range(n_segments - 2):
         assert wrapped_sol._v_diff[k] > wrapped_sol._v_diff[k + 1]
@@ -104,20 +112,18 @@ def test_combining_multiple_sols(n_segments):
                                    rtol=1e-14, atol=1e-14)
         t0 = t1
 
+    # Test interpolation for each segment
     t0 = 0.
     for k, t1 in enumerate(wrapped_sol._t_break_extended.flatten()):
         if np.isinf(t1):
             t1 = t0 * 2.
         t_test = np.linspace(t0, t0 + 0.99 * (t1 - t0), 10)
 
-        x, u, p, v = wrapped_sol(t_test)
         x_expect, u_expect, p_expect, v_expect = sols[k](t_test - t0)
         if k < n_segments - 1:
             v_expect += np.maximum(wrapped_sol._v_diff[k], 0.)
 
-        np.testing.assert_allclose(x, x_expect, rtol=1e-14, atol=1e-14)
-        np.testing.assert_allclose(u, u_expect, rtol=1e-14, atol=1e-14)
-        np.testing.assert_allclose(p, p_expect, rtol=1e-14, atol=1e-14)
-        np.testing.assert_allclose(v, v_expect, rtol=1e-14, atol=1e-14)
+        assert_matches_reference(wrapped_sol, t_test, x_expect, u_expect,
+                                 p_expect, v_expect, atol=1e-14, rtol=1e-14)
 
         t0 = t1

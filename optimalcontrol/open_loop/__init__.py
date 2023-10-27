@@ -60,8 +60,12 @@ More information and practical considerations are given in refs. [1-5] below.
     Solve a single open-loop infinite horizon OCP.
 
 * [`solutions.OpenLoopSolution`](open_loop/solutions#OpenLoopSolution)
-    Methods implemented in this model return open-loop OCP solutions as
+    Methods implemented in this framework return open-loop OCP solutions as
     instances of this class.
+
+* [`solutions.CombinedSolution`](open_loop/solutions#CombinedSolution)
+    Wrapper class which combines multiple `OpenLoopSolution`s valid on different
+    time segments.
 
 ---
 

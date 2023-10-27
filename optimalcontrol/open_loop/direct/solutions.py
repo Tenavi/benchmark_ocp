@@ -21,17 +21,27 @@ class DirectSolution(OpenLoopSolution):
 
         super().__init__(t, x, u, p, v, status, message)
 
-    def __call__(self, t):
+    def __call__(self, t, return_x=True, return_u=True, return_p=True,
+                 return_v=True):
         tau = time_map(t)
 
-        x = self._x_interp(tau)
-        u = self._u_interp(tau)
-        u = saturate(u, self._u_lb, self._u_ub)
-        p = self._p_interp(tau)
+        if return_x:
+            x = self._x_interp(tau)
 
-        v = self._v_interp(t)
+        if return_u:
+            u = self._u_interp(tau)
+            u = saturate(u, self._u_lb, self._u_ub)
 
-        return x, u, p, v
+        if return_p:
+            p = self._p_interp(tau)
+
+        if return_v:
+            v = self._v_interp(t)
+
+        return self._get_return_args(x=x if return_x else None,
+                                     u=u if return_u else None,
+                                     p=p if return_p else None,
+                                     v=v if return_v else None)
 
     @classmethod
     def from_minimize_result(cls, minimize_result, ocp, tau, w, order):

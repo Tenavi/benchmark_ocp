@@ -25,7 +25,8 @@ class OpenLoopSolution:
         self.message = str(message)
         """str. Human-readable description of `status`."""
 
-    def __call__(self, t):
+    def __call__(self, t, return_x=True, return_u=True, return_p=True,
+                 return_v=True):
         """
         Interpolate the optimal solution at new times `t`.
 
@@ -33,19 +34,42 @@ class OpenLoopSolution:
         ----------
         t : (n_points,) array
             Time points at which to evaluate the continuous solution.
+        return_x : bool, default=True
+            If True (default), interpolate and return the state `x`.
+        return_u : bool, default=True
+            If True (default), interpolate and return the control `u`.
+        return_p : bool, default=True
+            If True (default), interpolate and return the costate `p`.
+        return_v : bool, default=True
+            If True (default), interpolate and return the value function `v`.
 
         Returns
         -------
         x : (n_states, n_points) array
-            Values of the optimal state trajectory at times `t`.
+            Values of the optimal state trajectory at times `t`. Returned if
+            `return_x=True`.
         u : (n_controls, n_points) array
-            Values of the optimal control at times `t`.
+            Values of the optimal control at times `t`. Returned if
+            `return_u=True`.
         p : (n_states, n_points) array
-            Values of the costate at times `t`.
+            Values of the costate at times `t`. Returned if `return_p=True`.
         v : (n_points,) array
-            The value function evaluated at the points `x`.
+            The value function evaluated at the points `x`. Returned if
+            `return_v=True`.
         """
         raise NotImplementedError
+
+    @staticmethod
+    def _get_return_args(x=None, u=None, p=None, v=None):
+        args = []
+        for arg in (x, u, p, v):
+            if arg is not None:
+                args.append(arg)
+        if len(args) == 0:
+            return
+        if len(args) == 1:
+            return args[0]
+        return args
 
     def check_convergence(self, fun, tol, verbose=False):
         """
@@ -77,13 +101,13 @@ class OpenLoopSolution:
             return converged
 
         L = float(fun(self.x[:, -1], self.u[:, -1]))
-        converged = converged and L <= tol
+        converged = L <= tol
         if verbose:
             if converged:
-                print(f"Solution converged: running cost = {L:1.2e} <= "
+                print(f"Solution converged: running cost {L:1.2e} <= "
                       f"tolerance {tol:1.2e}")
             else:
-                print(f"Solution failed to converge: running cost = {L:1.2e} > "
+                print(f"Solution failed to converge: running cost {L:1.2e} > "
                       f"tolerance {tol:1.2e}")
 
         return converged
@@ -210,16 +234,25 @@ class CombinedSolution(OpenLoopSolution):
         idx[1:] = np.logical_and(idx[1:], self._t_break <= t)
         return idx
 
-    def __call__(self, t):
+    def __call__(self, t, return_x=True, return_u=True, return_p=True,
+                 return_v=True):
         t = np.asarray(t).reshape(-1)
         n_t = t.shape[0]
 
         indices = self._assign_to_segments(t)
 
-        x = np.empty((self.x.shape[0], n_t))
-        u = np.empty((self.u.shape[0], n_t))
-        p = np.empty((self.p.shape[0], n_t))
-        v = np.empty(n_t)
+        return_arrays = dict()
+        if return_x:
+            return_arrays['x'] = np.empty((self.x.shape[0], n_t))
+        if return_u:
+            return_arrays['u'] = np.empty((self.u.shape[0], n_t))
+        if return_p:
+            return_arrays['p'] = np.empty((self.p.shape[0], n_t))
+        if return_v:
+            return_arrays['v'] = np.empty(n_t)
+
+        if len(return_arrays) == 0:
+            return
 
         # Loop over segments
         for k, idx in enumerate(indices):
@@ -229,8 +262,26 @@ class CombinedSolution(OpenLoopSolution):
                 # interpolators expect time to start at 0
                 _t = _t - self._t_break[k - 1]
             if _t.size > 0:
-                x[:, idx], u[:, idx], p[:, idx], v[idx] = self._sols[k](_t)
-                if k < self.n_segments - 1 and self._v_diff[k] > 0.:
-                    v[idx] += self._v_diff[k]
+                sol_k = self._sols[k](_t, return_x=return_x, return_u=return_u,
+                                      return_p=return_p, return_v=return_v)
 
-        return x, u, p, v
+                # Iterate over arrays in the solution and the return dict, which
+                # are constructed to be the same length
+                if len(return_arrays) == 1:
+                    # There should only be one key
+                    for key in return_arrays.keys():
+                        return_arrays[key][..., idx] = sol_k
+                else:
+                    for arr, key in zip(sol_k, return_arrays.keys()):
+                        return_arrays[key][..., idx] = arr
+
+                if (return_v and
+                        k < self.n_segments - 1 and self._v_diff[k] > 0.):
+                    return_arrays['v'][idx] += self._v_diff[k]
+
+        if len(return_arrays) == 1:
+            # There should only be one key
+            for key in return_arrays.keys():
+                return return_arrays[key]
+
+        return return_arrays.values()

@@ -22,13 +22,20 @@ class IndirectSolution(OpenLoopSolution):
         self._n_states = np.shape(x)[0]
         super().__init__(t, x, u, p, v, status, message)
 
-    def __call__(self, t):
+    def __call__(self, t, return_x=True, return_u=True, return_p=True,
+                 return_v=True):
         xp = np.atleast_2d(self._cont_sol(t))
         x = xp[:self._n_states]
         p = xp[self._n_states:-1]
         v = xp[-1]
-        u = self._u_fun(x, p)
-        return x, u, p, v
+
+        if return_u:
+            u = self._u_fun(x, p)
+
+        return self._get_return_args(x=x if return_x else None,
+                                     u=u if return_u else None,
+                                     p=p if return_p else None,
+                                     v=v if return_v else None)
 
 
 def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
@@ -168,7 +175,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-    t1_tol = float(t1_tol)
+    t1_tol = np.maximum(float(t1_tol), np.finfo(float).eps)
     _max_t = np.max(t)
 
     if t1_add is None:
@@ -186,8 +193,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
                                    tol=tol, verbose=verbose)
 
         # Stop if algorithm succeeded and running cost is small enough
-        if ocp_sol.check_convergence(ocp.running_cost, t1_tol,
-                                     verbose=verbose > 0):
+        if ocp_sol.check_convergence(ocp.running_cost, t1_tol, verbose=verbose):
             return ocp_sol
 
         # Stop if maximum nodes or time horizon is reached
@@ -202,9 +208,9 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         # If encountered numerical error (hard to recover from), try changing
         # the guess for the costate to all zeros
         if ocp_sol.status == 3:
-            if verbose > 0:
-                print(f"Encountered numerical error. Resetting costates to "
-                      f"zeros and trying again...")
+            if verbose:
+                print(f"Encountered numerical error. Resetting costates to zero"
+                      f" and trying again...")
             ocp_sol.p = np.zeros_like(ocp_sol.p)
             ocp_sol.v = np.zeros_like(ocp_sol.v)
 
@@ -215,7 +221,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         u = np.hstack([ocp_sol.u, ocp_sol.u[:, -1:]])
         v = np.concatenate([ocp_sol.v, ocp_sol.v[-1:]])
 
-        if verbose > 0:
+        if verbose:
             print(f"Increasing time horizon to {t[-1]}")
 
 

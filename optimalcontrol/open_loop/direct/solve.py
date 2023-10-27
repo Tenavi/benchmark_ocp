@@ -1,6 +1,9 @@
+import numpy as np
+
 from . import setup_nlp, radau
 from ._optimize import minimize
 from .solutions import DirectSolution
+from optimalcontrol.simulate._ivp import solve_ivp
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
@@ -54,9 +57,10 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
     raise NotImplementedError
 
 
-def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
-                           reshape_order='F', n_add_nodes=16, max_nodes=64,
-                           tol_scale=1., t1_tol=1e-10, verbose=0):
+def _solve_infinite_horizon_old(ocp, t, x, u, n_nodes=16, tol=1e-05,
+                                max_iter=500, reshape_order='F', n_add_nodes=16,
+                                max_nodes=64, tol_scale=1., t1_tol=1e-10,
+                                verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
     an infinite horizon optimal control problem for a single initial condition.
@@ -130,7 +134,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
                                       max_iter=max_iter, verbose=verbose)
 
     # Stop if algorithm succeeded and running cost is small enough
-    if ocp_sol.check_convergence(ocp.running_cost, t1_tol, verbose=verbose > 0):
+    if ocp_sol.check_convergence(ocp.running_cost, t1_tol, verbose=verbose):
         return ocp_sol
 
     # Stop if maximum nodes is reached
@@ -146,18 +150,172 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
         n_nodes = int(max_nodes)
     tol = tol * tol_scale
 
-    if verbose > 0:
+    if verbose:
         print(f"Increasing n_nodes to {n_nodes:d}")
 
-    return solve_infinite_horizon(
+    return _solve_infinite_horizon_old(
         ocp, t, x, u, n_nodes=n_nodes, tol=tol, max_iter=max_iter,
         reshape_order=reshape_order, n_add_nodes=n_add_nodes,
         max_nodes=max_nodes, tol_scale=tol_scale, t1_tol=t1_tol,
         verbose=verbose)
 
 
+def solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
+                           t1_tol=1e-10, interp_tol=1e-04,
+                           integration_method='RK45', atol=1e-06, rtol=1e-03,
+                           reshape_order='F', verbose=0):
+    """
+    Compute the open-loop optimal solution of a finite horizon approximation of
+    an infinite horizon optimal control problem for a single initial condition.
+
+    This function applies a "direct method", which is to transform the optimal
+    control problem into a constrained optimization problem with Legendre-Gauss-
+    Radau pseudospectral collocation. The resulting optimization problem is
+    solved using is solved using sequential least squares quadratic programming
+    (SLSQP).
+
+
+
+    The number of collocation nodes is increased as necessary until the
+    running cost at final time `t[-1]` is smaller than the specified tolerance
+    `t1_tol`.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        The optimal control problem to solve.
+    t : (n_points,) array
+        Time points at which the initial guess is supplied. Assumed to be
+        sorted from smallest to largest.
+    x : (n_states, n_points) array
+        Initial guess for the state trajectory at times `t`. The initial
+        condition is assumed to be contained in `x[:, 0]`.
+    u : (n_controls, n_points) array
+        Initial guess for the optimal control at times `t`.
+    n_nodes : int, default=16
+        Number of nodes to use in the pseudospectral discretization.
+    tol : float, default=1e-05
+        Convergence tolerance for the SLSQP optimizer.
+    max_iter : int, default=500
+        Maximum number of SLSQP iterations.
+    t1_tol : float, default=1e-10
+        Tolerance for the running cost when determining convergence of the
+        finite horizon approximation.
+    integration_method : string or `OdeSolver`, default='RK45'
+        The solver to use for integration in the a2B algorithm. See
+        `scipy.integrate.solve_ivp` for options.
+    atol : float or array_like, default=1e-06
+        Absolute tolerance for integration in the a2B algorithm. See
+        `scipy.integrate.solve_ivp`.
+    rtol : float or array_like, default=1e-03
+        Relative tolerance for integration in the a2B algorithm. See
+        `scipy.integrate.solve_ivp`.
+    reshape_order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering for the NLP
+        decision variables. This setting can slightly affect performance.
+    verbose : {0, 1, 2}, default=0
+        Level of algorithm's verbosity:
+
+            * 0 (default) : work silently.
+            * 1 : display a termination report.
+            * 2 : display progress during iterations.
+
+    Returns
+    -------
+    sol : `OpenLoopSolution`
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status==0`.
+    """
+    t1_tol = np.maximum(float(t1_tol), np.finfo(float).eps)
+    interp_tol = np.maximum(float(interp_tol), np.finfo(float).eps)
+
+    f, converge_event, interp_event = _setup_open_loop(ocp, t1_tol, interp_tol)
+
+    sols = [_solve_infinite_horizon(ocp, t, x, u, tol=tol, n_nodes=n_nodes,
+                                    reshape_order=reshape_order,
+                                    max_iter=max_iter, verbose=verbose)]
+
+    raise NotImplementedError
+
+
+def _setup_open_loop(ocp, t1_tol, interp_tol):
+    # Open-loop controlled system dynamics
+    def dynamics(t, x, sol):
+        u_interp = sol(t, return_x=False, return_p=False, return_v=False)
+        if x.ndim < 2:
+            u_interp = u_interp.reshape(-1, )
+        return ocp.dynamics(x, u_interp)
+
+    # Terminate integration for sufficiently small running cost
+    def running_cost_converged(t, x, sol):
+        u_interp = sol(t, return_x=False, return_p=False, return_v=False)
+        if x.ndim < 2:
+            u_interp = u_interp.reshape(-1, )
+        return ocp.running_cost(x, u_interp) - t1_tol
+
+    # Terminate integration for exceeding interpolation error tolerance
+    def error_exceeds_interp_tol(t, x, sol):
+        x_interp = sol(t, return_u=False, return_p=False, return_v=False)
+        x_interp = x_interp.reshape(x.shape)
+        return np.linalg.norm(x - x_interp, axis=0) - interp_tol
+
+    # Assume running cost event starts positive, terminate when becomes negative
+    running_cost_converged.terminal = True
+    running_cost_converged.direction = -1
+
+    # Assume error event starts negative, terminate when becomes positive
+    error_exceeds_interp_tol.terminal = True
+    error_exceeds_interp_tol.direction = 1
+
+    return dynamics, running_cost_converged, error_exceeds_interp_tol
+
+
 def _solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
                             reshape_order='F', verbose=0):
+    """
+    Compute the open-loop optimal solution of a finite horizon approximation of
+    an infinite horizon optimal control problem for a single initial condition.
+
+    This function applies a "direct method", which is to transform the optimal
+    control problem into a constrained optimization problem with Legendre-Gauss-
+    Radau pseudospectral collocation. The resulting optimization problem is
+    solved using is solved using sequential least squares quadratic programming
+    (SLSQP).
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        The optimal control problem to solve.
+    t : (n_points,) array
+        Time points at which the initial guess is supplied. Assumed to be
+        sorted from smallest to largest.
+    x : (n_states, n_points) array
+        Initial guess for the state trajectory at times `t`. The initial
+        condition is assumed to be contained in `x[:, 0]`.
+    u : (n_controls, n_points) array
+        Initial guess for the optimal control at times `t`.
+    n_nodes : int, default=16
+        Number of nodes to use in the pseudospectral discretization.
+    tol : float, default=1e-05
+        Convergence tolerance for the SLSQP optimizer.
+    max_iter : int, default=500
+        Maximum number of SLSQP iterations.
+    reshape_order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering for the NLP
+        decision variables. This setting can slightly affect performance.
+    verbose : {0, 1, 2}, default=0
+        Level of algorithm's verbosity:
+
+            * 0 (default) : work silently.
+            * 1 : display a termination report.
+            * 2 : display progress during iterations.
+
+    Returns
+    -------
+    sol : `OpenLoopSolution`
+        Solution of the open-loop OCP. Should only be trusted if
+        `sol.status==0`.
+    """
     tau, w, D = radau.make_scaled_lgr(n_nodes)
     cost_fun, dyn_constr, bound_constr = setup_nlp.setup(
         ocp, tau, w, D, order=reshape_order)
