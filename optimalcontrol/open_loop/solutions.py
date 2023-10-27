@@ -89,14 +89,30 @@ class OpenLoopSolution:
         return converged
 
 
-class AntialiasedSolution(OpenLoopSolution):
-    def __init__(self, sols, t_break=[]):
+class CombinedSolution(OpenLoopSolution):
+    """
+    Combines multiple `OpenLoopSolution`s valid on different time segments
+    specified by breakpoints.
+    """
+    def __init__(self, sols, t_break=[], status=None, message=None):
         """
-
         Parameters
         ----------
-        sols
-        t_break
+        sols : non-empty list of `OpenLoopSolution`s
+            The solutions to combine. Each solution is assumed to start at time
+            zero, i.e. `sol.t[0] = 0`. In addition, the value function of each
+            solution is assumed to ignore the contributions of other segments,
+            i.e. `sol.v[-1] ~ 0`.
+        t_break : `(len(sols) - 1,)` array_like
+            Breakpoints specifying the end of the time segment each solution is
+            to be used. `sols[0]` is active for times `t < t_break[0]`,
+            `sols[i]` for times in `t_break[i] <= t < t_break[i + 1]`, and
+            `sols[-1]` for times `t_break[-1] <= t`.
+        status : int, default=`sols[-1].status`
+            Reason for solver termination. `status==0` indicates success; other
+            values indicate various failure modes. See `message` for details.
+        message : str, default=`sols[-1].message`
+            Human-readable description of `status`.
         """
         if not hasattr(sols, '__iter__'):
             sols = [sols]
@@ -117,9 +133,7 @@ class AntialiasedSolution(OpenLoopSolution):
 
         self._t_break_extended = np.vstack((self._t_break, np.inf))
 
-        combined_sol = {'t': [], 'x': [], 'u': [], 'p': [], 'v': [],
-                        'status': self._sols[-1].status,
-                        'message': self._sols[-1].message}
+        combined_sol = {'t': [], 'x': [], 'u': [], 'p': [], 'v': []}
 
         t0 = 0.
         for k, sol in enumerate(self._sols):
@@ -142,6 +156,7 @@ class AntialiasedSolution(OpenLoopSolution):
         # contributions from segments that follow the current segment.
         # We only need to do this for the first n - 1 segments.
         self._v_diff = np.empty(self.n_segments - 1)
+
         for k in range(self.n_segments - 2, -1, -1):
             # Find what this segment thinks the value should be at the end
             t1 = self._t_break_extended[k]
@@ -152,10 +167,15 @@ class AntialiasedSolution(OpenLoopSolution):
             if self._v_diff[k] > 0.:
                 combined_sol['v'][k] = combined_sol['v'][k] + self._v_diff[k]
 
-        for key in ['t', 'x', 'u', 'p', 'v']:
+        for key in combined_sol.keys():
             combined_sol[key] = np.concatenate(combined_sol[key], axis=-1)
 
-        super().__init__(**combined_sol)
+        if status is None:
+            status = self._sols[-1].status
+        if message is None:
+            message = self._sols[-1].message
+
+        super().__init__(**combined_sol, status=status, message=message)
 
     @property
     def n_segments(self):

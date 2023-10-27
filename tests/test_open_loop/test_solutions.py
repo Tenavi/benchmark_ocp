@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from optimalcontrol.open_loop.solutions import AntialiasedSolution
+from optimalcontrol.open_loop.solutions import CombinedSolution
 from optimalcontrol.open_loop.direct.solutions import DirectSolution
 
 
@@ -18,14 +18,14 @@ def _make_dummy_sol(n_t=51):
     return t, x, u, p, v
 
 
-def test_antialiasing_single_sol():
+def test_combining_single_sol():
     t, x, u, p, v = _make_dummy_sol()
 
     status = 123
     message = "hello world"
 
     sol = DirectSolution(t, x, u, p, v, status, message)
-    wrapped_sol = AntialiasedSolution(sol)
+    wrapped_sol = CombinedSolution(sol)
 
     assert wrapped_sol._sols[0] is sol
     assert wrapped_sol._t_break.size == 0
@@ -42,7 +42,7 @@ def test_antialiasing_single_sol():
 
 
 @pytest.mark.parametrize('n_segments', (2, 3, 7))
-def test_antialiasing_multiple_sols(n_segments):
+def test_combining_multiple_sols(n_segments):
     sols = []
     for k in range(n_segments):
         t, x, u, p, v = _make_dummy_sol()
@@ -60,7 +60,7 @@ def test_antialiasing_multiple_sols(n_segments):
             t0 = t_break[k - 1]
         t_break.append(rng.uniform(t0, t0 + sols[k].t[-1]))
 
-    wrapped_sol = AntialiasedSolution(sols, t_break=t_break)
+    wrapped_sol = CombinedSolution(sols, t_break=t_break)
 
     for k in range(n_segments):
         assert wrapped_sol._sols[k] is sols[k]
@@ -97,9 +97,27 @@ def test_antialiasing_multiple_sols(n_segments):
                                        getattr(wrapped_sol, key)[:, idx],
                                        rtol=1e-14, atol=1e-14)
 
-        v_segment = wrapped_sol.v[idx]
+        v_expect = sols[k].v[:n_t]
         if k < n_segments - 1:
-            v_segment = v_segment - np.maximum(wrapped_sol._v_diff[k], 0.)
-        np.testing.assert_allclose(v_segment, sols[k].v[:n_t],
+            v_expect = v_expect + np.maximum(wrapped_sol._v_diff[k], 0.)
+        np.testing.assert_allclose(wrapped_sol.v[idx], v_expect,
                                    rtol=1e-14, atol=1e-14)
+        t0 = t1
+
+    t0 = 0.
+    for k, t1 in enumerate(wrapped_sol._t_break_extended.flatten()):
+        if np.isinf(t1):
+            t1 = t0 * 2.
+        t_test = np.linspace(t0, t0 + 0.99 * (t1 - t0), 10)
+
+        x, u, p, v = wrapped_sol(t_test)
+        x_expect, u_expect, p_expect, v_expect = sols[k](t_test - t0)
+        if k < n_segments - 1:
+            v_expect += np.maximum(wrapped_sol._v_diff[k], 0.)
+
+        np.testing.assert_allclose(x, x_expect, rtol=1e-14, atol=1e-14)
+        np.testing.assert_allclose(u, u_expect, rtol=1e-14, atol=1e-14)
+        np.testing.assert_allclose(p, p_expect, rtol=1e-14, atol=1e-14)
+        np.testing.assert_allclose(v, v_expect, rtol=1e-14, atol=1e-14)
+
         t0 = t1
