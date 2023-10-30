@@ -325,7 +325,7 @@ class AttitudeControl(OptimalControlProblem):
 
     def dynamics(self, x, u):
         q, q0, w = self._break_state(x)
-        u = self._saturate(u)
+        u = self._saturate(u).reshape(w.shape)
 
         Jw = np.matmul(self.parameters.J, w)
 

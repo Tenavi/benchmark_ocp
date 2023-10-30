@@ -61,6 +61,7 @@ class OpenLoopSolution:
 
     @staticmethod
     def _get_return_args(x=None, u=None, p=None, v=None):
+        """Get appropriate subsets of returned values for `__call__`."""
         args = []
         for arg in (x, u, p, v):
             if arg is not None:
@@ -279,9 +280,4 @@ class CombinedSolution(OpenLoopSolution):
                         k < self.n_segments - 1 and self._v_diff[k] > 0.):
                     return_arrays['v'][idx] += self._v_diff[k]
 
-        if len(return_arrays) == 1:
-            # There should only be one key
-            for key in return_arrays.keys():
-                return return_arrays[key]
-
-        return return_arrays.values()
+        return self._get_return_args(**return_arrays)

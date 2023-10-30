@@ -1,3 +1,4 @@
+import numpy as np
 from scipy.interpolate import BarycentricInterpolator, make_interp_spline
 
 from optimalcontrol.utilities import saturate
@@ -14,10 +15,16 @@ class DirectSolution(OpenLoopSolution):
         if tau is None:
             tau = time_map(t)
 
+        # BarycentricInterpolator uses np.random.permutation at initialization,
+        # so control the random behavior
+        np.random.seed(1234)
+
         self._x_interp = BarycentricInterpolator(tau, x, axis=-1)
         self._u_interp = BarycentricInterpolator(tau, u, axis=-1)
         self._p_interp = BarycentricInterpolator(tau, p, axis=-1)
         self._v_interp = make_interp_spline(t, v, k=1)
+
+        np.random.seed()
 
         super().__init__(t, x, u, p, v, status, message)
 

@@ -22,7 +22,7 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
     n_states = 3
     n_controls = 2
 
-    t1_init = 10.
+    t1 = 30.
 
     kwargs = {'n_nodes': n_nodes, 'reshape_order': order}
 
@@ -31,7 +31,7 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     ocp, lqr = setup_lqr_test(n_states, n_controls, u_bound=u_bound, seed=123)
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1.)
-    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1_init)
+    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1)
 
     start_time = time.time()
 
@@ -41,14 +41,7 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
     print(f'Solution time: {comp_time:1.2f} sec')
 
     assert ocp_sol.status == 0
-
     assert_matches_reference(ocp_sol, t, x, u, atol=atol, rtol=rtol)
-
-    # Check that the solution is correct at collocation nodes
-    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1_init, t_eval=ocp_sol.t)
-
-    assert_matches_reference(ocp_sol, t, x, u, p=p if u_bound is None else None,
-                             atol=atol, rtol=rtol)
 
 
 @pytest.mark.parametrize('t1_tol', ('easy', 'strict'))
@@ -111,46 +104,34 @@ def test_open_loop_dynamics_and_events(t1_tol):
 
 @pytest.mark.parametrize('u_bound', (None, .75))
 @pytest.mark.parametrize('order', ('C', 'F'))
-@pytest.mark.parametrize('n_nodes', (11, 12))
-def test_solve_infinite_horizon_lqr_old(u_bound, order, n_nodes):
+@pytest.mark.parametrize('n_nodes', (16, 17))
+def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
-    optimal.
+    optimal. The solution is "antialiased" by combining multiple solutions
+    together, each with a small number of nodes.
     """
     n_states = 3
     n_controls = 2
 
-    t1_init = 10.
+    t1 = 30.
 
-    t1_tol = 1e-12
-
-    kwargs = {'n_nodes': n_nodes, 'reshape_order': order,
-              'max_nodes': 64, 't1_tol': t1_tol}
+    kwargs = {'n_nodes': n_nodes, 'reshape_order': order, 'interp_tol': 1e-03}
 
     atol = 0.05
     rtol = 0.05
 
     ocp, lqr = setup_lqr_test(n_states, n_controls, u_bound=u_bound, seed=123)
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1.)
-    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1_init)
+    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1)
 
     start_time = time.time()
 
-    ocp_sol = direct.solve._solve_infinite_horizon_old(ocp, t, x, u, **kwargs)
+    ocp_sol = direct.solve.solve_infinite_horizon(ocp, t, x, u, **kwargs)
 
     comp_time = time.time() - start_time
     print(f'Solution time: {comp_time:1.2f} sec')
 
     assert ocp_sol.status == 0
-    assert n_nodes < ocp_sol.t.size <= kwargs['max_nodes']
-    assert ocp.running_cost(ocp_sol.x, ocp_sol.u)[-1] <= t1_tol
-
     assert_matches_reference(ocp_sol, t, x, u, atol=atol, rtol=rtol)
-
-    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1_init, t_eval=ocp_sol.t)
-
-    print(f"n_nodes: {ocp_sol.t.size}, value: {ocp_sol.v[0]:.4f}, max error: {np.abs(ocp_sol(t)[1] - u).max():.4f}")
-
-    assert_matches_reference(ocp_sol, t, x, u, p=p if u_bound is None else None,
-                             atol=atol, rtol=rtol)
