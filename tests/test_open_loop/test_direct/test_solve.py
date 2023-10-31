@@ -117,7 +117,7 @@ def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     t1 = 30.
 
-    kwargs = {'n_nodes': n_nodes, 'reshape_order': order}
+    kwargs = {'n_nodes': n_nodes, 'reshape_order': order, 'tol': 1e-06}
 
     atol = 0.05
     rtol = 0.05
