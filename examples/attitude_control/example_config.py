@@ -17,19 +17,19 @@ params = {}
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
-n_train = 30
-n_test = 30
+n_train = 50
+n_test = 50
 
 # Distance in radians and radians/s (by default in l-infinity and l2 norm) of
 # initial condition samples
 attitude_distance = None
-rate_distance = np.deg2rad(10.)
+rate_distance = np.deg2rad(5.)
 
 # Integration time horizon guess for infinite horizon problems
-t_int = 90.
+t_int = 60.
 
 # Maximum integration time allowed
-t_max = 360.
+t_max = 180.
 
 # Keyword arguments for closed-loop simulation
 sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
@@ -37,7 +37,7 @@ sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {}
 
-random_seed = 456
+random_seed = 123
 
 # Keyword arguments for the polynomial and NN controllers
 poly_kwargs = {'degree': 2, 'alpha': 100.}

@@ -158,7 +158,8 @@ class UniformSampler(StateSampler):
                 x_norm = np.einsum('ij,js->is', self.norm, x)
                 x_norm = np.einsum('is,is->s', x_norm, x_norm)
                 x_norm = np.sqrt(x_norm)
-            x *= distance / x_norm
+            non_zero_norm = x_norm > 0.
+            x[:, non_zero_norm] *= distance / x_norm[non_zero_norm]
             x += self.xf
 
         if n_samples == 1:
