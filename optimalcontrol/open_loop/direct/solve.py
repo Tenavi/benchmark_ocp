@@ -59,8 +59,8 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
 
 def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
-                           t1_tol=1e-06, interp_tol=1e-02, max_n_segments=10,
-                           integration_method='RK45', atol=1e-08, rtol=1e-04,
+                           t1_tol=1e-06, interp_tol=1e-03, max_n_segments=10,
+                           integration_method='RK45', atol=1e-10, rtol=1e-05,
                            reshape_order='F', verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -118,7 +118,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     t1_tol : float, default=1e-06
         Tolerance for the running cost when determining convergence of the
         finite horizon approximation.
-    interp_tol : float, default=1e-02
+    interp_tol : float, default=1e-03
         Tolerance for the relative interpolation error (see above) when
         determining when to start a new Bellman segment.
     max_n_segments : int, default=10

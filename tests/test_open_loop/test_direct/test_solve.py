@@ -104,7 +104,7 @@ def test_open_loop_dynamics_and_events(t1_tol):
 
 @pytest.mark.parametrize('u_bound', (None, .75))
 @pytest.mark.parametrize('order', ('C', 'F'))
-@pytest.mark.parametrize('n_nodes', (16, 17))
+@pytest.mark.parametrize('n_nodes', (18, 19))
 def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
@@ -117,7 +117,7 @@ def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     t1 = 30.
 
-    kwargs = {'n_nodes': n_nodes, 'reshape_order': order, 'interp_tol': 1e-03}
+    kwargs = {'n_nodes': n_nodes, 'reshape_order': order}
 
     atol = 0.05
     rtol = 0.05
