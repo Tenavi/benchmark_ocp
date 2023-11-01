@@ -82,7 +82,7 @@ def solve_fixed_time(ocp, t, x, u=None, p=None, v=None, method='indirect',
 
 
 def solve_infinite_horizon(ocp, t, x, u=None, p=None, v=None, method='indirect',
-                           t1_tol=1e-10, verbose=0, **kwargs):
+                           verbose=0, **kwargs):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
     an infinite horizon optimal control problem (OCP) for a single initial
@@ -131,9 +131,6 @@ def solve_infinite_horizon(ocp, t, x, u=None, p=None, v=None, method='indirect',
                      verbose=verbose, **kwargs)
         ```
         and should return an `OpenLoopSolution`.
-    t1_tol : float, default=1e-10
-        Tolerance for the running cost when determining convergence of the
-        finite horizon approximation.
     verbose : {0, 1, 2}, default=0
         Level of algorithm's verbosity:
 
@@ -151,7 +148,7 @@ def solve_infinite_horizon(ocp, t, x, u=None, p=None, v=None, method='indirect',
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-    kwargs = {'t1_tol': t1_tol, 'verbose': verbose, **kwargs}
+    kwargs = {'verbose': verbose, **kwargs}
     if callable(method):
         return method(ocp, t, x, u=u, p=p, v=v, **kwargs)
     elif method == 'direct':

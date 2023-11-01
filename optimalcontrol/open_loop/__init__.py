@@ -15,12 +15,12 @@ directly from `open_loop`, and are also exposed as the
 The direct methods implemented in this module use pseudospectral collocation to
 transform the open-loop OCP into a constrained optimization problem, which is
 then solved using sequential least squares quadratic programming (SLSQP). See
-refs. [1, 2, 5] for more details.
+refs. [1-3] for more details.
 
 The indirect method is to solve the two-point boundary value problem (BVP)
 arising from Pontryagin's Maximum Principle (PMP), which provides necessary
 conditions for OCPs. This BVP is solved using `scipy.integrate.solve_bvp`. See
-refs. [3, 4] for more details.
+refs. [4, 5] for more details.
 
 The direct method is generally considered to be more robust than the indirect
 method, which is known to be highly sensitive to the initial guess for the
@@ -36,18 +36,18 @@ More information and practical considerations are given in refs. [1-5] below.
 1. I. M. Ross, Q. Gong, F. Fahroo, and W. Kang, *Practical stabilization through
     real-time optimal control*, in American Control Conference, 2006, pp.
     304-309. https://doi.org/10.1109/ACC.2006.1655372
-2. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
+2. I. M. Ross, Q. Gong, and P. Sekhavat, *Low-thrust, high-accuracy trajectory
+    optimization*, Journal of Guidance, Control, and Dynamics, 30 (2007), pp.
+    921-933. https://doi.org/10.2514/1.23181
+3. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
     nonlinear optimal control problems*, Journal of Guidance, Control, and
     Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
-3. W. Kang, Q. Gong, T. Nakamura-Zimmerer, and F. Fahroo, *Algorithms of data
+4. W. Kang, Q. Gong, T. Nakamura-Zimmerer, and F. Fahroo, *Algorithms of data
     development for deep learning and feedback design: A survey*, Physica D:
     Nonlinear Phenomena (2021), pp. 132955.
     https://doi.org/10.1016/j.physd.2021.132955
-4. I. M. Ross, *A Primer on Pontryagin’s Principle in Optimal Control*,
+5. I. M. Ross, *A Primer on Pontryagin’s Principle in Optimal Control*,
     Collegiate Publishers, San Francisco, CA, 2nd ed., 2015.
-5. I. M. Ross and M. Karpenko, *A review of pseudospectral optimal control: From
-    theory to flight*, Annual Reviews in Control, 36 (2012), pp. 182–197.
-    https://doi.org/10.1016/j.arcontrol.2012.09.002
 
 ---
 
@@ -60,8 +60,12 @@ More information and practical considerations are given in refs. [1-5] below.
     Solve a single open-loop infinite horizon OCP.
 
 * [`solutions.OpenLoopSolution`](open_loop/solutions#OpenLoopSolution)
-    Methods implemented in this model return open-loop OCP solutions as
+    Methods implemented in this framework return open-loop OCP solutions as
     instances of this class.
+
+* [`solutions.CombinedSolution`](open_loop/solutions#CombinedSolution)
+    Wrapper class which concatenates multiple `OpenLoopSolution`s valid on
+    different time segments.
 
 ---
 
@@ -72,8 +76,8 @@ More information and practical considerations are given in refs. [1-5] below.
     finite time horizon.
 
 * [`direct.solve_infinite_horizon`](open_loop/direct/solve#solve_infinite_horizon):
-    Use a pseudospectral method to solve a single open-loop infinite horizon
-    OCP.
+    Use a pseudospectral method and antialiasing to solve a single open-loop
+    infinite horizon OCP.
 
 ---
 

@@ -253,7 +253,7 @@ class LinearQuadraticRegulator(Controller):
         u = utilities.saturate(u, self.u_lb, self.u_ub)
 
         if np.ndim(x) < 2:
-            return u.flatten()
+            return u[:, 0]
 
         return u
 
@@ -309,7 +309,7 @@ class ConstantControl(Controller):
 
     def __call__(self, x):
         if np.ndim(x) < 2:
-            return self.u.flatten()
+            return self.u[:, 0]
 
         return np.tile(self.u, (1, np.shape(x)[1]))
 

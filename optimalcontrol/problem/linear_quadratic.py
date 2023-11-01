@@ -248,7 +248,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
         dxdt = np.matmul(self.parameters.A, x) + np.matmul(self.parameters.B, u)
 
         if squeeze:
-            return dxdt.flatten()
+            return dxdt[:, 0]
 
         return dxdt
 
@@ -282,7 +282,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
         u = self._saturate(u)
 
         if np.ndim(x) < 2:
-            return u.flatten()
+            return u[:, 0]
 
         return u
 

@@ -1,9 +1,10 @@
-from scipy.interpolate import BarycentricInterpolator, interp1d
+import numpy as np
+from scipy.interpolate import BarycentricInterpolator, make_interp_spline
 
 from optimalcontrol.utilities import saturate
 from optimalcontrol.open_loop.solutions import OpenLoopSolution
 from .radau import time_map, inverse_time_map
-from .utilities import separate_vars
+from .setup_nlp import separate_vars
 
 
 class DirectSolution(OpenLoopSolution):
@@ -14,24 +15,40 @@ class DirectSolution(OpenLoopSolution):
         if tau is None:
             tau = time_map(t)
 
+        # BarycentricInterpolator uses np.random.permutation at initialization,
+        # so control the random behavior
+        np.random.seed(1234)
+
         self._x_interp = BarycentricInterpolator(tau, x, axis=-1)
         self._u_interp = BarycentricInterpolator(tau, u, axis=-1)
         self._p_interp = BarycentricInterpolator(tau, p, axis=-1)
-        self._v_interp = interp1d(t, v)
+        self._v_interp = make_interp_spline(t, v, k=1)
+
+        np.random.seed()
 
         super().__init__(t, x, u, p, v, status, message)
 
-    def __call__(self, t):
+    def __call__(self, t, return_x=True, return_u=True, return_p=True,
+                 return_v=True):
         tau = time_map(t)
 
-        x = self._x_interp(tau)
-        u = self._u_interp(tau)
-        u = saturate(u, self._u_lb, self._u_ub)
-        p = self._p_interp(tau)
+        if return_x:
+            x = self._x_interp(tau)
 
-        v = self._v_interp(t)
+        if return_u:
+            u = self._u_interp(tau)
+            u = saturate(u, self._u_lb, self._u_ub)
 
-        return x, u, p, v
+        if return_p:
+            p = self._p_interp(tau)
+
+        if return_v:
+            v = self._v_interp(t)
+
+        return self._get_return_args(x=x if return_x else None,
+                                     u=u if return_u else None,
+                                     p=p if return_p else None,
+                                     v=v if return_v else None)
 
     @classmethod
     def from_minimize_result(cls, minimize_result, ocp, tau, w, order):
@@ -68,7 +85,7 @@ class DirectSolution(OpenLoopSolution):
 
         # Extract KKT multipliers and use to approximate costates
         p = minimize_result.kkt['eq'][0].reshape(x.shape, order=order)
-        p = p / w.reshape(1, -1)
+        p = - p / w.reshape(1, -1)
 
         v = ocp.total_cost(t, x, u)[::-1]
 

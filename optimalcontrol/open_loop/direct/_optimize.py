@@ -1,5 +1,6 @@
-import numpy as np
+import warnings
 
+import numpy as np
 from scipy.optimize._constraints import old_bound_to_new, _arr_to_scalar
 from scipy.optimize._differentiable_functions import FD_METHODS
 from scipy.optimize._minimize import (MemoizeJac, standardize_constraints,
@@ -7,7 +8,7 @@ from scipy.optimize._minimize import (MemoizeJac, standardize_constraints,
                                       _remove_from_bounds, _remove_from_func)
 from scipy.optimize._numdiff import approx_derivative
 from scipy.optimize._optimize import (OptimizeResult, _prepare_scalar_function,
-                                      _clip_x_for_func, _check_clip_x)
+                                      _check_clip_x)
 from scipy.optimize._slsqp import slsqp
 
 
@@ -239,7 +240,10 @@ def _minimize_slsqp(fun, x0, args=(), jac=None, bounds=None, constraints=(),
             # to keep a reference to `fun`, see gh-4240.
             def cjac_factory(fun):
                 def cjac(x, *args):
-                    x = _check_clip_x(x, new_bounds)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings('ignore', "outside bounds",
+                                                RuntimeWarning)
+                        x = _check_clip_x(x, new_bounds)
 
                     if jac in ['2-point', '3-point', 'cs']:
                         return approx_derivative(fun, x, method=jac, args=args,
@@ -451,6 +455,7 @@ def _eval_constraint(x, cons):
     c = np.concatenate((c_eq, c_ieq))
     return c
 
+
 def _eval_con_normals(x, cons, la, n, m, meq, mieq):
     # Compute the normals of the constraints
     if cons['eq']:
@@ -475,3 +480,19 @@ def _eval_con_normals(x, cons, la, n, m, meq, mieq):
     a = np.concatenate((a, np.zeros([la, 1])), 1)
 
     return a
+
+
+def _clip_x_for_func(func, bounds):
+    # ensures that x values sent to func are clipped to bounds
+
+    # this is used as a mitigation for gh11403, slsqp/tnc sometimes
+    # suggest a move that is outside the limits by 1 or 2 ULP. This
+    # unclean fix makes sure x is strictly within bounds.
+    def eval(x):
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', "Values in x were outside bounds",
+                                    RuntimeWarning)
+            x = _check_clip_x(x, bounds)
+        return func(x)
+
+    return eval

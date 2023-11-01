@@ -1,6 +1,7 @@
-import pytest
-import numpy as np
 import time
+
+import numpy as np
+import pytest
 
 from optimalcontrol.open_loop import indirect
 from optimalcontrol.simulate import integrate_fixed_time
@@ -42,13 +43,16 @@ def get_lqr_sol(ocp, lqr, x0, t1, t_eval=None):
     return t, x, p, u
 
 
-def assert_matches_reference(ocp_sol, t, x, u, p=None, atol=1e-02, rtol=1e-02):
+def assert_matches_reference(ocp_sol, t, x, u, p=None, v=None,
+                             atol=1e-02, rtol=1e-02):
     x_int, u_int, p_int, v_int = ocp_sol(t)
 
     np.testing.assert_allclose(x_int, x, atol=atol, rtol=rtol)
     np.testing.assert_allclose(u_int, u, atol=atol, rtol=rtol)
     if p is not None:
         np.testing.assert_allclose(p_int, p, atol=atol, rtol=rtol)
+    if v is not None:
+        np.testing.assert_allclose(v_int, v, atol=atol, rtol=rtol)
 
 
 @pytest.mark.parametrize('u_bound', (None, 0.75))

@@ -3,8 +3,7 @@ import pytest
 from scipy.optimize._numdiff import approx_derivative
 
 from optimalcontrol.problem import OptimalControlProblem
-from optimalcontrol.open_loop.direct import utilities
-from optimalcontrol.open_loop.direct import radau as lgr
+from optimalcontrol.open_loop.direct import setup_nlp, radau
 
 
 rng = np.random.default_rng(123)
@@ -70,9 +69,7 @@ class PolynomialDynamics(OptimalControlProblem):
 
     def dynamics(self, x, u):
         tau = x[0]
-
         dxdt = [np.ones_like(tau)] + [p(tau) for p in self.parameters._poly_x]
-
         dxdt = np.stack(dxdt, axis=0)
 
         if np.ndim(x) < 2:
@@ -81,43 +78,56 @@ class PolynomialDynamics(OptimalControlProblem):
         return dxdt
 
 
-@pytest.mark.parametrize('n', [10, 15])
+@pytest.mark.parametrize('n', [11, 12])
 @pytest.mark.parametrize('d', [1, 2])
 def test_interp_initial_guess(n, d):
     """
-    Test that the interpolation code recovers the original points if tau = t.
+    Test that the interpolation code recovers the original points if tau = t,
+    and that extrapolation uses the last values in the guess.
     """
-    t = np.linspace(0., 10., n)
-    tau = lgr.time_map(t)
+    t1 = 10.
+    t = np.linspace(0., t1, n)
+    tau = radau.time_map(t)
 
-    X = np.cos(t) * t
-    U = np.sin(-t)
+    x = np.cos(t) * t
+    u = np.sin(-t)
 
-    X = np.atleast_2d(X)
-    U = np.atleast_2d(U)
-    for k in range(d-1):
-        X = np.vstack((X, X[0] + k))
-        U = np.vstack((U, U[0] - k))
+    x = np.atleast_2d(x)
+    u = np.atleast_2d(u)
+    for k in range(d - 1):
+        x = np.vstack((x, x[0] + k))
+        u = np.vstack((u, u[0] - k))
 
-    X_interp, U_interp = utilities.interp_guess(t, X, U, tau, lgr.time_map)
+    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau,
+                                                radau.inverse_time_map)
 
-    assert np.allclose(X_interp, X)
-    assert np.allclose(U_interp, U)
+    np.testing.assert_allclose(x_interp, x, atol=1e-12)
+    np.testing.assert_allclose(u_interp, u, atol=1e-12)
+
+    tau_extra = radau.time_map(np.linspace(t1, 2. * t1, n - 1))
+
+    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau_extra,
+                                                radau.inverse_time_map)
+
+    for k in range(tau_extra.shape[0]):
+        np.testing.assert_allclose(x_interp[:, k], x[:, -1], atol=1e-12)
+        np.testing.assert_allclose(u_interp[:, k], u[:, -1], atol=1e-12)
 
 
-@pytest.mark.parametrize('n_states', [1, 3])
-@pytest.mark.parametrize('n_controls', [1, 2])
-@pytest.mark.parametrize('n_nodes', [16, 17])
+
+@pytest.mark.parametrize('n_states', [1, 2, 3])
+@pytest.mark.parametrize('n_controls', [1, 2, 3])
+@pytest.mark.parametrize('n_nodes', [12, 13])
 @pytest.mark.parametrize('order', ['F', 'C'])
 def test_reshaping_funs(n_states, n_controls, n_nodes, order):
     x = rng.normal(size=(n_states, n_nodes))
     u = rng.normal(size=(n_controls, n_nodes))
 
-    xu = utilities.collect_vars(x, u, order=order)
+    xu = setup_nlp.collect_vars(x, u, order=order)
     assert xu.ndim == 1
     assert xu.shape[0] == (n_states + n_controls) * n_nodes
 
-    _x, _u = utilities.separate_vars(xu, n_states, n_controls, order=order)
+    _x, _u = setup_nlp.separate_vars(xu, n_states, n_controls, order=order)
     np.testing.assert_array_equal(_x, x)
     np.testing.assert_array_equal(_u, u)
 
@@ -136,7 +146,7 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     state. We also test that the constraint Jacobian is approximated well using
     finite differences.
     """
-    tau, w, D = lgr.make_lgr(n_nodes)
+    tau, w, D = radau.make_lgr(n_nodes)
 
     # If there are n_nodes - 1 coefficients, the polynomial is degree
     # n_nodes - 2, so the state is degree n_nodes - 1
@@ -157,9 +167,9 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
 
     # Control is ignored by the dynamics so can be anything
     u = rng.normal(size=(n_controls, n_nodes))
-    xu = utilities.collect_vars(x, u, order=order)
+    xu = setup_nlp.collect_vars(x, u, order=order)
 
-    constr = utilities.make_dynamic_constraint(ocp, D, order=order)
+    constr = setup_nlp.make_dynamic_constraint(ocp, D, order=order)
 
     assert constr.lb == constr.ub == 0.
 
@@ -194,10 +204,10 @@ def test_init_cond_setup(n_nodes, order):
     # Generate random states and controls
     x = rng.normal(size=(n_x, n_t))
     u = rng.normal(size=(n_u, n_t))
-    xu = utilities.collect_vars(x, u, order=order)
+    xu = setup_nlp.collect_vars(x, u, order=order)
     x0 = x[:, :1]
 
-    constr = utilities.make_initial_condition_constraint(x0, n_u, n_t,
+    constr = setup_nlp.make_initial_condition_constraint(x0, n_u, n_t,
                                                          order=order)
 
     np.testing.assert_array_equal(constr.lb, x0.flatten())
@@ -231,7 +241,7 @@ def test_bounds_setup(n_nodes, order, u_lb):
 
     n_x, n_t = 3, n_nodes
 
-    constr = utilities.make_bound_constraint(u_lb, u_ub, n_x, n_t, order=order)
+    constr = setup_nlp.make_bound_constraint(u_lb, u_ub, n_x, n_t, order=order)
 
     if u_lb is None and u_ub is None:
         assert constr is None
@@ -246,7 +256,7 @@ def test_bounds_setup(n_nodes, order, u_lb):
             assert np.isinf(constr.lb[n_x * n_nodes:]).all()
         else:
             u = np.tile(u_lb, (1, n_nodes))
-            xu = utilities.collect_vars(rng.normal(size=(n_x, n_t)), u,
+            xu = setup_nlp.collect_vars(rng.normal(size=(n_x, n_t)), u,
                                         order=order)
             np.testing.assert_allclose(constr.lb[n_x * n_nodes:],
                                        xu[n_x * n_nodes:], atol=1e-10)
@@ -255,7 +265,7 @@ def test_bounds_setup(n_nodes, order, u_lb):
             assert np.isinf(constr.ub[n_x * n_nodes:]).all()
         else:
             u = np.tile(u_ub, (1, n_nodes))
-            xu = utilities.collect_vars(rng.normal(size=(n_x, n_t)), u,
+            xu = setup_nlp.collect_vars(rng.normal(size=(n_x, n_t)), u,
                                         order=order)
             np.testing.assert_allclose(constr.ub[n_x * n_nodes:],
                                        xu[n_x * n_nodes:], atol=1e-10)

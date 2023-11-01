@@ -1,3 +1,13 @@
+"""
+Problem adapted from ref. [1].
+
+##### References
+
+1. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
+    nonlinear optimal control problems*, Journal of Guidance, Control, and
+    Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
+"""
+
 import warnings
 
 import numpy as np
@@ -93,16 +103,14 @@ def euler_to_quaternion(angles, degrees=False):
 
 
 class AttitudeControl(OptimalControlProblem):
-    _required_parameters = {'J': [[59.22, -1.14, -0.8],
-                                  [-1.14, 40.56, 0.1],
-                                  [-0.8, 0.1, 57.6]],
-                            'Wq': 1/4, 'Ww': 1/2, 'Wu': 1.,
+    _required_parameters = {'J': np.diag([5., 5.1, 2.]),
+                            'Wq': 1., 'Ww': 10., 'Wu': 50.,
                             'final_attitude': [0., 0., 0.],
                             'initial_max_attitude': [np.pi, np.pi/2., np.pi],
-                            'initial_max_rate': 0.15,
+                            'initial_max_rate': np.deg2rad(5.),
                             'attitude_sample_norm': np.inf,
                             'rate_sample_norm': 2}
-    _optional_parameters = {'u_lb': -0.2, 'u_ub': 0.2,
+    _optional_parameters = {'u_lb': -0.02, 'u_ub': 0.02,
                             'attitude_sample_seed': None,
                             'rate_sample_seed': None}
 
@@ -250,13 +258,13 @@ class AttitudeControl(OptimalControlProblem):
         q, _, w = self._break_state(x)
 
         if np.ndim(x) < 2:
-            q_err = q - self.parameters._q_final.flatten()
+            q_err = q - self.parameters._q_final[:, 0]
         else:
             q_err = q - self.parameters._q_final
 
-        Lq = (self.parameters.Wq / 2.) * np.sum(q_err**2, axis=0)
-        Lw = (self.parameters.Ww / 2.) * np.sum(w**2, axis=0)
-        Lu = (self.parameters.Wu / 2.) * np.sum(self._saturate(u)**2, axis=0)
+        Lq = (self.parameters.Wq / 2.) * np.sum(q_err ** 2, axis=0)
+        Lw = (self.parameters.Ww / 2.) * np.sum(w ** 2, axis=0)
+        Lu = (self.parameters.Wu / 2.) * np.sum(self._saturate(u) ** 2, axis=0)
 
         return Lq + Lw + Lu
 
@@ -325,7 +333,7 @@ class AttitudeControl(OptimalControlProblem):
 
     def dynamics(self, x, u):
         q, q0, w = self._break_state(x)
-        u = self._saturate(u)
+        u = self._saturate(u).reshape(w.shape)
 
         Jw = np.matmul(self.parameters.J, w)
 
@@ -397,7 +405,7 @@ class AttitudeControl(OptimalControlProblem):
         p_q, p_q0, p_w = self._break_state(p)
 
         if np.ndim(x) < 2:
-            q_err = q - self.parameters._q_final.flatten()
+            q_err = q - self.parameters._q_final[:, 0]
         else:
             q_err = q - self.parameters._q_final
 
