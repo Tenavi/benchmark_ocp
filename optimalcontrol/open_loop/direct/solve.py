@@ -184,6 +184,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
             sols[-1].status = 4
             sols[-1].message = (f"Reached maximum number of Bellman "
                                 f"segments ({max_n_segments})")
+            if verbose:
+                print("Terminating optimization: " + sols[-1].message)
             break
 
         # Otherwise, the interpolation error is greater than the tolerance, so
