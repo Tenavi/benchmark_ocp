@@ -60,7 +60,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
 def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                            t1_tol=1e-06, interp_tol=1e-03, max_n_segments=10,
-                           integration_method='RK45', atol=1e-10, rtol=1e-05,
+                           integration_method='RK45', atol=1e-08, rtol=1e-04,
                            reshape_order='F', verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -157,7 +157,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
 
     sols, t_break = [], []
 
-    for _ in range(max_n_segments):
+    for k in range(max_n_segments):
         sols.append(_solve_infinite_horizon(ocp, t, x, u, tol=tol,
                                             n_nodes=n_nodes, max_iter=max_iter,
                                             reshape_order=reshape_order,
@@ -196,20 +196,12 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
             t_break.append(t1)
 
         # Get the initial guess for the next segment
-        idx = sols[-1].t >= t1
-
-        # Time guess starts at zero
-        # In case t[0] == t1, add a small offset so time points are different
-        t = sols[-1].t[idx] - t1 + 1e-07
-        t = np.concatenate(([0.], t))
-
-        # Set the initial condition to the one obtained by integration
-        x, u = sols[-1](t, return_p=False, return_v=False)
-        x[:, 0] = ode_sol.y[:, -1]
+        t, x, u = _get_next_segment_guess(sols[-1], t1, ode_sol.y[:, -1:])
 
         if verbose:
-            print(f"Starting new Bellman segment at t1 = {t_break[-1]}")
-            print(f"Running cost L(t1) = {ocp.running_cost(x[:, 0], u[:, 0])}")
+            L1 = ocp.running_cost(x[:, 0], u[:, 0])
+            print(f"Starting new Bellman segment at t{k + 1} = {t_break[-1]}")
+            print(f"Running cost L(t{k + 1}) = {L1}")
 
     if len(sols) == 1:
         return sols[0]
@@ -217,7 +209,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     return CombinedSolution(sols, t_break)
 
 
-def _solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
+def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
                             reshape_order='F', verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -241,7 +233,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=16, tol=1e-05, max_iter=500,
         condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
-    n_nodes : int, default=16
+    n_nodes : int, default=32
         Number of nodes to use in the pseudospectral discretization.
     tol : float, default=1e-05
         Convergence tolerance for the SLSQP optimizer.
@@ -324,3 +316,23 @@ def _setup_open_loop(ocp, t1_tol, interp_tol):
     error_exceeds_interp_tol.direction = 1
 
     return dynamics, running_cost_converged, error_exceeds_interp_tol
+
+
+def _get_next_segment_guess(last_sol, t1, x1):
+    idx = last_sol.t >= t1
+    # Need at least two points
+    idx[-2:] = True
+
+    t = last_sol.t[idx]
+    t1 = np.minimum(t1, t[0])
+
+    # Set the initial condition to the one obtained by integration
+    x = np.hstack((x1.reshape(-1, 1), last_sol.x[:, idx]))
+
+    u1 = last_sol(t1, return_x=False, return_p=False, return_v=False)
+    u = np.hstack((u1.reshape(-1, 1), last_sol.u[:, idx]))
+
+    # Time starts at zero. Add a small constant to keep points distinct
+    t = np.concatenate(([0.], t - t1 + 1e-07))
+
+    return t, x, u

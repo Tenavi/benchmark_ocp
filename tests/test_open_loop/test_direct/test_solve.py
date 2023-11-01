@@ -102,6 +102,48 @@ def test_open_loop_dynamics_and_events(t1_tol):
         assert converge_event[-1] > 0.
 
 
+def test_get_next_segment_guess():
+    rng = np.random.default_rng()
+
+    n_states = 3
+    n_controls = 2
+    u_bound = 0.75
+
+    ocp, lqr = setup_lqr_test(n_states, n_controls, u_bound=u_bound, seed=123)
+    x0 = ocp.sample_initial_conditions(n_samples=1, distance=1.)
+    t, x, p, u = get_lqr_sol(ocp, lqr, x0, 10.)
+
+    sol = direct.solve._solve_infinite_horizon(ocp, t, x, u)
+
+    def common_asserts(t1):
+        idx = sol.t >= t1
+        x1 = rng.normal(size=(n_states,))
+        u1 = sol(t1, return_x=False, return_p=False, return_v=False)
+
+        t, x, u = direct.solve._get_next_segment_guess(sol, t1, x1)
+
+        t_ref = sol.t[idx] - t1 + 1e-07
+
+        np.testing.assert_allclose(t[0], 0., atol=1e-14)
+        np.testing.assert_allclose(t[1:], t_ref, atol=1e-14)
+        np.testing.assert_allclose(x[:, 0], x1, atol=1e-14)
+        np.testing.assert_allclose(x[:, 1:], sol.x[:, idx], atol=1e-14)
+        np.testing.assert_allclose(u[:, 0], u1, atol=1e-14)
+        np.testing.assert_allclose(u[:, 1:], sol.u[:, idx], atol=1e-14)
+
+    for t1 in (0., sol.t[6], sol.t[7:9].mean(), sol.t[-2]):
+        common_asserts(t1)
+
+    # All of these should be the same by construction
+    x1 = rng.normal(size=(n_states,))
+    guess1 = direct.solve._get_next_segment_guess(sol, sol.t[-2], x1)
+    guess2 = direct.solve._get_next_segment_guess(sol, sol.t[-1], x1)
+    guess3 = direct.solve._get_next_segment_guess(sol, sol.t[-1] + 1., x1)
+    for arr1, arr2, arr3 in zip(guess1, guess2, guess3):
+        np.testing.assert_array_equal(arr1, arr2)
+        np.testing.assert_array_equal(arr2, arr3)
+
+
 @pytest.mark.parametrize('u_bound', (None, .75))
 @pytest.mark.parametrize('order', ('C', 'F'))
 @pytest.mark.parametrize('n_nodes', (18, 19))
@@ -117,7 +159,7 @@ def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     t1 = 30.
 
-    kwargs = {'n_nodes': n_nodes, 'reshape_order': order, 'tol': 1e-06}
+    kwargs = {'n_nodes': n_nodes, 'reshape_order': order}
 
     atol = 0.05
     rtol = 0.05
