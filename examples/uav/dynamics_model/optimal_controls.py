@@ -98,7 +98,7 @@ def jacobian(states, costates, R_inverse, controls):
     -------
     controls_jac : (n_controls, n_states, n_points) array
         Jacobian matrices dU/dX (X, dVdX). Equivalent to but more accurate and
-        faster than numerical gradients of optimal_control(states, costates...).
+        faster than numerical gradients of hamiltonian_minimizer(states, costates...).
     '''
     if isinstance(states, np.ndarray):
         states = VehicleState(states)

@@ -273,11 +273,11 @@ class BurgersPDE(OptimalControlProblem):
 
         return dfdx, dfdu
 
-    def optimal_control(self, x, p):
+    def hamiltonian_minimizer(self, x, p):
         u = np.matmul(self.parameters._RBT, p)
         return self._saturate(u)
 
-    def optimal_control_jac(self, x, p, u0=None):
+    def hamiltonian_minimizer_jac(self, x, p, u0=None):
         return np.zeros((self.n_controls, *np.shape(x)))
 
     def bvp_dynamics(self, t, xp):
@@ -285,7 +285,7 @@ class BurgersPDE(OptimalControlProblem):
         x = xp[:self.n_states]
         p = xp[self.n_states:-1]
 
-        u = self.optimal_control(x, p)
+        u = self.hamiltonian_minimizer(x, p)
         L = np.atleast_1d(self.running_cost(x, u))
 
         if np.ndim(x) == 1:

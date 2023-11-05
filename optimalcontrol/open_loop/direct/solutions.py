@@ -87,7 +87,10 @@ class DirectSolution(OpenLoopSolution):
         p = minimize_result.kkt['eq'][0].reshape(x.shape, order=order)
         p = - p / w.reshape(1, -1)
 
-        v = ocp.total_cost(t, x, u)[::-1]
+        L = ocp.running_cost(x, u)
+        v = np.empty_like(w)
+        for k in range(v.shape[0]):
+            v[k] = np.matmul(L[k:], w[k:])
 
         return cls(t, x, u, p, v, minimize_result.status,
                    minimize_result.message, tau=tau,

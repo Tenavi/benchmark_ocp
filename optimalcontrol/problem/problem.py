@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import cumulative_trapezoid as cumtrapz
+from scipy.optimize import minimize, Bounds
 from scipy.spatial.distance import cdist
 
 from ..utilities import approx_derivative, saturate, find_saturated
@@ -130,7 +131,7 @@ class OptimalControlProblem:
         -------
         x0 : (n_states, n_samples) or (n_states,) array
             Samples of the system state, where each column is a different
-            sample. If `n_samples==1` then `x0` will be a 1d array.
+            sample. If `n_samples=1` then `x0` will be a 1d array.
         """
         raise NotImplementedError
 
@@ -158,7 +159,7 @@ class OptimalControlProblem:
 
     def running_cost(self, x, u):
         """
-        Evaluate the running cost $L(x,u)$ at one or more state-control pairs.
+        Evaluate the running cost `L(x, u)` at one or more state-control pairs.
 
         Parameters
         ----------
@@ -170,7 +171,7 @@ class OptimalControlProblem:
         Returns
         -------
         L : (1,) or (n_points,) array
-            Running cost $L(x,u)$ evaluated at pairs (`x`, `u`).
+            Running cost `L(x, u)` evaluated at pairs (`x`, `u`).
         """
         raise NotImplementedError
 
@@ -370,10 +371,55 @@ class OptimalControlProblem:
 
         return dfdx, dfdu
 
-    def optimal_control(self, x, p):
+    def hamiltonian(self, x, u, p, return_dHdu=False):
         """
-        Evaluate the optimal control as a function of state and costate,
-        $u=u(x,p)$.
+        Evaluate the Pontryagin Hamiltonian, `H(x,u,p) = L(x,u) + p.T @ f(x,u)`
+        where `x` is the state, `u` is the control, `p` is the costate or value
+        gradient, `L(x,u)` is the running cost, and `f(x,u)` is the dynamics. A
+        necessary condition for optimality is that `hamiltonian(x,u,p) == 0` for
+        the whole trajectory.
+
+        Parameters
+        ----------
+        x : (n_states,) or (n_states, n_points) array
+            State(s) arranged by (dimension, time).
+        u : (n_controls,) or (n_controls, n_points) array
+            Control(s) arranged by (dimension, time).
+        p : (n_states,) or (n_states, n_points) array
+            Costate(s) arranged by (dimension, time).
+        return_dHdu : bool, default=False
+            If `return_dHdu=True`, compute and return the gradient of the
+            Hamiltonian with respect to controls `u`.
+
+        Returns
+        -------
+        H : (1,) or (n_points,) array
+            Pontryagin Hamiltonian evaluated at each triplet (`x`, `u`, `p`).
+        dHdu : (n_controls,) or (n_controls, n_points) array
+            $dH/du$, the gradient of the Hamiltonian with respect to controls
+            `u`. Returned only if `return_dHdu=True`.
+        """
+        L = self.running_cost(x, u)
+        f = self.dynamics(x, u)
+        H = L + np.sum(p * f, axis=0)
+
+        if return_dHdu:
+            dLdu = self.running_cost_grad(x, u, return_dLdx=False, L0=L)
+            dfdu = self.jac(x, u, return_dfdx=False, f0=f)
+            dHdx = dLdu + np.einsum('ijk,ik->jk', dfdu, p)
+            if np.ndim(u) < 2:
+                dHdx = dHdx.reshape(-1)
+            return H, dHdx
+
+        return H
+
+    def hamiltonian_minimizer(self, x, p, **minimize_opts):
+        """
+        Evaluate the minimizer of the Hamiltonian (the optimal control) as a
+        function of state and costate, $u = argmin H(x, u, p)$.
+
+        The default performs numerical optimization to find `u`. It should be
+        overwritten whenever possible.
 
         Parameters
         ----------
@@ -381,15 +427,51 @@ class OptimalControlProblem:
             State(s) arranged by (dimension, time).
         p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
+        **minimize_opts : dict, optional
+            For the default numerical optimization method, keyword arguments to
+            pass to `scipy.optimize.minimize`.
 
         Returns
         -------
         u : (n_controls,) or (n_controls, n_points) array
             Optimal control(s) arranged by (dimension, time).
         """
-        raise NotImplementedError
+        x = np.asarray(x)
+        p = np.asarray(p)
 
-    def optimal_control_jac(self, x, p, u0=None):
+        u_shape = (self.n_controls,) + x.shape[1:]
+
+        u0 = getattr(self.parameters, 'uf', 0.)
+        u0 = np.resize(u0, (self.n_controls,))
+        u0 = np.tile(u0, u_shape[1:])
+
+        lb = getattr(self.parameters, 'u_lb', None)
+        ub = getattr(self.parameters, 'u_ub', None)
+        if lb is None and ub is None:
+            bounds = None
+        else:
+            if lb is None:
+                lb = -np.inf
+            if ub is None:
+                ub = np.inf
+
+            lb = np.resize(lb, (self.n_controls,))
+            ub = np.resize(ub, (self.n_controls,))
+
+            bounds = Bounds(lb=np.tile(lb, u_shape[1:]),
+                            ub=np.tile(ub, u_shape[1:]))
+
+        def obj_fun_and_grad(u):
+            u = u.reshape(u_shape)
+            H, dHdu = self.hamiltonian(x, u, p, return_dHdu=True)
+            return H.sum(), dHdu.reshape(-1)
+
+        minimize_res = minimize(obj_fun_and_grad, u0, bounds=bounds, jac=True,
+                                **minimize_opts)
+
+        return minimize_res.x.reshape(u_shape)
+
+    def hamiltonian_minimizer_jac(self, x, p, u0=None):
         """
         Evaluate the Jacobian of the optimal control with respect to the state,
         leaving the costate fixed. Default implementation uses finite
@@ -402,7 +484,7 @@ class OptimalControlProblem:
         p : (n_states,) or (n_states, n_points) array
             Costate(s) arranged by (dimension, time).
         u0 : (n_controls,) or (n_controls, n_points) array, optional
-            `self.optimal_control(x, p)`, pre-evaluated at `x` and `p`.
+            `self.hamiltonian_minimizer(x, p)`, pre-evaluated at `x` and `p`.
 
         Returns
         -------
@@ -411,8 +493,8 @@ class OptimalControlProblem:
             costates fixed, $du/dx (x; p=p)$.
         """
         p = np.reshape(p, np.shape(x))
-        dudx = approx_derivative(lambda x: self.optimal_control(x, p), x, f0=u0,
-                                 method=self._fin_diff_method)
+        dudx = approx_derivative(lambda x: self.hamiltonian_minimizer(x, p), x,
+                                 f0=u0, method=self._fin_diff_method)
         return dudx
 
     def bvp_dynamics(self, t, xp):
@@ -426,13 +508,13 @@ class OptimalControlProblem:
         ----------
         t : (n_points,) array or float
             Time collocation points for each state.
-        xp : (2*n_states + 1, n_points) or (2*n_states + 1,) array
+        xp : (2 * n_states + 1, n_points) or (2 * n_states + 1,) array
             Current state, costate, and value function, vertically stacked in
             that order.
 
         Returns
         -------
-        dxpdt : (2*n_states + 1, n_points) or (2*n_states + 1,) array
+        dxpdt : (2 * n_states + 1, n_points) or (2 * n_states + 1,) array
             Vertical stack of dynamics $dx/dt = f(x,u)$, costate dynamics
             $dp/dt = -dH/dx(x,u,p)$, and running cost $L(x,u)$, where
             $u = u(x,p)$ is the optimal control and $H(x,u,p)$ is the
@@ -440,14 +522,14 @@ class OptimalControlProblem:
         """
         x = xp[:self.n_states]
         p = xp[self.n_states:-1]
-        u = self.optimal_control(x, p)
+        u = self.hamiltonian_minimizer(x, p)
 
         # State dynamics
         dxdt = self.dynamics(x, u)
 
         # Evaluate closed loop Jacobian using chain rule
         dfdx, dfdu = self.jac(x, u, f0=dxdt)
-        dudx = self.optimal_control_jac(x, p, u0=u)
+        dudx = self.hamiltonian_minimizer_jac(x, p, u0=u)
 
         dfdx += np.einsum('ijk,jhk->ihk', dfdu, dudx)
 
@@ -470,32 +552,6 @@ class OptimalControlProblem:
             return dxpdt[:, 0]
 
         return dxpdt
-
-    def hamiltonian(self, x, u, p):
-        """
-        Evaluate the Pontryagin Hamiltonian, `H(x,u,p) = L(x,u) + p.T @ f(x,u)`
-        where `x` is the state, `u` is the control, `p` is the costate or value
-        gradient, `L(x,u)` is the running cost, and `f(x,u)` is the dynamics. A
-        necessary condition for optimality is that `hamiltonian(x,u,p) == 0` for
-        the whole trajectory.
-
-        Parameters
-        ----------
-        x : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        u : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-        p : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        H : (1,) or (n_points,) array
-            Pontryagin Hamiltonian evaluated at each triplet (`x`, `u`, `p`).
-        """
-        L = self.running_cost(x, u)
-        f = self.dynamics(x, u)
-        return L + np.sum(p * f, axis=0)
 
     def constraint_fun(self, x):
         """

@@ -389,11 +389,11 @@ class AttitudeControl(OptimalControlProblem):
 
         return dfdx, dfdu
 
-    def optimal_control(self, x, p):
+    def hamiltonian_minimizer(self, x, p):
         u = np.matmul(self.parameters._Jinv.T, p[4:]) / self.parameters.Wu
         return self._saturate(u)
 
-    def optimal_control_jac(self, x, p, u0=None):
+    def hamiltonian_minimizer_jac(self, x, p, u0=None):
         return np.zeros((self.n_controls, *np.shape(x)))
 
     def bvp_dynamics(self, t, xp):
@@ -409,7 +409,7 @@ class AttitudeControl(OptimalControlProblem):
         else:
             q_err = q - self.parameters._q_final
 
-        u = self.optimal_control(x, p)
+        u = self.hamiltonian_minimizer(x, p)
         L = self.running_cost(x, u)
 
         Jw = np.matmul(self.parameters.J, w)

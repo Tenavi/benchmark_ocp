@@ -16,7 +16,7 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
     ----------
     ocp : `OptimalControlProblem`
         An instance of an `OptimalControlProblem` subclass implementing
-        `bvp_dynamics` and `optimal_control` methods.
+        `bvp_dynamics` and `hamiltonian_minimizer` methods.
     guesses : length n_problems list of dicts,
         Initial guesses for each open-loop OCP. Each element of `guesses` should
         be a dict or DataFrame with keys

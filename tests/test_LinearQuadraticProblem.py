@@ -277,15 +277,19 @@ def test_dynamics(n_states, n_controls, n_samples):
         assert dfdu.shape == (n_states, n_controls)
 
 
-@pytest.mark.parametrize('n_states', [1, 2])
-@pytest.mark.parametrize('n_controls', [1, 2])
-@pytest.mark.parametrize('n_samples', [1, 10])
-def test_optimal_control(n_states, n_controls, n_samples):
+@pytest.mark.parametrize('n_states', (1, 3))
+@pytest.mark.parametrize('n_controls', (1, 2))
+@pytest.mark.parametrize('n_samples', (1, 4))
+@pytest.mark.parametrize('u_ub', (0.5, None))
+def test_hamiltonian(n_states, n_controls, n_samples, u_ub):
     """Test that the optimal control as a function of state and costate matches
     LQR when costates are optimal."""
-    A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls)
+    u_lb = None if u_ub is None else -u_ub
+
+    A, B, Q, R, xf, uf = make_LQ_params(n_states, n_controls, seed=123)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-1., x0_ub=1.,
-                                 xf=xf, uf=uf, u_lb=-0.5, u_ub=0.5)
+                                 xf=xf, uf=uf, u_lb=u_lb, u_ub=u_ub,
+                                 x0_sample_seed=456)
 
     # Get some random states and costates
     x = ocp.sample_initial_conditions(n_samples=n_samples)
@@ -293,31 +297,34 @@ def test_optimal_control(n_states, n_controls, n_samples):
     p = ocp.sample_initial_conditions(n_samples=n_samples)
     p = p.reshape(ocp.n_states, n_samples)
 
-    # Evaluate the optimal control and check that the shape is correct
-    u = ocp.optimal_control(x, p)
+    # Evaluate the optimal control and check shape
+    # (the numerical optimizer method works badly for the LQR problem, and we
+    # will check it later against LQR)
+    u = ocp.hamiltonian_minimizer(x, p)
     assert u.shape == (n_controls, n_samples)
 
     # Check that Jacobian gives the correct size
-    dudx = ocp.optimal_control_jac(x, p)
+    dudx = ocp.hamiltonian_minimizer_jac(x, p)
     assert dudx.shape == (n_controls, n_states, n_samples)
 
-    compare_finite_difference(x, dudx, lambda x: ocp.optimal_control(x, p),
+    compare_finite_difference(x, dudx,
+                              lambda x: ocp.hamiltonian_minimizer(x, p),
                               method=ocp._fin_diff_method)
 
     # Check shape for flat vector inputs
     if n_samples == 1:
-        u = ocp.optimal_control(x.flatten(), p.flatten())
+        u = ocp.hamiltonian_minimizer(x.flatten(), p.flatten())
         assert u.shape == (n_controls,)
 
-        dudx = ocp.optimal_control_jac(x.flatten(), p.flatten())
+        dudx = ocp.hamiltonian_minimizer_jac(x.flatten(), p.flatten())
         assert dudx.shape == (n_controls, n_states)
 
     # Compare with LQR solution
     lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
-                                   u_lb=-0.5, u_ub=0.5)
+                                   u_lb=u_lb, u_ub=u_ub)
 
     p = 2. * lqr.P @ (x - xf)
-    u = ocp.optimal_control(x, p)
+    u = ocp.hamiltonian_minimizer(x, p)
     u_expected = lqr(x)
 
     np.testing.assert_allclose(u, u_expected, rtol=1e-06, atol=1e-12)
