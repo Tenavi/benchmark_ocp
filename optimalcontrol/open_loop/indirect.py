@@ -53,7 +53,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     ----------
     ocp : `OptimalControlProblem`
         The optimal control problem to solve. Must implement `bvp_dynamics` and
-        `optimal_control` methods.
+        `hamiltonian_minimizer` methods.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.
@@ -88,7 +88,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
     p = np.reshape(p, (ocp.n_states, -1))
 
     if u is None:
-        u = ocp.optimal_control(x, p)
+        u = ocp.hamiltonian_minimizer(x, p)
 
     if v is None:
         v = ocp.total_cost(t, x, u)[::-1]
@@ -109,7 +109,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
             x = bvp_sol.y[:ocp.n_states]
             p = bvp_sol.y[ocp.n_states:-1]
             v = bvp_sol.y[-1]
-            u = ocp.optimal_control(x, p)
+            u = ocp.hamiltonian_minimizer(x, p)
 
             status, message, sol = bvp_sol.status, bvp_sol.message, bvp_sol.sol
         except RuntimeWarning as w:
@@ -118,7 +118,7 @@ def solve_fixed_time(ocp, t, x, p, u=None, v=None, max_nodes=1000, tol=1e-05,
             sol = make_interp_spline(t, xp, k=1, axis=1)
 
     return IndirectSolution(t, x, u, p, v, status, message, cont_sol=sol,
-                            u_fun=ocp.optimal_control)
+                            u_fun=ocp.hamiltonian_minimizer)
 
 
 def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
@@ -137,7 +137,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
     ----------
     ocp : `OptimalControlProblem`
         The optimal control problem to solve. Must implement `bvp_dynamics` and
-        `optimal_control` methods.
+        `hamiltonian_minimizer` methods.
     t : (n_points,) array
         Time points at which the initial guess is supplied. Assumed to be
         sorted from smallest to largest.

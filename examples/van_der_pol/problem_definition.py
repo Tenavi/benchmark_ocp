@@ -193,15 +193,15 @@ class VanDerPol(OptimalControlProblem):
 
         return dfdx, dfdu
 
-    def optimal_control(self, x, p):
+    def hamiltonian_minimizer(self, x, p):
         u = self.parameters.uf - self.parameters.b / self.parameters.Wu * p[1:]
         return self._saturate(u)
 
-    def optimal_control_jac(self, x, p, u0=None):
+    def hamiltonian_minimizer_jac(self, x, p, u0=None):
         return np.zeros((self.n_controls, *np.shape(x)))
 
     def bvp_dynamics(self, t, xp):
-        u = self.optimal_control(xp[:2], xp[2:4])
+        u = self.hamiltonian_minimizer(xp[:2], xp[2:4])
         L = self.running_cost(xp[:2], u)
 
         # Extract states and costates

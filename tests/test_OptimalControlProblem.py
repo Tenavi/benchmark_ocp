@@ -1,6 +1,5 @@
-import pytest
-
 import numpy as np
+import pytest
 
 from optimalcontrol.problem import ProblemParameters
 
@@ -181,10 +180,44 @@ def test_dynamics(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', [1, 2])
-def test_optimal_control(ocp_name, n_samples):
+@pytest.mark.parametrize('n_samples', [1, 100])
+def test_hamiltonian(ocp_name, n_samples):
     """Test that the optimal control as a function of state and costate returns
     the correct shape and Jacobians match finite difference approximations."""
+    ocp = ocp_dict[ocp_name](x0_sample_seed=123)
+
+    # Get some random states and costates
+    x = ocp.sample_initial_conditions(n_samples=n_samples)
+    x = x.reshape(ocp.n_states, n_samples)
+    p = ocp.sample_initial_conditions(n_samples=n_samples)
+    p = p.reshape(ocp.n_states, n_samples)
+
+    # Evaluate the optimal control and compare to a numerical minimizer
+    u = ocp.hamiltonian_minimizer(x, p)
+    assert u.shape == (ocp.n_controls, n_samples)
+
+    u_expect = super(type(ocp), ocp).hamiltonian_minimizer(x, p)
+    np.testing.assert_allclose(u, u_expect, atol=1e-05, rtol=1e-05)
+
+    # Check that Jacobian is the correct size
+    dudx = ocp.hamiltonian_minimizer_jac(x, p)
+    assert dudx.shape == (ocp.n_controls, ocp.n_states, n_samples)
+
+    compare_finite_difference(x, dudx, lambda x: ocp.hamiltonian_minimizer(x, p),
+                              method=ocp._fin_diff_method, atol=1e-05)
+
+    # Check shape for flat vector inputs
+    if n_samples == 1:
+        u = ocp.hamiltonian_minimizer(x.flatten(), p.flatten())
+        assert u.shape == (ocp.n_controls,)
+
+        dudx = ocp.hamiltonian_minimizer_jac(x.flatten(), p.flatten())
+        assert dudx.shape == (ocp.n_controls, ocp.n_states)
+
+
+@pytest.mark.parametrize('ocp_name', ocp_dict.keys())
+@pytest.mark.parametrize('n_samples', [1, 10])
+def test_hamiltonian_grad(ocp_name, n_samples):
     ocp = ocp_dict[ocp_name]()
 
     # Get some random states and costates
@@ -193,24 +226,17 @@ def test_optimal_control(ocp_name, n_samples):
     p = ocp.sample_initial_conditions(n_samples=n_samples)
     p = p.reshape(ocp.n_states, n_samples)
 
-    # Evaluate the optimal control and check that the shape is correct
-    u = ocp.optimal_control(x, p)
-    assert u.shape == (ocp.n_controls, n_samples)
+    u_lb = getattr(ocp.parameters, 'u_lb', -1.)
+    u_ub = getattr(ocp.parameters, 'u_ub', 1.)
+    if u_lb is None or not np.all(np.isfinite(u_lb)):
+        u_lb = -1.
+    if u_ub is None or not np.all(np.isfinite(u_ub)):
+        u_ub = -1.
+    u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
 
-    # Check that Jacobian is the correct size
-    dudx = ocp.optimal_control_jac(x, p)
-    assert dudx.shape == (ocp.n_controls, ocp.n_states, n_samples)
-
-    compare_finite_difference(x, dudx, lambda x: ocp.optimal_control(x, p),
+    H, dHdu = ocp.hamiltonian(x, u, p, return_dHdu=True)
+    compare_finite_difference(u, dHdu, lambda u: ocp.hamiltonian(x, u, p),
                               method=ocp._fin_diff_method, atol=1e-05)
-
-    # Check shape for flat vector inputs
-    if n_samples == 1:
-        u = ocp.optimal_control(x.flatten(), p.flatten())
-        assert u.shape == (ocp.n_controls,)
-
-        dudx = ocp.optimal_control_jac(x.flatten(), p.flatten())
-        assert dudx.shape == (ocp.n_controls, ocp.n_states)
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())

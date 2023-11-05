@@ -276,7 +276,7 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         return dfdx, dfdu
 
-    def optimal_control(self, x, p):
+    def hamiltonian_minimizer(self, x, p):
         p = np.reshape(p, (self.n_states, -1))
         u = self.parameters.uf - np.matmul(self.parameters._RB2, p)
         u = self._saturate(u)
@@ -286,5 +286,5 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         return u
 
-    def optimal_control_jac(self, x, p, u0=None):
+    def hamiltonian_minimizer_jac(self, x, p, u0=None):
         return np.zeros((self.n_controls, self.n_states) + np.shape(p)[1:])
