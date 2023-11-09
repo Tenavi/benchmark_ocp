@@ -202,10 +202,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
         if return_dLdu:
             dLdu = 2. * np.einsum('ij,jb->ib', self.parameters.R, u_err)
 
-            # Where the control is saturated, the gradient is zero
-            sat_idx = self._find_saturated(np.reshape(u, dLdu.shape))
-            dLdu[sat_idx] = 0.
-
             if squeeze:
                 dLdu = dLdu[..., 0]
             if not return_dLdx:
@@ -226,13 +222,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         if return_dLdu:
             dLdu = np.tile(self.parameters.R[..., None], (1, 1, u.shape[1]))
-
-            # Where the control is saturated, the gradient is zero (constant).
-            # This makes the Hessian zero in all terms that include a saturated
-            # control
-            sat_idx = self._find_saturated(u)
-            sat_idx = sat_idx[None, ...] + sat_idx[:, None, :]
-            dLdu[sat_idx] = 0.
 
             if squeeze:
                 dLdu = dLdu[..., 0]
@@ -264,10 +253,6 @@ class LinearQuadraticProblem(OptimalControlProblem):
 
         if return_dfdu:
             dfdu = np.tile(self.parameters.B[..., None], (1, 1, u.shape[1]))
-
-            # Where the control is saturated, the Jacobian is zero
-            idx = self._find_saturated(u)
-            dfdu[:, idx] = 0.
 
             if squeeze:
                 dfdu = dfdu[..., 0]

@@ -48,7 +48,9 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
             *  1: A termination event occurred.
     """
     def fun(t, x):
-        return ocp.dynamics(x, controller(x))
+        u = controller(x)
+        u = ocp._saturate(u)
+        return ocp.dynamics(x, u)
 
     def jac(t, x):
         return closed_loop_jacobian(x, ocp.jac, controller)

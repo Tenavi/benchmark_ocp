@@ -76,27 +76,6 @@ class OptimalControlProblem:
         return saturate(u, lb=getattr(self.parameters, 'u_lb'),
                         ub=getattr(self.parameters, 'u_ub'))
 
-    def _find_saturated(self, u):
-        """
-        Find indices where control inputs are saturated, with lower bound
-        `self.parameters.u_lb` and upper bound `self.parameters.u_ub`, if one or
-        both of these are defined.
-
-        Parameters
-        ----------
-        u : (n_controls,) or (n_controls, n_points) array
-            Controls arranged by (dimension, time).
-
-        Returns
-        -------
-        sat_idx : boolean array with same shape as `u`
-            `sat_idx[i,j] = True` if `u[i,j] <= u_lb[i]` or `u[i,j] >= u_ub[i]`.
-            If `self.parameters.u_lb` or `self.parameters.u_lb` is not defined,
-            then these are ignored.
-        """
-        return find_saturated(u, lb=getattr(self.parameters, 'u_lb'),
-                              ub=getattr(self.parameters, 'u_ub'))
-
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
         """
@@ -675,8 +654,7 @@ class OptimalControlProblem:
     def _center_inputs(self, x, u, xf, uf):
         """
         Wrapper of `_reshape_inputs` that reshapes 1d array state and controls
-        into 2d arrays, saturates the controls, and subtracts nominal states and
-        controls.
+        into 2d arrays and subtracts nominal states and controls.
 
         Parameters
         ----------
@@ -695,8 +673,8 @@ class OptimalControlProblem:
             Centered state(s) arranged by (dimension, time). If the input was
             flat, `n_points = 1`.
         u - uf : (n_controls, n_points) array
-            Centered saturated control(s) arranged by (dimension, time). If the
-            input was flat, `n_points = 1`.
+            Centered control(s) arranged by (dimension, time). If the input was
+            flat, `n_points = 1`.
         squeeze: bool
             True if either input was flat.
 
@@ -708,7 +686,7 @@ class OptimalControlProblem:
         """
         x, u, squeeze = self._reshape_inputs(x, u)
         x_err = x - np.reshape(xf, (self.n_states, 1))
-        u_err = self._saturate(u) - np.reshape(uf, (self.n_controls, 1))
+        u_err = u - np.reshape(uf, (self.n_controls, 1))
         return x_err, u_err, squeeze
 
 
