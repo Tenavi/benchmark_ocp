@@ -167,9 +167,11 @@ for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
                                                  u=sim['u'], v=sim['v'],
                                                  p=2. * lqr.P @ (sim['x'] - xf),
                                                  **config.open_loop_kwargs)
-                if new_sol.v[0] < sol['v'][0]:
+                cost_change = 1. - new_sol.v[0] / sol['v'][0]
+                if cost_change < 0.:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
-                          f"warm start with {type(controller).__name__:s}")
+                          f"warm start with {type(controller).__name__:s}.")
+                    print(f"    Cost improvement = {-100 * cost_change:.2f}%")
                     new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
                     for key in sol.keys():
                         sol[key] = getattr(new_sol, key)

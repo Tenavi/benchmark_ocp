@@ -10,8 +10,8 @@ from optimalcontrol.simulate._ivp import solve_ivp
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
 
 
-def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
-                     verbose=0):
+def solve_fixed_time(ocp, t, x, u, n_nodes=32, n_nodes_init=None, tol=1e-06,
+                     max_iter=500, reshape_order='F', verbose=0):
     """
     ### NOT YET IMPLEMENTED
 
@@ -39,7 +39,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=32
         Number of nodes to use in the pseudospectral discretization.
-    tol : float, default=1e-05
+    tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
         Maximum number of SLSQP iterations.
@@ -58,8 +58,9 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     raise NotImplementedError
 
 
-def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
-                           t1_tol=1e-06, interp_tol=1e-03, max_n_segments=10,
+def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
+                           tol=1e-06, max_iter=500, t1_tol=1e-06,
+                           interp_tol=1e-03, max_n_segments=10,
                            integration_method='RK45', atol=1e-08, rtol=1e-04,
                            reshape_order='F', verbose=0):
     """
@@ -70,7 +71,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     control problem into a constrained optimization problem with Legendre-Gauss-
     Radau pseudospectral collocation. The resulting optimization problem is
     solved using is solved using sequential least squares quadratic programming
-    (SLSQP).
+    (SLSQP). Each optimization is performed twice: first with fewer collocation
+    points (`n_nodes_init`) and then more points (`n_nodes`) to refine the
+    solutions.
 
     The solution is "antialiased" by stringing multiple solutions together. The
     individual solutions are referred to as "Bellman segments". Each of these
@@ -109,9 +112,13 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
-    n_nodes : int, default=32
-        Number of nodes to use in the pseudospectral discretization.
-    tol : float, default=1e-05
+    n_nodes : int, default=64
+        Number of nodes to use in the pseudospectral discretization for the
+        final solution.
+    n_nodes_init : int, default=`n_nodes // 2`
+        Number of nodes to use in the pseudospectral discretization of the
+        rough warm start solution.
+    tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
         Maximum number of SLSQP iterations.
@@ -149,19 +156,34 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-    t1_tol = np.maximum(float(t1_tol), np.finfo(float).eps)
-    interp_tol = np.maximum(float(interp_tol), np.finfo(float).eps)
-    max_n_segments = np.maximum(int(max_n_segments), 1)
+    n_nodes = max(4, int(n_nodes))
+    if n_nodes_init is None:
+        n_nodes_init = n_nodes / 2
+    n_nodes_init = np.clip(n_nodes_init, 3, n_nodes - 1).astype(int)
+
+    tol = max(float(tol), np.finfo(float).eps)
+    t1_tol = max(float(t1_tol), np.finfo(float).eps)
+    interp_tol = max(float(interp_tol), np.finfo(float).eps)
+
+    max_n_segments = max(int(max_n_segments), 1)
 
     f, converge_event, interp_event = _setup_open_loop(ocp, t1_tol, interp_tol)
 
     sols, t_break = [], []
 
+    solve_kwargs = {'tol': tol, 'max_iter': max_iter,
+                    'reshape_order': reshape_order, 'verbose': verbose}
+
     for k in range(max_n_segments):
-        sols.append(_solve_infinite_horizon(ocp, t, x, u, tol=tol,
-                                            n_nodes=n_nodes, max_iter=max_iter,
-                                            reshape_order=reshape_order,
-                                            verbose=verbose))
+        warm_start_sol = _solve_infinite_horizon(ocp, t, x, u,
+                                                 n_nodes=n_nodes_init,
+                                                 **solve_kwargs)
+
+        t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
+
+        sols.append(_solve_infinite_horizon(ocp, t, x, u,
+                                            n_nodes=n_nodes,
+                                            **solve_kwargs))
 
         ode_sol = solve_ivp(f, [0., sols[-1].t[-1]], sols[-1].x[:, 0],
                             events=(converge_event, interp_event),
@@ -211,7 +233,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
     return CombinedSolution(sols, t_break)
 
 
-def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
+def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
                             reshape_order='F', verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -237,7 +259,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-05, max_iter=500,
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=32
         Number of nodes to use in the pseudospectral discretization.
-    tol : float, default=1e-05
+    tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
         Maximum number of SLSQP iterations.

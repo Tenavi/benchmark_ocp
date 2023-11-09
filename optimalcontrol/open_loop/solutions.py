@@ -177,21 +177,6 @@ class CombinedSolution(OpenLoopSolution):
 
             t0 = t1
 
-        # Make sure that the value function decreases over time by including
-        # contributions from segments that follow the current segment.
-        # We only need to do this for the first n - 1 segments.
-        self._v_diff = np.empty(self.n_segments - 1)
-
-        for k in range(self.n_segments - 2, -1, -1):
-            # Find what this segment thinks the value should be at the end
-            t1 = self._t_break_extended[k]
-            _, _, _, v1 = self._sols[k](t1)
-            # If needed, raise the value by the value difference of this segment
-            # and the start of the following segment
-            self._v_diff[k] = combined_sol['v'][k + 1][0] - np.squeeze(v1)
-            if self._v_diff[k] > 0.:
-                combined_sol['v'][k] = combined_sol['v'][k] + self._v_diff[k]
-
         for key in combined_sol.keys():
             combined_sol[key] = np.concatenate(combined_sol[key], axis=-1)
 
@@ -275,9 +260,5 @@ class CombinedSolution(OpenLoopSolution):
                 else:
                     for arr, key in zip(sol_k, return_arrays.keys()):
                         return_arrays[key][..., idx] = arr
-
-                if (return_v and
-                        k < self.n_segments - 1 and self._v_diff[k] > 0.):
-                    return_arrays['v'][idx] += self._v_diff[k]
 
         return self._get_return_args(**return_arrays)
