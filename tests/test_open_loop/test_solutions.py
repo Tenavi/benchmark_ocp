@@ -81,12 +81,8 @@ def test_combining_multiple_sols(n_segments):
     assert wrapped_sol.status == n_segments
     assert wrapped_sol.message == f"hello world ({n_segments})"
 
-    # First check that at least time and value function vectors are sorted
+    # First check that time vectors is sorted
     np.testing.assert_array_equal(wrapped_sol.t, np.sort(wrapped_sol.t))
-    np.testing.assert_array_equal(wrapped_sol.v, np.sort(wrapped_sol.v)[::-1])
-
-    for k in range(n_segments - 2):
-        assert wrapped_sol._v_diff[k] > wrapped_sol._v_diff[k + 1]
 
     # Check that time points are constructed correctly, and each solution is
     # associated with the correct part of the overall time vector
@@ -106,8 +102,6 @@ def test_combining_multiple_sols(n_segments):
                                        rtol=1e-14, atol=1e-14)
 
         v_expect = sols[k].v[:n_t]
-        if k < n_segments - 1:
-            v_expect = v_expect + np.maximum(wrapped_sol._v_diff[k], 0.)
         np.testing.assert_allclose(wrapped_sol.v[idx], v_expect,
                                    rtol=1e-14, atol=1e-14)
         t0 = t1
@@ -120,8 +114,6 @@ def test_combining_multiple_sols(n_segments):
         t_test = np.linspace(t0, t0 + 0.99 * (t1 - t0), 10)
 
         x_expect, u_expect, p_expect, v_expect = sols[k](t_test - t0)
-        if k < n_segments - 1:
-            v_expect += np.maximum(wrapped_sol._v_diff[k], 0.)
 
         assert_matches_reference(wrapped_sol, t_test, x_expect, u_expect,
                                  p_expect, v_expect, atol=1e-14, rtol=1e-14)

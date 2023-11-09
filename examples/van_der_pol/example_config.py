@@ -31,7 +31,7 @@ t_max = 5. * t_int
 sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
 
 # Keyword arguments for open-loop data generation
-open_loop_kwargs = {}
+open_loop_kwargs = {'method': 'direct', 'n_nodes_init': 16}
 
 random_seed = 123
 
