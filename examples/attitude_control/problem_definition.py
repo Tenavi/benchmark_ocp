@@ -264,7 +264,7 @@ class AttitudeControl(OptimalControlProblem):
 
         Lq = (self.parameters.Wq / 2.) * np.sum(q_err ** 2, axis=0)
         Lw = (self.parameters.Ww / 2.) * np.sum(w ** 2, axis=0)
-        Lu = (self.parameters.Wu / 2.) * np.sum(self._saturate(u) ** 2, axis=0)
+        Lu = (self.parameters.Wu / 2.) * np.sum(u ** 2, axis=0)
 
         return Lq + Lw + Lu
 
@@ -284,11 +284,8 @@ class AttitudeControl(OptimalControlProblem):
                 return dLdx
 
         if return_dLdu:
-            dLdu = self.parameters.Wu * self._saturate(u)
+            dLdu = self.parameters.Wu * u
 
-            # Where the control is saturated, the gradient is zero
-            sat_idx = self._find_saturated(u)
-            dLdu[sat_idx] = 0.
             if squeeze:
                 dLdu = dLdu[..., 0]
             if not return_dLdx:
@@ -317,13 +314,6 @@ class AttitudeControl(OptimalControlProblem):
             if u.shape[1] > 1:
                 R = np.tile(R, (1, 1, np.shape(u)[1]))
 
-            # Where the control is saturated, the gradient is zero (constant).
-            # This makes the Hessian zero in all terms that include a saturated
-            # control
-            sat_idx = self._find_saturated(u)
-            sat_idx = sat_idx[None, ...] + sat_idx[:, None, ...]
-            R[sat_idx] = 0.
-
             if squeeze:
                 R = R[..., 0]
             if not return_dLdx:
@@ -333,7 +323,7 @@ class AttitudeControl(OptimalControlProblem):
 
     def dynamics(self, x, u):
         q, q0, w = self._break_state(x)
-        u = self._saturate(u).reshape(w.shape)
+        u = np.reshape(u, w.shape)
 
         Jw = np.matmul(self.parameters.J, w)
 
@@ -377,10 +367,6 @@ class AttitudeControl(OptimalControlProblem):
 
         if return_dfdu:
             dfdu = np.tile(self.parameters._B[..., None], (1, 1, u.shape[1]))
-
-            # Where the control is saturated, the Jacobian is zero
-            sat_idx = self._find_saturated(u)
-            dfdu[:, sat_idx] = 0.
 
             if squeeze:
                 dfdu = dfdu[..., 0]

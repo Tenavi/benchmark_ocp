@@ -159,7 +159,7 @@ class BurgersPDE(OptimalControlProblem):
         x, u, squeeze = self._reshape_inputs(x, u)
 
         x_err = self.distances(x, 0., squared=True)[:, 0]
-        u_err = np.sum(self._saturate(u) ** 2, axis=0)
+        u_err = np.sum(u ** 2, axis=0)
 
         L = x_err + self.parameters.R * u_err
 
@@ -181,11 +181,8 @@ class BurgersPDE(OptimalControlProblem):
                 return dLdx
 
         if return_dLdu:
-            dLdu = (2. * self.parameters.R) * self._saturate(u)
+            dLdu = (2. * self.parameters.R) * u
 
-            # Where the control is saturated, the gradient is zero
-            sat_idx = self._find_saturated(u)
-            dLdu[sat_idx] = 0.
             if squeeze:
                 dLdu = dLdu[..., 0]
             if not return_dLdx:
@@ -212,13 +209,6 @@ class BurgersPDE(OptimalControlProblem):
             if u.shape[1] > 1:
                 R = np.tile(R, (1, 1, np.shape(u)[1]))
 
-            # Where the control is saturated, the gradient is zero (constant).
-            # This makes the Hessian zero in all terms that include a saturated
-            # control
-            sat_idx = self._find_saturated(u)
-            sat_idx = sat_idx[None, ...] + sat_idx[:, None, ...]
-            R[sat_idx] = 0.
-
             if squeeze:
                 R = R[..., 0]
             if not return_dLdx:
@@ -232,7 +222,7 @@ class BurgersPDE(OptimalControlProblem):
         dxdt = (-0.5 * np.matmul(self.parameters._D, x**2)
                 + np.matmul(self.parameters.nu * self.parameters._D2, x)
                 + x * self.parameters._alpha / np.exp(self.parameters.gamma * x)
-                + np.matmul(self.parameters._B, self._saturate(u)))
+                + np.matmul(self.parameters._B, u))
 
         if squeeze:
             return dxdt[:, 0]
@@ -261,10 +251,6 @@ class BurgersPDE(OptimalControlProblem):
 
         if return_dfdu:
             dfdu = np.tile(self.parameters._B[..., None], (1, 1, u.shape[1]))
-
-            # Where the control is saturated, the Jacobian is zero
-            sat_idx = self._find_saturated(u)
-            dfdu[:, sat_idx] = 0.
 
             if squeeze:
                 dfdu = dfdu[..., 0]
@@ -300,7 +286,7 @@ class BurgersPDE(OptimalControlProblem):
         dxdt = (-0.5 * np.matmul(self.parameters._D, x ** 2)
                 + np.matmul(self.parameters.nu * self.parameters._D2, x)
                 + x * aex
-                + np.matmul(self.parameters._B, self._saturate(u)))
+                + np.matmul(self.parameters._B, u))
 
         dpdt = (- 2. * wx
                 + x * np.matmul(self.parameters._D.T, p)

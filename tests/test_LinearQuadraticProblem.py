@@ -205,7 +205,7 @@ def test_cost_functions(n_states, n_controls, n_samples):
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
         xi = x[:, i] - xf.flatten()
-        ui = ocp._saturate(u[:, i]) - uf.flatten()
+        ui = u[:, i] - uf.flatten()
 
         np.testing.assert_allclose(L[i], xi @ Q @ xi + ui @ R @ ui, atol=1e-12)
 
@@ -261,7 +261,7 @@ def test_dynamics(n_states, n_controls, n_samples):
     # Check that vectorized construction matches brute force
     for i in range(n_samples):
         xi = x[:, i] - xf.flatten()
-        ui = ocp._saturate(u[:,i]) - uf.flatten()
+        ui = u[:, i] - uf.flatten()
 
         np.testing.assert_allclose(f[:, i], A @ xi + B @ ui, atol=1e-12)
 
