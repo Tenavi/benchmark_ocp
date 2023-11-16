@@ -280,15 +280,12 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
         `sol.status==0`.
     """
     tau, w, D = radau.make_scaled_lgr(n_nodes)
-    cost_fun, dyn_constr, bound_constr = setup_nlp.setup(
-        ocp, tau, w, D, order=reshape_order)
+    cost_fun, dyn_constr, bounds = setup_nlp.setup(ocp, x[:, 0], tau, w, D,
+                                                   order=reshape_order)
 
     # Map initial guess to LGR points
     x, u = setup_nlp.interp_guess(t, x, u, tau, radau.inverse_time_map)
     xu = setup_nlp.collect_vars(x, u, order=reshape_order)
-
-    x0_constr = setup_nlp.make_initial_condition_constraint(
-        x[:, :1], ocp.n_controls, n_nodes, order=reshape_order)
 
     if verbose:
         print(f"\nNumber of LGR nodes: {n_nodes}")
@@ -296,9 +293,9 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
 
     minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
 
-    minimize_result = minimize(cost_fun, xu, bounds=bound_constr,
-                               constraints=[dyn_constr, x0_constr],
-                               tol=tol, jac=True, options=minimize_opts)
+    minimize_result = minimize(cost_fun, xu, bounds=bounds,
+                               constraints=dyn_constr, jac=True, tol=tol,
+                               options=minimize_opts)
 
     return DirectSolution.from_minimize_result(minimize_result, ocp, tau, w,
                                                order=reshape_order)

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import sparse
-from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint
+from scipy.optimize import Bounds, NonlinearConstraint
 from scipy.interpolate import make_interp_spline
 
 from optimalcontrol.utilities import resize_vector
@@ -10,7 +10,7 @@ _order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
                   "(Fortran, column-major)")
 
 
-def setup(ocp, tau, w, D, order='F'):
+def setup(ocp, x0, tau, w, D, order='F'):
     """
     Wrapper function which calls other functions in this module to build a
     collocated objective function, dynamic constraints, and control constraints.
@@ -19,6 +19,8 @@ def setup(ocp, tau, w, D, order='F'):
     ----------
     ocp : OptimalControlProblem
         The optimal control problem to solve.
+    x0 : (n_states,) array
+        Initial condition.
     tau : (n_nodes,) array
         LGR collocation nodes on [-1, 1).
     w : (n_nodes,) array
@@ -53,12 +55,16 @@ def setup(ocp, tau, w, D, order='F'):
     # Control bounds
     u_lb = getattr(ocp.parameters, 'u_lb', None)
     u_ub = getattr(ocp.parameters, 'u_ub', None)
-    if u_lb is not None:
+    if u_lb is None:
+        u_lb = np.full((ocp.n_controls,), -np.inf)
+    else:
         u_lb = resize_vector(u_lb, ocp.n_controls)
-    if u_ub is not None:
+    if u_ub is None:
+        u_ub = np.full((ocp.n_controls,), np.inf)
+    else:
         u_ub = resize_vector(u_ub, ocp.n_controls)
 
-    bound_constr = make_bound_constraint(u_lb, u_ub, ocp.n_states, tau.shape[0],
+    bound_constr = make_bound_constraint(x0, u_lb, u_ub, tau.shape[0],
                                          order=order)
 
     return cost_fun, dyn_constr, bound_constr
@@ -163,18 +169,18 @@ def make_dynamic_constraint(ocp, D, order='F'):
     return NonlinearConstraint(fun=constr_fun, jac=constr_jac, lb=0., ub=0.)
 
 
-def make_initial_condition_constraint(x0, n_controls, n_nodes, order='F'):
+def make_bound_constraint(x0, u_lb, u_ub, n_nodes, order='F'):
     """
-    Create a function which evaluates the initial condition constraint
-    `x(0) - x0 == 0`. This is a linear constraint which is expressed by matrix
-    multiplication.
+    Create the control saturation and initial condition constraints.
 
     Parameters
     ----------
     x0 : (n_states,) array
         Initial condition.
-    n_controls : int
-        Number of control variables.
+    u_lb : (n_controls,) array
+        Lower bounds for the controls. Set to `-inf` for no lower bounds.
+    u_ub : (n_controls,) array
+        Upper bounds for the controls. Set to `inf` for no lower bounds.
     n_nodes : int
         Number of LGR collocation points.
     order : {'C', 'F'}, default='F'
@@ -182,69 +188,28 @@ def make_initial_condition_constraint(x0, n_controls, n_nodes, order='F'):
 
     Returns
     -------
-    constraints : `scipy.optimize.LinearConstraint`
-        Instance of `LinearConstraint` containing the constraint matrix and
-        initial condition.
+    bound_constraint : `scipy.optimize.Bounds`
+        Instance of `Bounds` containing the control bounds and initial condition
+        constraint mapped to the decision vector of states and controls.
     """
     x0 = np.reshape(x0, (-1,))
     n_states = x0.shape[0]
 
-    # Generates sparse matrix for multiplying combined state
-    if order == 'F':
-        A = sparse.eye(m=n_states, n=(n_states + n_controls) * n_nodes)
-    elif order == 'C':
-        A = sparse.eye(m=1, n=n_nodes)
-        A = sparse.kron(sparse.identity(n_states), A)
-        A = sparse.hstack((A, np.zeros((n_states, n_controls * n_nodes))))
-    else:
-        raise ValueError(_order_err_msg)
+    x_lb = np.full((n_states, n_nodes), -np.inf)
+    x_lb[:, 0] = x0
 
-    return LinearConstraint(A=A, lb=x0, ub=x0)
+    x_ub = np.full((n_states, n_nodes), np.inf)
+    x_ub[:, 0] = x0
 
+    if np.size(u_lb) != np.size(u_ub):
+        raise ValueError(f"shape(u_lb) = {np.shape(u_lb)} is not compatible "
+                         f"with shape(u_ub) = {np.shape(u_ub)}")
 
-def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='F'):
-    """
-    Create the control saturation constraints for all controls. Returns None if
-    both control bounds are None.
+    u_lb = np.tile(np.reshape(u_lb, (-1, 1)), (1, n_nodes))
+    u_ub = np.tile(np.reshape(u_ub, (-1, 1)), (1, n_nodes))
 
-    Parameters
-    ----------
-    u_lb : (n_controls, 1) array or None
-        Lower bounds for the controls.
-    u_ub : (n_controls, 1) array or None
-        Upper bounds for the controls.
-    n_states : int
-        Number of state variables.
-    n_nodes : int
-        Number of LGR collocation points.
-    order : {'C', 'F'}, default='F'
-        Use C (row-major) or Fortran (column-major) ordering.
-
-    Returns
-    -------
-    bound_constraint : `scipy.optimize.Bounds` or None
-        Instance of `Bounds` containing the control bounds mapped to the
-        decision vector of states and controls. Returned only if at least one of
-        `u_lb` and `u_ub` is not None.
-    """
-    if u_lb is None and u_ub is None:
-        return
-
-    if u_lb is None:
-        u_lb = np.full_like(u_ub, -np.inf)
-    elif u_ub is None:
-        u_ub = np.full_like(u_lb, np.inf)
-
-    u_lb = np.reshape(u_lb, (-1, 1))
-    u_ub = np.reshape(u_ub, (-1, 1))
-
-    lb = np.concatenate((np.full(n_states * n_nodes, -np.inf),
-                         np.tile(u_lb, (1, n_nodes)).flatten(order=order)))
-
-    ub = np.concatenate((np.full(n_states * n_nodes, np.inf),
-                         np.tile(u_ub, (1, n_nodes)).flatten(order=order)))
-
-    return Bounds(lb=lb, ub=ub)
+    return Bounds(lb=collect_vars(x_lb, u_lb, order=order),
+                  ub=collect_vars(x_ub, u_ub, order=order))
 
 
 def collect_vars(x, u, order='F'):
@@ -269,7 +234,8 @@ def collect_vars(x, u, order='F'):
         `xu[:x.size] == x.flatten(order=order)` and
         `xu[x.size:] == u.flatten(order=order)`.
     """
-    return np.concatenate((x.flatten(order=order), u.flatten(order=order)))
+    return np.concatenate((x.reshape(-1, order=order),
+                           u.reshape(-1, order=order)))
 
 
 def separate_vars(xu, n_states, n_controls, order='F'):

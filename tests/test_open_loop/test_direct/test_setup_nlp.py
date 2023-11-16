@@ -194,78 +194,45 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     np.testing.assert_allclose(constr_jac.toarray(), expected_jac, atol=1e-05)
 
 
-@pytest.mark.parametrize('n_nodes', [3, 4, 7, 8])
-@pytest.mark.parametrize('order', ['F', 'C'])
-def test_init_cond_setup(n_nodes, order):
-    """Check that the initial condition matrix multiplication returns the
-    correct points."""
-    n_x, n_u, n_t = 3, 2, n_nodes
-
-    # Generate random states and controls
-    x = rng.normal(size=(n_x, n_t))
-    u = rng.normal(size=(n_u, n_t))
-    xu = setup_nlp.collect_vars(x, u, order=order)
-    x0 = x[:, :1]
-
-    constr = setup_nlp.make_initial_condition_constraint(x0, n_u, n_t,
-                                                         order=order)
-
-    np.testing.assert_array_equal(constr.lb, x0.flatten())
-    np.testing.assert_array_equal(constr.ub, x0.flatten())
-    assert constr.A.shape == (n_x, (n_x + n_u)*n_t)
-    # Check that evaluating the multiplying the linear constraint matrix
-    # times the full state-control vector returns the initial condtion
-    np.testing.assert_allclose(constr.A @ xu, x0.flatten())
-
-
+@pytest.mark.parametrize('n_states', [1, 2, 3])
 @pytest.mark.parametrize('n_nodes', [3, 4, 5])
 @pytest.mark.parametrize('order', ['F', 'C'])
-@pytest.mark.parametrize('u_lb', (None, -1., [-1.], [-1., -2.],
+@pytest.mark.parametrize('u_lb', (-np.inf, -1., [-1.], [-1., -2.],
                                   [-np.inf, -np.inf], [-np.inf, -2.]))
-def test_bounds_setup(n_nodes, order, u_lb):
+@pytest.mark.parametrize('u_ub', (np.inf, 1., [1.], [1., 2.],
+                                  [np.inf, np.inf], [2., np.inf]))
+def test_bounds_setup(n_states, n_nodes, order, u_lb, u_ub):
     """
-    Test that Bounds are initialized correctly for all different kinds of
-    possible control bounds.
+    Test that Bounds are initialized correctly for different kinds of possible
+    control bounds.
     """
-    if u_lb is None:
-        u_ub = None
-        n_u = 1
-    elif np.isinf(u_lb).all():
-        u_lb = None
-        u_ub = None
-        n_u = 2
-    else:
-        u_lb = np.reshape(u_lb, (-1, 1))
-        u_ub = - u_lb
-        n_u = u_lb.shape[0]
+    n_x, n_t = n_states, n_nodes
+    x0 = rng.normal(size=(n_x,))
 
-    n_x, n_t = 3, n_nodes
+    u_lb_array = np.reshape(u_lb, -1)
+    u_ub_array = np.reshape(u_ub, -1)
 
-    constr = setup_nlp.make_bound_constraint(u_lb, u_ub, n_x, n_t, order=order)
+    if u_lb_array.shape[0] != u_ub_array.shape[0]:
+        with pytest.raises(ValueError):
+            setup_nlp.make_bound_constraint(x0, u_lb, u_ub, n_t, order=order)
+        return
 
-    if u_lb is None and u_ub is None:
-        assert constr is None
-    else:
-        assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
+    n_u = u_lb_array.shape[0]
 
-        # No state constraints
-        assert np.isinf(constr.lb[:n_x * n_nodes]).all()
-        assert np.isinf(constr.ub[:n_x * n_nodes]).all()
+    constr = setup_nlp.make_bound_constraint(x0, u_lb, u_ub, n_t, order=order)
 
-        if u_lb is None:
-            assert np.isinf(constr.lb[n_x * n_nodes:]).all()
-        else:
-            u = np.tile(u_lb, (1, n_nodes))
-            xu = setup_nlp.collect_vars(rng.normal(size=(n_x, n_t)), u,
-                                        order=order)
-            np.testing.assert_allclose(constr.lb[n_x * n_nodes:],
-                                       xu[n_x * n_nodes:], atol=1e-10)
+    assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
 
-        if u_ub is None:
-            assert np.isinf(constr.ub[n_x * n_nodes:]).all()
-        else:
-            u = np.tile(u_ub, (1, n_nodes))
-            xu = setup_nlp.collect_vars(rng.normal(size=(n_x, n_t)), u,
-                                        order=order)
-            np.testing.assert_allclose(constr.ub[n_x * n_nodes:],
-                                       xu[n_x * n_nodes:], atol=1e-10)
+    x_lb, u_lb = setup_nlp.separate_vars(constr.lb, n_x, n_u, order=order)
+    x_ub, u_ub = setup_nlp.separate_vars(constr.ub, n_x, n_u, order=order)
+
+    # Initial condition constraint
+    np.testing.assert_allclose(x_lb[:, 0], x0, atol=1e-14)
+    np.testing.assert_allclose(x_ub[:, 0], x0, atol=1e-14)
+    # No state bounds
+    np.testing.assert_allclose(x_lb[:, 1:], -np.inf, atol=1e-14)
+    np.testing.assert_allclose(x_ub[:, 1:], np.inf, atol=1e-14)
+    # Control constraint
+    for k in range(n_t):
+        np.testing.assert_allclose(u_lb[:, k], u_lb_array, atol=1e-14)
+        np.testing.assert_allclose(u_ub[:, k], u_ub_array, atol=1e-14)
