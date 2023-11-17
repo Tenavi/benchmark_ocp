@@ -42,6 +42,15 @@ class AttitudeControl(OptimalControlProblem):
     def final_time(self):
         return np.inf
 
+    @property
+    def state_lb(self):
+        """(`n_states`,) array. Lower bounds on quaternion states, specifying
+        that the scalar quaternion must be positive. Currently not compatible
+        with `indirect` open loop solvers."""
+        x_lb = np.full(self.n_states, -np.inf)
+        x_lb[3] = 0.
+        return x_lb
+
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
         if 'final_attitude' in new_params:

@@ -195,28 +195,37 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     np.testing.assert_allclose(constr_jac.toarray(), expected_jac, atol=1e-05)
 
 
-@pytest.mark.parametrize('n_states', [1, 2, 3])
 @pytest.mark.parametrize('n_nodes', [3, 4, 5])
 @pytest.mark.parametrize('order', ['F', 'C'])
-@pytest.mark.parametrize('u_bound', (None, np.inf, 1., [1., np.inf]))
-def test_bounds_setup(n_states, n_nodes, order, u_bound):
+@pytest.mark.parametrize('u_bound', (None, np.inf, 1.5, [1., np.inf]))
+@pytest.mark.parametrize('x_bound', (None, np.inf, 2., [np.inf, 2.]))
+def test_bounds_setup(n_nodes, order, u_bound, x_bound):
     """
     Test that Bounds are initialized correctly for different kinds of possible
     control bounds.
     """
-    n_x, n_t = n_states, n_nodes
+    n_t = n_nodes
 
     u_ub = u_bound
     if u_bound is None:
         u_lb = u_ub
-        n_u = n_states + 1
+        n_u = n_t - 1
     else:
         u_lb = - np.asarray(u_ub)
         n_u = u_lb.size
 
+    x_ub = x_bound
+    if x_bound is None:
+        x_lb = x_ub
+        n_x = n_t - 1
+    else:
+        x_lb = - np.asarray(x_ub)
+        n_x = x_lb.size
+
     A, B, Q, R, xf, uf = make_LQ_params(n_x, n_u)
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
-                                 x0_lb=-1., x0_ub=1., u_lb=u_lb, u_ub=u_ub)
+                                 x0_lb=-1., x0_ub=1.,
+                                 u_lb=u_lb, u_ub=u_ub, x_lb=x_lb, x_ub=x_ub)
 
     x0 = ocp.sample_initial_conditions()
 
@@ -224,16 +233,23 @@ def test_bounds_setup(n_states, n_nodes, order, u_bound):
 
     assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
 
-    x_lb, u_lb_c = setup_nlp.separate_vars(constr.lb, n_x, n_u, order=order)
-    x_ub, u_ub_c = setup_nlp.separate_vars(constr.ub, n_x, n_u, order=order)
+    x_lb_c, u_lb_c = setup_nlp.separate_vars(constr.lb, n_x, n_u, order=order)
+    x_ub_c, u_ub_c = setup_nlp.separate_vars(constr.ub, n_x, n_u, order=order)
 
     # Initial condition constraint
-    np.testing.assert_allclose(x_lb[:, 0], x0, atol=1e-14)
-    np.testing.assert_allclose(x_ub[:, 0], x0, atol=1e-14)
-    # No state bounds
-    np.testing.assert_allclose(x_lb[:, 1:], -np.inf, atol=1e-14)
-    np.testing.assert_allclose(x_ub[:, 1:], np.inf, atol=1e-14)
-    # Control constraint
+    np.testing.assert_allclose(x_lb_c[:, 0], x0, atol=1e-14)
+    np.testing.assert_allclose(x_ub_c[:, 0], x0, atol=1e-14)
+
+    # State bounds
+    if x_bound is None:
+        np.testing.assert_allclose(x_lb_c[:, 1:], -np.inf)
+        np.testing.assert_allclose(x_ub_c[:, 1:], np.inf)
+    else:
+        for k in range(1, n_t):
+            np.testing.assert_allclose(x_lb_c[:, k], x_lb, atol=1e-14)
+            np.testing.assert_allclose(x_ub_c[:, k], x_ub, atol=1e-14)
+
+    # Control bounds
     if u_bound is None:
         np.testing.assert_allclose(u_lb_c, -np.inf)
         np.testing.assert_allclose(u_ub_c, np.inf)
