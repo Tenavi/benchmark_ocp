@@ -3,7 +3,7 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.optimize import minimize, Bounds
 from scipy.spatial.distance import cdist
 
-from ..utilities import approx_derivative, saturate, find_saturated
+from optimalcontrol.utilities import approx_derivative, saturate
 
 
 class OptimalControlProblem:
@@ -16,7 +16,7 @@ class OptimalControlProblem:
     # required and optional parameters. To be overwritten by subclass
     # implementations.
     _required_parameters = {}
-    _optional_parameters = {'u_lb': None, 'u_ub': None}
+    _optional_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
     _fin_diff_method = '3-point'
@@ -58,10 +58,20 @@ class OptimalControlProblem:
         `np.inf`)."""
         raise NotImplementedError
 
+    @property
+    def control_lb(self):
+        """(`n_controls`,) array or None. Lower bounds on control inputs."""
+        return getattr(self.parameters, 'u_lb', None)
+
+    @property
+    def control_ub(self):
+        """(`n_controls`,) array or None. Upper bounds on control inputs."""
+        return getattr(self.parameters, 'u_ub', None)
+
     def _saturate(self, u):
         """
-        Saturate control inputs between lower bound `self.parameters.u_lb` and
-        upper bound `self.parameters.u_ub`, if one or both of these are defined.
+        Saturate control inputs between lower bound `control_lb` and upper bound
+        `control_ub`, if one or both of these are defined.
 
         Parameters
         ----------
@@ -73,8 +83,7 @@ class OptimalControlProblem:
         u_sat : (n_controls,) or (n_controls, n_points) array
             Saturated control inputs arranged by (dimension, time).
         """
-        return saturate(u, lb=getattr(self.parameters, 'u_lb'),
-                        ub=getattr(self.parameters, 'u_ub'))
+        return saturate(u, lb=self.control_lb, ub=self.control_ub)
 
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
@@ -424,8 +433,8 @@ class OptimalControlProblem:
         u0 = np.resize(u0, (self.n_controls,))
         u0 = np.tile(u0, u_shape[1:])
 
-        lb = getattr(self.parameters, 'u_lb', None)
-        ub = getattr(self.parameters, 'u_ub', None)
+        lb = self.control_lb
+        ub = self.control_ub
         if lb is None and ub is None:
             bounds = None
         else:

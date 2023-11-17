@@ -114,10 +114,12 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=64
         Number of nodes to use in the pseudospectral discretization for the
-        final solution.
-    n_nodes_init : int, default=`n_nodes // 2`
+        final solution. `n_nodes` must be at least 4.
+    n_nodes_init : array of ints, default=`n_nodes // 2`
         Number of nodes to use in the pseudospectral discretization of the
-        rough warm start solution.
+        rough warm start solution. If multiple `n_nodes_init` are specified,
+        performs warm start with each of these. We require
+        `3 <= n_nodes_init <= n_nodes`.
     tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
@@ -159,7 +161,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
     n_nodes = max(4, int(n_nodes))
     if n_nodes_init is None:
         n_nodes_init = n_nodes / 2
-    n_nodes_init = np.clip(n_nodes_init, 3, n_nodes - 1).astype(int)
+    n_nodes_init = np.clip(n_nodes_init, 3, n_nodes - 1)
+    n_nodes_init = np.unique(n_nodes_init.astype(int))
 
     tol = max(float(tol), np.finfo(float).eps)
     t1_tol = max(float(t1_tol), np.finfo(float).eps)
@@ -175,11 +178,11 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
                     'reshape_order': reshape_order, 'verbose': verbose}
 
     for k in range(max_n_segments):
-        warm_start_sol = _solve_infinite_horizon(ocp, t, x, u,
-                                                 n_nodes=n_nodes_init,
-                                                 **solve_kwargs)
+        for n in n_nodes_init:
+            warm_start_sol = _solve_infinite_horizon(ocp, t, x, u, n_nodes=n,
+                                                     **solve_kwargs)
 
-        t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
+            t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
 
         sols.append(_solve_infinite_horizon(ocp, t, x, u,
                                             n_nodes=n_nodes,
@@ -258,7 +261,8 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=32
-        Number of nodes to use in the pseudospectral discretization.
+        Number of nodes to use in the pseudospectral discretization. Must be at
+        least 3.
     tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500

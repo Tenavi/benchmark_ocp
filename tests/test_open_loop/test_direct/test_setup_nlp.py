@@ -2,8 +2,10 @@ import numpy as np
 import pytest
 from scipy.optimize._numdiff import approx_derivative
 
-from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.problem import OptimalControlProblem, LinearQuadraticProblem
 from optimalcontrol.open_loop.direct import setup_nlp, radau
+
+from tests._utilities import make_LQ_params
 
 
 rng = np.random.default_rng(123)
@@ -114,7 +116,6 @@ def test_interp_initial_guess(n, d):
         np.testing.assert_allclose(u_interp[:, k], u[:, -1], atol=1e-12)
 
 
-
 @pytest.mark.parametrize('n_states', [1, 2, 3])
 @pytest.mark.parametrize('n_controls', [1, 2, 3])
 @pytest.mark.parametrize('n_nodes', [12, 13])
@@ -197,34 +198,34 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
 @pytest.mark.parametrize('n_states', [1, 2, 3])
 @pytest.mark.parametrize('n_nodes', [3, 4, 5])
 @pytest.mark.parametrize('order', ['F', 'C'])
-@pytest.mark.parametrize('u_lb', (-np.inf, -1., [-1.], [-1., -2.],
-                                  [-np.inf, -np.inf], [-np.inf, -2.]))
-@pytest.mark.parametrize('u_ub', (np.inf, 1., [1.], [1., 2.],
-                                  [np.inf, np.inf], [2., np.inf]))
-def test_bounds_setup(n_states, n_nodes, order, u_lb, u_ub):
+@pytest.mark.parametrize('u_bound', (None, np.inf, 1., [1., np.inf]))
+def test_bounds_setup(n_states, n_nodes, order, u_bound):
     """
     Test that Bounds are initialized correctly for different kinds of possible
     control bounds.
     """
     n_x, n_t = n_states, n_nodes
-    x0 = rng.normal(size=(n_x,))
 
-    u_lb_array = np.reshape(u_lb, -1)
-    u_ub_array = np.reshape(u_ub, -1)
+    u_ub = u_bound
+    if u_bound is None:
+        u_lb = u_ub
+        n_u = n_states + 1
+    else:
+        u_lb = - np.asarray(u_ub)
+        n_u = u_lb.size
 
-    if u_lb_array.shape[0] != u_ub_array.shape[0]:
-        with pytest.raises(ValueError):
-            setup_nlp.make_bound_constraint(x0, u_lb, u_ub, n_t, order=order)
-        return
+    A, B, Q, R, xf, uf = make_LQ_params(n_x, n_u)
+    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+                                 x0_lb=-1., x0_ub=1., u_lb=u_lb, u_ub=u_ub)
 
-    n_u = u_lb_array.shape[0]
+    x0 = ocp.sample_initial_conditions()
 
-    constr = setup_nlp.make_bound_constraint(x0, u_lb, u_ub, n_t, order=order)
+    constr = setup_nlp.make_bound_constraint(ocp, x0, n_t, order=order)
 
     assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
 
-    x_lb, u_lb = setup_nlp.separate_vars(constr.lb, n_x, n_u, order=order)
-    x_ub, u_ub = setup_nlp.separate_vars(constr.ub, n_x, n_u, order=order)
+    x_lb, u_lb_c = setup_nlp.separate_vars(constr.lb, n_x, n_u, order=order)
+    x_ub, u_ub_c = setup_nlp.separate_vars(constr.ub, n_x, n_u, order=order)
 
     # Initial condition constraint
     np.testing.assert_allclose(x_lb[:, 0], x0, atol=1e-14)
@@ -233,6 +234,10 @@ def test_bounds_setup(n_states, n_nodes, order, u_lb, u_ub):
     np.testing.assert_allclose(x_lb[:, 1:], -np.inf, atol=1e-14)
     np.testing.assert_allclose(x_ub[:, 1:], np.inf, atol=1e-14)
     # Control constraint
-    for k in range(n_t):
-        np.testing.assert_allclose(u_lb[:, k], u_lb_array, atol=1e-14)
-        np.testing.assert_allclose(u_ub[:, k], u_ub_array, atol=1e-14)
+    if u_bound is None:
+        np.testing.assert_allclose(u_lb_c, -np.inf)
+        np.testing.assert_allclose(u_ub_c, np.inf)
+    else:
+        for k in range(n_t):
+            np.testing.assert_allclose(u_lb_c[:, k], u_lb, atol=1e-14)
+            np.testing.assert_allclose(u_ub_c[:, k], u_ub, atol=1e-14)

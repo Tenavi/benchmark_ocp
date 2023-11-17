@@ -72,11 +72,11 @@ def test_cost_functions(ocp_name, n_samples):
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
     try:
-        u_lb = 2. * getattr(ocp.parameters, 'u_lb', -1.)
+        u_lb = 2. * ocp.control_lb
     except TypeError:
         u_lb = -2.
     try:
-        u_ub = 2. * getattr(ocp.parameters, 'u_ub', 1.)
+        u_ub = 2. * ocp.control_ub
     except TypeError:
         u_ub = 2.
     u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
@@ -146,11 +146,11 @@ def test_dynamics(ocp_name, n_samples):
     x = ocp.sample_initial_conditions(n_samples=n_samples)
     x = x.reshape(ocp.n_states, n_samples)
     try:
-        u_lb = 2. * getattr(ocp.parameters, 'u_lb', -1.)
+        u_lb = 2. * ocp.control_lb
     except TypeError:
         u_lb = -2.
     try:
-        u_ub = 2. * getattr(ocp.parameters, 'u_ub', 1.)
+        u_ub = 2. * ocp.control_ub
     except TypeError:
         u_ub = 2.
     u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
@@ -226,8 +226,8 @@ def test_hamiltonian_grad(ocp_name, n_samples):
     p = ocp.sample_initial_conditions(n_samples=n_samples)
     p = p.reshape(ocp.n_states, n_samples)
 
-    u_lb = getattr(ocp.parameters, 'u_lb', -1.)
-    u_ub = getattr(ocp.parameters, 'u_ub', 1.)
+    u_lb = ocp.control_lb
+    u_ub = ocp.control_ub
     if u_lb is None or not np.all(np.isfinite(u_lb)):
         u_lb = -1.
     if u_ub is None or not np.all(np.isfinite(u_ub)):

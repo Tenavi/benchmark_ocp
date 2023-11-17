@@ -42,30 +42,16 @@ def setup(ocp, x0, tau, w, D, order='F'):
         its sparse Jacobian. See `make_dynamic_constraint`.
     bound_constraint : `scipy.optimize.Bounds` or None
         Instance of `Bounds` containing the control bounds mapped to the
-        decision vector of states and controls. Returned only if at least one of
-        `ocp.parameters.u_lb` and `ocp.parameters.u_ub` is not None. See
-        `make_bound_constraint`.
+        decision vector of states and controls. See `make_bound_constraint`.
     """
     # Quadrature integration of running cost
     cost_fun = make_objective_fun(ocp, w, order=order)
 
-    # Dynamic and initial condition constraints
+    # Dynamic constraint
     dyn_constr = make_dynamic_constraint(ocp, D, order=order)
 
-    # Control bounds
-    u_lb = getattr(ocp.parameters, 'u_lb', None)
-    u_ub = getattr(ocp.parameters, 'u_ub', None)
-    if u_lb is None:
-        u_lb = np.full((ocp.n_controls,), -np.inf)
-    else:
-        u_lb = resize_vector(u_lb, ocp.n_controls)
-    if u_ub is None:
-        u_ub = np.full((ocp.n_controls,), np.inf)
-    else:
-        u_ub = resize_vector(u_ub, ocp.n_controls)
-
-    bound_constr = make_bound_constraint(x0, u_lb, u_ub, tau.shape[0],
-                                         order=order)
+    # Control and initial condition constraints
+    bound_constr = make_bound_constraint(ocp, x0, tau.shape[0], order=order)
 
     return cost_fun, dyn_constr, bound_constr
 
@@ -169,18 +155,16 @@ def make_dynamic_constraint(ocp, D, order='F'):
     return NonlinearConstraint(fun=constr_fun, jac=constr_jac, lb=0., ub=0.)
 
 
-def make_bound_constraint(x0, u_lb, u_ub, n_nodes, order='F'):
+def make_bound_constraint(ocp, x0, n_nodes, order='F'):
     """
     Create the control saturation and initial condition constraints.
 
     Parameters
     ----------
+    ocp : OptimalControlProblem
+        The optimal control problem to solve.
     x0 : (n_states,) array
         Initial condition.
-    u_lb : (n_controls,) array
-        Lower bounds for the controls. Set to `-inf` for no lower bounds.
-    u_ub : (n_controls,) array
-        Upper bounds for the controls. Set to `inf` for no lower bounds.
     n_nodes : int
         Number of LGR collocation points.
     order : {'C', 'F'}, default='F'
@@ -192,13 +176,24 @@ def make_bound_constraint(x0, u_lb, u_ub, n_nodes, order='F'):
         Instance of `Bounds` containing the control bounds and initial condition
         constraint mapped to the decision vector of states and controls.
     """
-    x0 = np.reshape(x0, (-1,))
-    n_states = x0.shape[0]
+    x0 = np.reshape(x0, (ocp.n_states,))
 
-    x_lb = np.full((n_states, n_nodes), -np.inf)
+    u_lb = ocp.control_lb
+    u_ub = ocp.control_ub
+
+    if u_lb is None:
+        u_lb = np.full((ocp.n_controls,), -np.inf)
+    else:
+        u_lb = resize_vector(u_lb, ocp.n_controls)
+    if u_ub is None:
+        u_ub = np.full((ocp.n_controls,), np.inf)
+    else:
+        u_ub = resize_vector(u_ub, ocp.n_controls)
+
+    x_lb = np.full((ocp.n_states, n_nodes), -np.inf)
     x_lb[:, 0] = x0
 
-    x_ub = np.full((n_states, n_nodes), np.inf)
+    x_ub = np.full((ocp.n_states, n_nodes), np.inf)
     x_ub[:, 0] = x0
 
     if np.size(u_lb) != np.size(u_ub):

@@ -30,8 +30,7 @@ A, B = ocp.jac(xf, uf)
 # Cost matrices (1/2 Running cost Hessians)
 Q, R = ocp.running_cost_hess(xf, uf)
 lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
-                               u_lb=ocp.parameters.u_lb,
-                               u_ub=ocp.parameters.u_ub)
+                               u_lb=ocp.control_lb, u_ub=ocp.control_ub)
 
 # Generate some training and test data
 
@@ -79,7 +78,7 @@ _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
 print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
-    x_train, u_train, u_lb=ocp.parameters.u_lb, u_ub=ocp.parameters.u_ub,
+    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
     random_state=random_seed + 3, **config.nn_kwargs)
 
 print("\n" + "+" * 80)
