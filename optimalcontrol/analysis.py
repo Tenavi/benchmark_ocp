@@ -64,11 +64,6 @@ def find_equilibrium(ocp, controller, x0, **root_opts):
     """
     x0 = np.reshape(x0, (ocp.n_states,))
 
-    c0 = ocp.constraint_fun(x0)
-    if c0 is not None:
-        raise NotImplementedError("find_equilibrium cannot yet handle state "
-                                  "constraints")
-
     def dynamics_wrapper(x):
         u = controller(x)
         return ocp.dynamics(x, u)

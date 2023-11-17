@@ -306,14 +306,14 @@ def _setup_open_loop(ocp, t1_tol, interp_tol):
     def dynamics(t, x, sol):
         u_interp = sol(t, return_x=False, return_p=False, return_v=False)
         if x.ndim < 2:
-            u_interp = u_interp.reshape(-1, )
+            u_interp = u_interp.reshape(-1,)
         return ocp.dynamics(x, u_interp)
 
     # Terminate integration for sufficiently small running cost
     def running_cost_converged(t, x, sol):
         u_interp = sol(t, return_x=False, return_p=False, return_v=False)
         if x.ndim < 2:
-            u_interp = u_interp.reshape(-1, )
+            u_interp = u_interp.reshape(-1,)
         return ocp.running_cost(x, u_interp) - t1_tol
 
     # Terminate integration for exceeding interpolation error tolerance

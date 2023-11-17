@@ -8,98 +8,14 @@ Problem adapted from ref. [1].
     Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
 """
 
-import warnings
-
 import numpy as np
-from scipy.spatial.transform import Rotation
 
 from optimalcontrol.problem import OptimalControlProblem
 from optimalcontrol.utilities import resize_vector
 from optimalcontrol.sampling import UniformSampler
 
-
-def cross_product_matrix(w):
-    """
-    Construct the cross product matrix or matrices from one or more vectors.
-
-    Parameters
-    ----------
-    w : (3, n_vectors) or (3,) array
-        Vector(s) to construct cross product matrices for.
-
-    Returns
-    -------
-    w_x : (3, 3, n_vectors) or (3, 3) array
-        If `w` is a 1d array, then `w_x` is a 2d array with entries
-        ```
-        w_x = [[ 0,    -w[2], w[1]  ],
-               [ w[2], 0,     -w[0] ],
-               [ -w[1], w[0], 0     ]]
-        ```
-        If `w` is a 2d array, then `w_x[:, :, i]` is the cross product matrix
-        (see above) for `w[:, i]`.
-    """
-    zeros = np.zeros_like(w[0])
-    return np.array([[zeros, -w[2], w[1]],
-                     [w[2], zeros, -w[0]],
-                     [-w[1], w[0], zeros]])
-
-
-def quaternion_to_euler(quat, degrees=False, normalize=True,
-                        ignore_warnings=True):
-    """
-    Convert angles in quaternion representation to Euler angles.
-
-    Parameters
-    ----------
-    quat : (4, n_angles) or (4,) array
-        Angles in quaternion representation. `quat[:3]` are assumed to contain
-        the vector portion of the quaternion, and `quat[3]` is asssumed to
-        contain the scalar portion.
-    degrees : bool, default=False
-        If `degrees=False` (default), output Euler angles in radians. If True,
-        convert these to degrees.
-    normalize : bool, default=True
-        If `normalize=True` (default), quaternions are scaled to have unit norm
-        before converting to Euler angles.
-    ignore_warnings : bool, default=True
-        Set `ignore_warnings=True` (default) to suppress a `UserWarning` about
-        gimbal lock, if it occurs.
-
-    Returns
-    -------
-    angles : (3, n_angles) or (3,) array
-        `quat` converted to Euler angle representation. `angles[0]` contains
-        yaw, `angles[1]` contains pitch, and `angles[2]` contains roll.
-    """
-    with warnings.catch_warnings():
-        if ignore_warnings:
-            warnings.simplefilter('ignore', category=UserWarning)
-        angles = Rotation(np.asarray(quat).T, normalize=normalize)
-        return angles.as_euler('ZYX', degrees=degrees).T
-
-
-def euler_to_quaternion(angles, degrees=False):
-    """
-    Convert Euler angles to quaternion representation.
-
-    Parameters
-    ----------
-    angles : (3, n_angles) or (3,) array
-        Euler angles to convert to quaternion representation. `angles[0]`
-        is assumed to contain yaw, `angles[1]` pitch, and `angles[2]` roll.
-    degrees : bool, default=False
-        If `degrees=False` (default), assumes `angles` are in radians. If True,
-        assumes `angles` are in degrees.
-
-    Returns
-    -------
-    quat : (4, n_angles) or (4,) array
-        `angles` in quaternion representation. `quat[:3]` contains the vector
-        portion of the quaternion, and `quat[3]` contains the scalar portion.
-    """
-    angles = Rotation.from_euler('ZYX', np.asarray(angles).T, degrees=degrees)
-    return angles.as_quat().T
+from examples.common_utilities.dynamics import (cross_product_matrix,
+                                                euler_to_quaternion)
 
 
 class AttitudeControl(OptimalControlProblem):
@@ -423,38 +339,3 @@ class AttitudeControl(OptimalControlProblem):
 
         return np.concatenate((dqdt, dq0dt, dwdt, dpqdt, dpq0dt, dpwdt, L),
                               axis=0)
-
-    def _constraint_fun(self, X):
-        """
-        A (vector-valued) function which is zero when the quaternion norm state
-        constraint is satisfied.
-
-        Parameters
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states.
-
-        Returns
-        -------
-        C : (n_constraints,) or (n_constraints, n_data) array or None
-            Algebraic equation such that C(X)=0 means that X satisfies the state
-            constraints.
-        """
-        return 1. - np.sum(X[:4]**2, axis=0, keepdims=True)
-
-    def _constraint_jacobian(self, X):
-        """
-        Constraint function Jacobian dC/dX of self.constraint_fun.
-
-        Parameters
-        ----------
-        X : (n_states,) array
-            Current state.
-
-        Returns
-        -------
-        JC : (n_constraints, n_states) array or None
-            dC/dX evaluated at the point X, where C(X)=self.constraint_fun(X).
-        """
-        JC = -2. * X[:4]
-        return np.hstack((JC.reshape(1,-1), np.zeros((1,3))))

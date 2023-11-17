@@ -484,44 +484,6 @@ class MakeOCP(TemplateOCP):
 
         return np.vstack((dXdt, -dHdX, -L))
 
-    def constraint_fun(self, X):
-        '''
-        A function which is zero when the quaternion norm state constraint is
-        satisfied.
-
-        Parameters
-        ----------
-        X : (n_states, n_data) or (n_states,) array
-            Current states.
-
-        Returns
-        -------
-        C : (n_constraints,) or (n_constraints, n_data) array or None
-            Algebraic equation such that C(X)=0 means that X satisfies the state
-            constraints.
-        '''
-        quaternion = X[STATES_IDX['attitude']]
-        return 1. - np.sum(quaternion**2, axis=0)
-
-    def constraint_jacobian(self, X):
-        '''
-        Constraint function Jacobian dC/dX of self.constraint_fun.
-
-        Parameters
-        ----------
-        X : (n_states,) array
-            Current state.
-
-        Returns
-        -------
-        jac : (n_constraints, n_states) array or None
-            dC/dX evaluated at the point X, where C(X)=self.constraint_fun(X).
-        '''
-        jac = np.zeros((1,self.n_states))
-        idx = STATES_IDX['attitude']
-        jac[0, idx] = -2. * X.flatten()[idx]
-        return jac
-
     @property
     def integration_events(self):
         '''

@@ -1,8 +1,8 @@
-This software is being developed independently of NASA. It is not endorsed or supported by NASA or the US government.
+# Benchmark problems for optimal control
 
----
+_This software is being developed independently of NASA. It is not endorsed or supported by NASA or the US government._
 
-This software repository contains a collection of benchmark optimal feedback control problems. Some of these problems are described in
+This software repository contains a framework for describing optimal control problems (OCPs) in python, and a collection of some benchmark OCPs of varying difficulty. Some of these problems are described in
 
   * [Neural Network Optimal Feedback Control with Guaranteed Local Stability](https://doi.org/10.1109/OJCSYS.2022.3205863)
   * [QRnet: Optimal Regulator Design With LQR-Augmented Neural Networks](https://doi.org/10.1109/LCSYS.2020.3034415)
@@ -46,3 +46,7 @@ Run `pytest tests -s -v` from the root directory.
 Install `pdoc` and run
 
     pdoc optimalcontrol --d numpy --math -t documentation/.template/ -o documentation/
+
+---
+
+## Example problems

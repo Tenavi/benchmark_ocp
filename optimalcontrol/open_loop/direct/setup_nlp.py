@@ -107,7 +107,7 @@ def make_objective_fun(ocp, w, order='F'):
 def make_dynamic_constraint(ocp, D, order='F'):
     """
     Create a function to evaluate the dynamic constraint,
-    `ocp.dynamics(x, u) - D @ x== 0`, and its Jacobian. The Jacobian is
+    `ocp.dynamics(x, u) - D @ x == 0`, and its Jacobian. The Jacobian is
     returned as a callable which employs sparse matrices. In particular, the
     constraints at time `tau[i]` are independent of constraints at time
     `tau[j]`, and some constraint Jacobians are constant.
@@ -127,8 +127,7 @@ def make_dynamic_constraint(ocp, D, order='F'):
         Instance of `NonlinearConstraint` containing the constraint function and
         its sparse Jacobian.
     """
-    n_t = D.shape[0]
-    n_x, n_u = ocp.n_states, ocp.n_controls
+    n_x, n_u, n_t = ocp.n_states, ocp.n_controls, D.shape[0]
 
     # Dynamic constraint function evaluates to 0 when (x, u) is feasible
     def constr_fun(xu):
@@ -149,6 +148,7 @@ def make_dynamic_constraint(ocp, D, order='F'):
     def constr_jac(xu):
         x, u = separate_vars(xu, n_x, n_u, order=order)
         dfdx, dfdu = ocp.jac(x, u)
+
         if order == 'F':
             dfdx = np.transpose(dfdx, (2, 0, 1))
             dfdu = np.transpose(dfdu, (2, 0, 1))

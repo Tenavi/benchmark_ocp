@@ -532,55 +532,6 @@ class OptimalControlProblem:
 
         return dxpdt
 
-    def constraint_fun(self, x):
-        """
-        A (vector-valued) function which is zero when the state constraints are
-        satisfied.
-
-        TODO: Replace with a @property returning a list of
-            scipy.optimize.Constraint objects, or something else compatible with
-            constrained optimization
-
-        Parameters
-        ----------
-        x : (n_states, n_points) or (n_states,) array
-            State(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        c : (n_constraints,) or (n_constraints, n_points) array or None
-            Algebraic equation such that `c(x)==0` means that `x` satisfies the
-            state constraints.
-        """
-        return
-
-    def constraint_jac(self, x, c0=None):
-        """
-        Constraint function Jacobian $dc/dx$ of `self.constraint_fun`. Default
-        implementation approximates this with finite differences.
-
-        Parameters
-        ----------
-        x : (n_states, n_points) or (n_states,) array
-            State(s) arranged by (dimension, time).
-        c0 : (n_constraints,) or (n_constraints, n_points) array, optional
-            `self.constraint_fun(x)`, pre-evaluated at `x`.
-
-        Returns
-        -------
-        dcdx : (n_constraints, n_states) or (n_constraints, n_points, n_points)\
-                 array or None
-            $dc/dx (x)$ evaluated at the point `x`, where $c(x)$ denotes
-            `self.constraint_fun(x)`.
-        """
-        if c0 is None:
-            c0 = self.constraint_fun(x)
-        if c0 is None:
-            return
-
-        return approx_derivative(self.constraint_fun, x, f0=c0,
-                                 method=self._fin_diff_method)
-
     @property
     def integration_events(self):
         """

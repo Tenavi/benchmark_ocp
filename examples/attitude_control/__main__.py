@@ -11,10 +11,9 @@ from optimalcontrol.controls import LinearQuadraticRegulator
 from optimalcontrol.open_loop import solve_infinite_horizon
 
 from examples.common_utilities import data_utils, supervised_learning, plotting
-
+from examples.common_utilities.dynamics import (euler_to_quaternion,
+                                                quaternion_to_euler)
 from examples.attitude_control import AttitudeControl
-from examples.attitude_control.problem_definition import (euler_to_quaternion,
-                                                          quaternion_to_euler)
 from examples.attitude_control import example_config as config
 
 
