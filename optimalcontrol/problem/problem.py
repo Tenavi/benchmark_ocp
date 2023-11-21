@@ -60,26 +60,28 @@ class OptimalControlProblem:
 
     @property
     def control_lb(self):
-        """(`n_controls`,) array or None. Lower bounds on controls `u`."""
+        """(`n_controls`,) array or None. Lower bounds on controls `u`. Defaults
+        to `self.parameters.u_lb`."""
         return getattr(self.parameters, 'u_lb', None)
 
     @property
     def control_ub(self):
-        """(`n_controls`,) array or None. Upper bounds on controls `u`."""
+        """(`n_controls`,) array or None. Upper bounds on controls `u`. Defaults
+        to `self.parameters.u_ub`."""
         return getattr(self.parameters, 'u_ub', None)
 
     @property
     def state_lb(self):
         """(`n_states`,) array or None. Simple lower bound state constraints
-        defined by `x >= state_lb`. Currently not compatible with `indirect`
-        open loop solvers."""
+        defined by `x >= state_lb`. Defaults to `self.parameters.x_lb`.
+        WARNING: currently ignored by `indirect` open loop solvers."""
         return getattr(self.parameters, 'x_lb', None)
 
     @property
     def state_ub(self):
-        """(`n_states`,) array or None. Simple upperr bound state constraints
-        defined by `x <= state_ub`. Currently not compatible with `indirect`
-        open loop solvers."""
+        """(`n_states`,) array or None. Simple upper bound state constraints
+        defined by `x <= state_ub`. Defaults to `self.parameters.x_ub`.
+        WARNING: currently ignored by `indirect` open loop solvers."""
         return getattr(self.parameters, 'x_ub', None)
 
     def _saturate(self, u):

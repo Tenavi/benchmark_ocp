@@ -6,7 +6,7 @@ import numpy as np
 from scipy.interpolate import make_interp_spline
 from matplotlib import pyplot as plt
 
-from optimalcontrol import simulate, utilities, analysis
+from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.controls import LinearQuadraticRegulator
 from optimalcontrol.open_loop import solve_infinite_horizon
 
@@ -111,24 +111,12 @@ print("\n" + "+" * 80)
 for controller in (lqr, poly_control, nn_control):
     print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
 
-    x, f = analysis.find_equilibrium(ocp, controller, xf)
-    jac = utilities.closed_loop_jacobian(x, ocp.jac, controller)
-    eigs, max_eig = analysis.linear_stability(jac)
-
-    # If an unstable equilibrium was found, try perturbing the equilibrium
-    # slightly and integrating from there to find a stable equilibrium
-    if max_eig > 0.:
-        x += rng.normal(scale=1 / 100, size=x.shape)
-        t, x, _ = simulate.integrate_to_converge(
-            ocp, controller, x, config.t_int, config.t_max, **config.sim_kwargs)
-
-        print("Closed-loop integration from the unstable equilibrium led to:")
-        print(x[:, -1:])
-        print("Retrying root-finding...")
-
-        x, f = analysis.find_equilibrium(ocp, controller, x[:, -1])
-        jac = utilities.closed_loop_jacobian(x, ocp.jac, controller)
-        eigs, max_eig = analysis.linear_stability(jac)
+    x = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
+                                 config.t_max, **config.sim_kwargs)
+    if isinstance(x, np.ndarray):
+        print("Equilibrium point:")
+        print(x.reshape(-1, 1))
+        analyze.linear_stability(ocp, controller, x, zero_tol=1e-06)
 
 print("\n" + "+" * 80)
 

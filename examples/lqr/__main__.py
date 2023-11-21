@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import r2_score
 from importlib.machinery import SourceFileLoader
 
-from optimalcontrol import controls, simulate, utilities, analysis
+from optimalcontrol import controls, simulate, utilities, analyze
 from optimalcontrol.problem.linear_quadratic import LinearQuadraticProblem
 
 from examples.common_utilities import data_utils, supervised_learning, plotting
@@ -58,24 +58,11 @@ nn_control = supervised_learning.NeuralNetworkController(
 
 print(f"\nLinear stability analysis for {type(nn_control).__name__:s}:")
 
-x, f = analysis.find_equilibrium(ocp, nn_control, config.lqr_param_dict['xf'])
-jac = utilities.closed_loop_jacobian(x, ocp.jac, nn_control)
-eigs, max_eig = analysis.linear_stability(jac)
-
-# If an unstable equilibrium was found, try perturbing the equilibrium
-# slightly and integrating from there to find a stable equilibrium
-if max_eig > 0.:
-    x += rng.normal(scale=1/100, size=x.shape)
-    t, x, _ = simulate.integrate_to_converge(
-        ocp, nn_control, x, config.t_int, config.t_max, **config.sim_kwargs)
-
-    print("Closed-loop integration from the unstable equilibrium led to:")
-    print(x[:, -1:])
-    print("Retrying root-finding...")
-
-    x, f = analysis.find_equilibrium(ocp, nn_control, x[:, -1])
-    jac = utilities.closed_loop_jacobian(x, ocp.jac, nn_control)
-    eigs, max_eig = analysis.linear_stability(jac)
+x = analyze.find_equilibrium(ocp, nn_control, config.lqr_param_dict['xf'],
+                             config.t_int, config.t_max, **config.sim_kwargs)
+print("Equilibrium point:")
+print(x.reshape(-1, 1))
+analyze.linear_stability(ocp, nn_control, x)
 
 print("\n" + "+" * 80)
 

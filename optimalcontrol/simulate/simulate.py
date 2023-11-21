@@ -65,10 +65,10 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
 def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
                           method='RK45', atol=1e-06, rtol=1e-03):
     """
-    Integrate continuous-time system dynamics with a given feedback controller
+    Integrate continuous time system dynamics with a given feedback controller
     until a steady state is reached or a specified time horizon is exceeded.
     Integration starts at `t[0]=0` and continues over intervals of length
-    `t_int` until a steady state is reached or `t[-1]>=t_max`.
+    `t_int` until a steady state is reached or `abs(t[-1]) >= abs(t_max)`.
 
     Parameters
     ----------
@@ -82,9 +82,10 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
         Initial state.
     t_int : float
         Time interval to step integration over. This function internally calls
-        `integrate_closed_loop` with `t_span=(t[-1], t[-1] + t_int)`.
+        `integrate_closed_loop` with `t_span=(t[-1], t[-1] + t_int)`. Can be
+        negative.
     t_max : float
-        Maximum time allowed for integration.
+        Maximum time allowed for integration. Can be negative.
     norm : {1, 2, `np.inf`}, default=2
             Integration continues until `norm(f(x,u)) <= ftol`, where `f`
             denotes `ocp.dynamics` and `norm` specifies the norm used for
@@ -117,20 +118,24 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
             *  2: `t[-1]` exceeded `t_max`.
     """
     ftol = np.reshape(ftol, -1)
-    if np.size(ftol) not in (1, ocp.n_states) or np.any(ftol <= 0.):
-        raise ValueError('ftol must be a positive float or array_like')
+
+    if np.size(t_int) != 1:
+        raise ValueError("t_int must be a float")
+
+    if np.size(t_max) != 1:
+        raise ValueError("t_max must be a float")
+
+    if np.abs(t_int) > np.abs(t_max):
+        raise ValueError("abs(t_int) must be less than or equal to abs(t_max)")
+
+    if np.sign(t_int) != np.sign(t_max):
+        raise ValueError("t_int and t_max must have the same sign")
 
     if norm not in (1, 2, np.inf):
-        raise ValueError('norm must be one of {1, 2, np.inf}')
+        raise ValueError("norm must be one of {1, 2, np.inf}")
 
-    if np.size(t_int) > 1 or t_int <= 0.:
-        raise ValueError('t_int must be a positive float')
-
-    if np.size(t_max) > 1 or t_max <= 0.:
-        raise ValueError('t_max must be a positive float')
-
-    if t_int > t_max:
-        raise ValueError('t_int must be less than or equal to t_max')
+    if np.size(ftol) not in (1, ocp.n_states) or np.any(ftol <= 0.):
+        raise ValueError("ftol must be a positive float or array_like")
 
     t = np.zeros(1)
     x = np.reshape(x0, (-1, 1))
@@ -156,11 +161,11 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
         if ftol.shape[0] == ocp.n_states:
             if np.all(np.abs(f) <= ftol):
                 break
-        elif np.linalg.norm(f, ord=norm) < ftol:
+        elif np.linalg.norm(f, ord=norm) <= ftol:
             break
 
         # Time exceeds maximum time horizon
-        if t[-1] >= t_max:
+        if np.abs(t[-1]) >= np.abs(t_max):
             status = 2
             break
 
@@ -170,7 +175,7 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
 def monte_carlo_fixed_time(ocp, controller, x0, t_span, t_eval=None,
                            method='RK45', atol=1e-06, rtol=1e-03):
     """
-    Wraps `integrate_fixed_time` to integrate continuous-time system dynamics
+    Wraps `integrate_fixed_time` to integrate continuous time system dynamics
     with a given feedback controller over a fixed time horizon for multiple
     initial conditions.
 

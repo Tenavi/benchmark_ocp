@@ -182,7 +182,10 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
             warm_start_sol = _solve_infinite_horizon(ocp, t, x, u, n_nodes=n,
                                                      **solve_kwargs)
 
-            t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
+            if warm_start_sol.status == 0:
+                t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
+            elif verbose:
+                print("Ignoring failed warm start solution...")
 
         sols.append(_solve_infinite_horizon(ocp, t, x, u,
                                             n_nodes=n_nodes,

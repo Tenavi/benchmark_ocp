@@ -45,8 +45,8 @@ class AttitudeControl(OptimalControlProblem):
     @property
     def state_lb(self):
         """(`n_states`,) array. Lower bounds on quaternion states, specifying
-        that the scalar quaternion must be positive. Currently not compatible
-        with `indirect` open loop solvers."""
+        that the scalar quaternion must be positive. WARNING: currently ignored
+        by `indirect` open loop solvers."""
         x_lb = np.full(self.n_states, -np.inf)
         x_lb[3] = 0.
         return x_lb
