@@ -1,7 +1,3 @@
-"""
-TODO: write module documentation
-"""
-
 import warnings
 
 import numpy as np
