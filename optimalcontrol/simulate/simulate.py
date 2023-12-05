@@ -55,7 +55,9 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
     def jac(t, x):
         return closed_loop_jacobian(x, ocp.jac, controller)
 
-    ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=ocp.integration_events,
+    integration_events = _make_state_bound_events(ocp)
+
+    ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=integration_events,
                         t_eval=t_eval, vectorized=True, method=method,
                         rtol=rtol, atol=atol)
 
@@ -303,3 +305,44 @@ def _monte_carlo(ocp, controller, x0_pool, fun, *args, **kwargs):
         sims.append({'t': t, 'x': x, 'u': controller(x)})
 
     return np.asarray(sims, dtype=object), status
+
+
+def _make_state_bound_events(ocp):
+    x_lb, x_ub = ocp.state_lb, ocp.state_ub
+
+    if x_lb is not None and not np.any(np.isfinite(x_lb)):
+        x_lb = None
+    if x_ub is not None and not np.any(np.isfinite(x_ub)):
+        x_ub = None
+
+    if x_lb is None and x_ub is None:
+        return None
+
+    events = []
+    if x_lb is not None:
+        lb_idx = np.isfinite(x_lb)
+        x_lb = np.array(x_lb)[lb_idx]
+
+        def lb_event(t, x, *args):
+            """Function that triggers when x < x_lb"""
+            eps = x[lb_idx] - x_lb
+            return eps.min(axis=0)
+
+        lb_event.terminal = True
+        lb_event.direction = -1
+        events.append(lb_event)
+
+    if x_ub is not None:
+        ub_idx = np.isfinite(x_ub)
+        x_ub = np.array(x_ub)[ub_idx]
+
+        def ub_event(t, x, *args):
+            """Function that triggers when x_ub < x"""
+            eps = x_ub - x[ub_idx]
+            return eps.min(axis=0)
+
+        ub_event.terminal = True
+        ub_event.direction = -1
+        events.append(ub_event)
+
+    return events

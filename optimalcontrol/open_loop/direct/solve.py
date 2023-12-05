@@ -5,6 +5,7 @@ from ._optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.open_loop.solutions import CombinedSolution
 from optimalcontrol.simulate._ivp import solve_ivp
+from optimalcontrol.simulate.simulate import _make_state_bound_events
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
@@ -171,6 +172,11 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
     max_n_segments = max(int(max_n_segments), 1)
 
     f, converge_event, interp_event = _setup_open_loop(ocp, t1_tol, interp_tol)
+    bound_events = _make_state_bound_events(ocp)
+
+    events = (converge_event, interp_event)
+    if bound_events is not None:
+        events = events + tuple(bound_events)
 
     sols, t_break = [], []
 
@@ -182,7 +188,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
             warm_start_sol = _solve_infinite_horizon(ocp, t, x, u, n_nodes=n,
                                                      **solve_kwargs)
 
-            if warm_start_sol.status == 0:
+            if warm_start_sol.status in [0, 9]:
+                # Accept successful solutions or solutions which maxed out the
+                # allowed number of iterations
                 t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
             elif verbose:
                 print("Ignoring failed warm start solution...")
@@ -192,10 +200,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
                                             **solve_kwargs))
 
         ode_sol = solve_ivp(f, [0., sols[-1].t[-1]], sols[-1].x[:, 0],
-                            events=(converge_event, interp_event),
-                            args=(sols[-1],), exact_event_times=True,
-                            method=integration_method, atol=atol, rtol=rtol,
-                            vectorized=True)
+                            events=events, args=(sols[-1],),
+                            exact_event_times=True, method=integration_method,
+                            atol=atol, rtol=rtol, vectorized=True)
 
         # Integration failed
         if ode_sol.status == -1:
@@ -218,7 +225,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
 
         # Otherwise, the interpolation error is greater than the tolerance, so
         # solve a new OCP
-        t1 = ode_sol.t[-1]
+        t1 = np.maximum(ode_sol.t[-1], np.finfo(float).resolution)
 
         if len(t_break) >= 1:
             t_break.append(t1 + t_break[-1])

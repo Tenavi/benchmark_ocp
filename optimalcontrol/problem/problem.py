@@ -557,22 +557,6 @@ class OptimalControlProblem:
 
         return dxpdt
 
-    @property
-    def integration_events(self):
-        """
-        Get a (list of) callables that are tracked during integration for times
-        at which they cross zero. Such events can terminate integration early.
-
-        Returns
-        -------
-        events : None, callable, or list of callables
-            Each callable has a function signature `e = event(t, x)`. If the ODE
-            integrator finds a sign change in `e` then it searches for the time
-            `t` at which this occurs. If `event.terminal = True` then
-            integration stops.
-        """
-        return
-
     def _reshape_inputs(self, x, u):
         """
         Reshape 1d array state and controls into 2d arrays.
