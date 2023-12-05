@@ -4,7 +4,6 @@ systems. It provides a convenient interface between `OptimalControlProblem` and
 `Controller` classes with `scipy.integrate.solve_ivp`, facilitating closed-loop
 performance and stability testing of feedback control laws.
 
-
 ---
 
 * [`integrate_closed_loop`](simulate/simulate#integrate_closed_loop):

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import sparse
-from scipy.optimize import Bounds, LinearConstraint, NonlinearConstraint
+from scipy.optimize import Bounds, NonlinearConstraint
 from scipy.interpolate import make_interp_spline
 
 from optimalcontrol.utilities import resize_vector
@@ -10,7 +10,7 @@ _order_err_msg = ("order must be one of 'C' (C, row-major) or 'F' "
                   "(Fortran, column-major)")
 
 
-def setup(ocp, tau, w, D, order='F'):
+def setup(ocp, x0, tau, w, D, order='F'):
     """
     Wrapper function which calls other functions in this module to build a
     collocated objective function, dynamic constraints, and control constraints.
@@ -19,6 +19,8 @@ def setup(ocp, tau, w, D, order='F'):
     ----------
     ocp : OptimalControlProblem
         The optimal control problem to solve.
+    x0 : (n_states,) array
+        Initial condition.
     tau : (n_nodes,) array
         LGR collocation nodes on [-1, 1).
     w : (n_nodes,) array
@@ -40,26 +42,16 @@ def setup(ocp, tau, w, D, order='F'):
         its sparse Jacobian. See `make_dynamic_constraint`.
     bound_constraint : `scipy.optimize.Bounds` or None
         Instance of `Bounds` containing the control bounds mapped to the
-        decision vector of states and controls. Returned only if at least one of
-        `ocp.parameters.u_lb` and `ocp.parameters.u_ub` is not None. See
-        `make_bound_constraint`.
+        decision vector of states and controls. See `make_bound_constraint`.
     """
     # Quadrature integration of running cost
     cost_fun = make_objective_fun(ocp, w, order=order)
 
-    # Dynamic and initial condition constraints
+    # Dynamic constraint
     dyn_constr = make_dynamic_constraint(ocp, D, order=order)
 
-    # Control bounds
-    u_lb = getattr(ocp.parameters, 'u_lb', None)
-    u_ub = getattr(ocp.parameters, 'u_ub', None)
-    if u_lb is not None:
-        u_lb = resize_vector(u_lb, ocp.n_controls)
-    if u_ub is not None:
-        u_ub = resize_vector(u_ub, ocp.n_controls)
-
-    bound_constr = make_bound_constraint(u_lb, u_ub, ocp.n_states, tau.shape[0],
-                                         order=order)
+    # Control and initial condition constraints
+    bound_constr = make_bound_constraint(ocp, x0, tau.shape[0], order=order)
 
     return cost_fun, dyn_constr, bound_constr
 
@@ -101,7 +93,7 @@ def make_objective_fun(ocp, w, order='F'):
 def make_dynamic_constraint(ocp, D, order='F'):
     """
     Create a function to evaluate the dynamic constraint,
-    `ocp.dynamics(x, u) - D @ x== 0`, and its Jacobian. The Jacobian is
+    `ocp.dynamics(x, u) - D @ x == 0`, and its Jacobian. The Jacobian is
     returned as a callable which employs sparse matrices. In particular, the
     constraints at time `tau[i]` are independent of constraints at time
     `tau[j]`, and some constraint Jacobians are constant.
@@ -121,60 +113,121 @@ def make_dynamic_constraint(ocp, D, order='F'):
         Instance of `NonlinearConstraint` containing the constraint function and
         its sparse Jacobian.
     """
-    n_t = D.shape[0]
-    n_x, n_u = ocp.n_states, ocp.n_controls
-
-    # Dynamic constraint function evaluates to 0 when (x, u) is feasible
-    def constr_fun(xu):
-        x, u = separate_vars(xu, n_x, n_u, order=order)
+    def dynamics_constr_fun(x, u):
         f = ocp.dynamics(x, u)
         Dx = np.matmul(x, D.T)
-        return (f - Dx).flatten(order=order)
+        return f - Dx
+
+    return make_nonlinear_constraint(ocp.n_states, ocp.n_controls, D.shape[0],
+                                     dynamics_constr_fun, jac=ocp.jac,
+                                     linear_part=-D, order=order)
+
+
+def make_nonlinear_constraint(n_states, n_controls, n_nodes, fun, jac=None,
+                              linear_part=None, lb=0., ub=0., order='F'):
+    """
+    Utility function for applying general nonlinear constraint functions to
+    state and control decision vectors
+
+    Parameters
+    ----------
+    n_states : int
+        Number of states.
+    n_controls : int
+        Number of controls.
+    n_nodes : int
+        Number of LGR collocation points.
+    fun : callable
+        Constraint function to wrap. Expects the call signature `c = fun(x, u)`,
+        where `x` and `u` are separated states and controls with respective
+        shapes `(n_states, n_nodes)` and `(n_controls, n_nodes)`, and `c` is an
+        `(n_constraints, n_nodes)` array of constraints for which we desire
+        `lb <= c <= ub`.
+    jac : callable, optional
+        Jacobians of `fun` with respect to `x` and `u`. Expects the call
+        signature `dcdx, dcdu = jac(x, u)`, where `dcdx` is the
+        `(n_constraints, n_states, n_nodes)` array of Jacobians with respect to
+        each state `x` and `dcdu` is the `(n_constraints, n_states, n_nodes)`
+        array of Jacobians with respect each control `u`. If not provided, uses
+        numerical Jacobians.
+    linear_part : (n_nodes, n_nodes) array, optional
+        Linear part of the Jacobian with respect to states. If provided, assumes
+        that `fun` is equal to some nonlinear part plus
+        `matmul(x, linear_part.T)`. When evaluating the constraint Jacobian,
+        we sum the state Jacobian `dcdx` returned by `jac` with `linear_part`.
+        This separation can improve computational efficiency.
+    lb : (n_constraints,) array, default=0
+        Desired lower bound of the constraint function.
+    ub : (n_constraints,) array, default=0
+        Desired upper bound of the constraint function.
+    order : {'C', 'F'}, default='F'
+        Use C (row-major) or Fortran (column-major) ordering.
+
+    Returns
+    -------
+    constraint : `scipy.optimize.NonlinearConstraint`
+        Instance of `NonlinearConstraint` containing the constraint function and
+        its sparse Jacobian.
+    """
+    n_x, n_u, n_t = n_states, n_controls, n_nodes
+
+    def constr_fun(xu):
+        x, u = separate_vars(xu, n_x, n_u, order=order)
+        return fun(x, u).reshape(-1, order=order)
 
     # Generates linear component of Jacobian
-    if order == 'F':
-        linear_part = sparse.kron(-D, sparse.identity(n_x))
-    elif order == 'C':
-        linear_part = sparse.kron(sparse.identity(n_x), -D)
-    else:
-        raise ValueError(_order_err_msg)
+    if linear_part is not None:
+        if order == 'F':
+            linear_part = sparse.kron(linear_part, sparse.identity(n_x))
+        elif order == 'C':
+            linear_part = sparse.kron(sparse.identity(n_x), linear_part)
+        else:
+            raise ValueError(_order_err_msg)
 
     # Make constraint Jacobian function by summing linear and nonlinear parts
-    def constr_jac(xu):
-        x, u = separate_vars(xu, n_x, n_u, order=order)
-        dfdx, dfdu = ocp.jac(x, u)
-        if order == 'F':
-            dfdx = np.transpose(dfdx, (2, 0, 1))
-            dfdu = np.transpose(dfdu, (2, 0, 1))
-            dfdx = sparse.block_diag(dfdx)
-            dfdu = sparse.block_diag(dfdu)
-        elif order == 'C':
-            dfdx = sparse.vstack([sparse.diags(diagonals=dfdx[i],
-                                               offsets=range(0, n_t * n_x, n_t),
-                                               shape=(n_t, n_t * n_x))
-                                  for i in range(n_x)])
-            dfdu = sparse.vstack([sparse.diags(diagonals=dfdu[i],
-                                               offsets=range(0, n_t * n_u, n_t),
-                                               shape=(n_t, n_t * n_u))
-                                  for i in range(n_x)])
+    if jac is None:
+        constr_jac = None
+    else:
+        def constr_jac(xu):
+            x, u = separate_vars(xu, n_x, n_u, order=order)
+            dfdx, dfdu = jac(x, u)
 
-        return sparse.hstack((dfdx + linear_part, dfdu))
+            if order == 'F':
+                dfdx = np.transpose(dfdx, (2, 0, 1))
+                dfdu = np.transpose(dfdu, (2, 0, 1))
+                dfdx = sparse.block_diag(dfdx)
+                dfdu = sparse.block_diag(dfdu)
+            elif order == 'C':
+                dfdx = sparse.vstack(
+                    [sparse.diags(diagonals=dfdx[i],
+                                  offsets=range(0, n_t * n_x, n_t),
+                                  shape=(n_t, n_t * n_x))
+                     for i in range(n_x)])
+                dfdu = sparse.vstack(
+                    [sparse.diags(diagonals=dfdu[i],
+                                  offsets=range(0, n_t * n_u, n_t),
+                                  shape=(n_t, n_t * n_u))
+                     for i in range(n_x)])
 
-    return NonlinearConstraint(fun=constr_fun, jac=constr_jac, lb=0., ub=0.)
+            if linear_part is not None:
+                dfdx += linear_part
+
+            return sparse.hstack((dfdx, dfdu))
+
+    return NonlinearConstraint(fun=constr_fun, jac=constr_jac, lb=lb, ub=ub)
 
 
-def make_initial_condition_constraint(x0, n_controls, n_nodes, order='F'):
+def make_bound_constraint(ocp, x0, n_nodes, order='F'):
     """
-    Create a function which evaluates the initial condition constraint
-    `x(0) - x0 == 0`. This is a linear constraint which is expressed by matrix
-    multiplication.
+    Create a `Bounds` object containing control saturation constraints, initial
+    condition constraints, and simple bounds on states.
 
     Parameters
     ----------
+    ocp : OptimalControlProblem
+        The optimal control problem to solve.
     x0 : (n_states,) array
         Initial condition.
-    n_controls : int
-        Number of control variables.
     n_nodes : int
         Number of LGR collocation points.
     order : {'C', 'F'}, default='F'
@@ -182,69 +235,34 @@ def make_initial_condition_constraint(x0, n_controls, n_nodes, order='F'):
 
     Returns
     -------
-    constraints : `scipy.optimize.LinearConstraint`
-        Instance of `LinearConstraint` containing the constraint matrix and
-        initial condition.
+    bound_constraint : `scipy.optimize.Bounds`
+        Instance of `Bounds` containing state and control bounds and the initial
+        condition constraint mapped to the state and control decision vector.
     """
-    x0 = np.reshape(x0, (-1,))
-    n_states = x0.shape[0]
+    x0 = np.reshape(x0, (ocp.n_states,))
 
-    # Generates sparse matrix for multiplying combined state
-    if order == 'F':
-        A = sparse.eye(m=n_states, n=(n_states + n_controls) * n_nodes)
-    elif order == 'C':
-        A = sparse.eye(m=1, n=n_nodes)
-        A = sparse.kron(sparse.identity(n_states), A)
-        A = sparse.hstack((A, np.zeros((n_states, n_controls * n_nodes))))
+    n_x, n_u = ocp.n_states, ocp.n_controls
+
+    x_lb = _standardize_bound_vector(ocp.state_lb, -np.inf, n_x, n_nodes)
+    x_ub = _standardize_bound_vector(ocp.state_ub, np.inf, n_x, n_nodes)
+
+    x_lb[:, 0] = x0
+    x_ub[:, 0] = x0
+
+    u_lb = _standardize_bound_vector(ocp.control_lb, -np.inf, n_u, n_nodes)
+    u_ub = _standardize_bound_vector(ocp.control_ub, np.inf, n_u, n_nodes)
+
+    return Bounds(lb=collect_vars(x_lb, u_lb, order=order),
+                  ub=collect_vars(x_ub, u_ub, order=order))
+
+
+def _standardize_bound_vector(bound, fill_value, n_expect, n_nodes):
+    if bound is None:
+        bound = np.full((n_expect,), fill_value)
     else:
-        raise ValueError(_order_err_msg)
+        bound = resize_vector(bound, n_expect)
 
-    return LinearConstraint(A=A, lb=x0, ub=x0)
-
-
-def make_bound_constraint(u_lb, u_ub, n_states, n_nodes, order='F'):
-    """
-    Create the control saturation constraints for all controls. Returns None if
-    both control bounds are None.
-
-    Parameters
-    ----------
-    u_lb : (n_controls, 1) array or None
-        Lower bounds for the controls.
-    u_ub : (n_controls, 1) array or None
-        Upper bounds for the controls.
-    n_states : int
-        Number of state variables.
-    n_nodes : int
-        Number of LGR collocation points.
-    order : {'C', 'F'}, default='F'
-        Use C (row-major) or Fortran (column-major) ordering.
-
-    Returns
-    -------
-    bound_constraint : `scipy.optimize.Bounds` or None
-        Instance of `Bounds` containing the control bounds mapped to the
-        decision vector of states and controls. Returned only if at least one of
-        `u_lb` and `u_ub` is not None.
-    """
-    if u_lb is None and u_ub is None:
-        return
-
-    if u_lb is None:
-        u_lb = np.full_like(u_ub, -np.inf)
-    elif u_ub is None:
-        u_ub = np.full_like(u_lb, np.inf)
-
-    u_lb = np.reshape(u_lb, (-1, 1))
-    u_ub = np.reshape(u_ub, (-1, 1))
-
-    lb = np.concatenate((np.full(n_states * n_nodes, -np.inf),
-                         np.tile(u_lb, (1, n_nodes)).flatten(order=order)))
-
-    ub = np.concatenate((np.full(n_states * n_nodes, np.inf),
-                         np.tile(u_ub, (1, n_nodes)).flatten(order=order)))
-
-    return Bounds(lb=lb, ub=ub)
+    return np.tile(np.reshape(bound, (n_expect, 1)), (1, n_nodes))
 
 
 def collect_vars(x, u, order='F'):
@@ -269,7 +287,8 @@ def collect_vars(x, u, order='F'):
         `xu[:x.size] == x.flatten(order=order)` and
         `xu[x.size:] == u.flatten(order=order)`.
     """
-    return np.concatenate((x.flatten(order=order), u.flatten(order=order)))
+    return np.concatenate((x.reshape(-1, order=order),
+                           u.reshape(-1, order=order)))
 
 
 def separate_vars(xu, n_states, n_controls, order='F'):

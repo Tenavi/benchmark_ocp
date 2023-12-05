@@ -8,7 +8,7 @@ from scipy.integrate import solve_ivp as scipy_solve_ivp
 from optimalcontrol.simulate import integrate_fixed_time, integrate_to_converge
 from optimalcontrol.simulate._ivp import solve_ivp
 from optimalcontrol.problem import LinearQuadraticProblem
-from optimalcontrol.controls import LinearQuadraticRegulator
+from optimalcontrol.controls import LinearQuadraticRegulator, ConstantControl
 
 from ._utilities import make_LQ_params
 
@@ -99,6 +99,52 @@ def test_integrate_closed_loop_lqr(method, u_ub):
     xPx = (x[:, :1] - xf).T @ lqr.P @ (x[:, :1] - xf)
     J = ocp.total_cost(t, x, u)[-1]
     np.testing.assert_allclose(xPx, J, atol=1e-02, rtol=1e-02)
+
+
+@pytest.mark.parametrize('x_ub', (None, [np.inf, np.inf],
+                                  [0.25, np.inf], [0.25, 0.75]))
+@pytest.mark.parametrize('x_lb', (None, [-np.inf, -np.inf],
+                                  [-0.25, -np.inf], [-0.25, -0.75]))
+@pytest.mark.parametrize('x0', ([0., 0.5], [0., -0.5]))
+def test_integrate_closed_loop_bound_events(x_ub, x_lb, x0):
+    n_states = 2
+    n_controls = 1
+
+    # Neutrally stable linear system
+    A = np.array([[0., 1.],
+                  [-1., 0.]])
+    B = np.zeros((n_states, n_controls))
+    Q = np.eye(n_states)
+    R = np.eye(n_controls)
+
+    t_span = [0., 30.]
+    t_eval = np.linspace(t_span[0], t_span[-1], 301)
+
+    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-10., x0_ub=10.,
+                                 x_lb=x_lb, x_ub=x_ub)
+    ctrl = ConstantControl(0.)
+
+    t, x, status = integrate_fixed_time(ocp, ctrl, x0, t_span, t_eval=t_eval)
+
+    assert t[-1] > t_span[0]
+
+    if x_lb is not None and not np.any(np.isfinite(x_lb)):
+        x_lb = None
+    if x_ub is not None and not np.any(np.isfinite(x_ub)):
+        x_ub = None
+
+    if x_lb is None and x_ub is None:
+        assert np.isclose(t[-1], t_span[-1])
+        assert status == 0
+    else:
+        assert t[-1] < t_span[-1]
+        assert status == 1
+        if x_lb is None:
+            assert np.any(x[:, -1] > x_ub)
+        elif x_ub is None:
+            assert np.any(x[:, -1] < x_lb)
+        else:
+            assert np.any(x[:, -1] > x_ub) or np.any(x[:, -1] < x_lb)
 
 
 @pytest.mark.parametrize('norm', [1, 2, np.inf])

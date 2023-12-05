@@ -147,7 +147,8 @@ def test_get_next_segment_guess():
 @pytest.mark.parametrize('u_bound', (None, .75))
 @pytest.mark.parametrize('order', ('C', 'F'))
 @pytest.mark.parametrize('n_nodes', (18, 19))
-def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
+@pytest.mark.parametrize('n_nodes_init', (None, [8, 16]))
+def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes, n_nodes_init):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
@@ -159,7 +160,8 @@ def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     t1 = 30.
 
-    kwargs = {'n_nodes': n_nodes, 'reshape_order': order}
+    kwargs = {'n_nodes': n_nodes, 'n_nodes_init': n_nodes_init,
+              'reshape_order': order}
 
     atol = 0.05
     rtol = 0.05

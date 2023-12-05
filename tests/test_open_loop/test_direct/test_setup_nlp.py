@@ -2,8 +2,10 @@ import numpy as np
 import pytest
 from scipy.optimize._numdiff import approx_derivative
 
-from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.problem import OptimalControlProblem, LinearQuadraticProblem
 from optimalcontrol.open_loop.direct import setup_nlp, radau
+
+from tests._utilities import make_LQ_params
 
 
 rng = np.random.default_rng(123)
@@ -114,7 +116,6 @@ def test_interp_initial_guess(n, d):
         np.testing.assert_allclose(u_interp[:, k], u[:, -1], atol=1e-12)
 
 
-
 @pytest.mark.parametrize('n_states', [1, 2, 3])
 @pytest.mark.parametrize('n_controls', [1, 2, 3])
 @pytest.mark.parametrize('n_nodes', [12, 13])
@@ -194,78 +195,65 @@ def test_dynamics_setup(n_states, n_controls, n_nodes, order):
     np.testing.assert_allclose(constr_jac.toarray(), expected_jac, atol=1e-05)
 
 
-@pytest.mark.parametrize('n_nodes', [3, 4, 7, 8])
-@pytest.mark.parametrize('order', ['F', 'C'])
-def test_init_cond_setup(n_nodes, order):
-    """Check that the initial condition matrix multiplication returns the
-    correct points."""
-    n_x, n_u, n_t = 3, 2, n_nodes
-
-    # Generate random states and controls
-    x = rng.normal(size=(n_x, n_t))
-    u = rng.normal(size=(n_u, n_t))
-    xu = setup_nlp.collect_vars(x, u, order=order)
-    x0 = x[:, :1]
-
-    constr = setup_nlp.make_initial_condition_constraint(x0, n_u, n_t,
-                                                         order=order)
-
-    np.testing.assert_array_equal(constr.lb, x0.flatten())
-    np.testing.assert_array_equal(constr.ub, x0.flatten())
-    assert constr.A.shape == (n_x, (n_x + n_u)*n_t)
-    # Check that evaluating the multiplying the linear constraint matrix
-    # times the full state-control vector returns the initial condtion
-    np.testing.assert_allclose(constr.A @ xu, x0.flatten())
-
-
 @pytest.mark.parametrize('n_nodes', [3, 4, 5])
 @pytest.mark.parametrize('order', ['F', 'C'])
-@pytest.mark.parametrize('u_lb', (None, -1., [-1.], [-1., -2.],
-                                  [-np.inf, -np.inf], [-np.inf, -2.]))
-def test_bounds_setup(n_nodes, order, u_lb):
+@pytest.mark.parametrize('u_bound', (None, np.inf, 1.5, [1., np.inf]))
+@pytest.mark.parametrize('x_bound', (None, np.inf, 2., [np.inf, 2.]))
+def test_bounds_setup(n_nodes, order, u_bound, x_bound):
     """
-    Test that Bounds are initialized correctly for all different kinds of
-    possible control bounds.
+    Test that Bounds are initialized correctly for different kinds of possible
+    control bounds.
     """
-    if u_lb is None:
-        u_ub = None
-        n_u = 1
-    elif np.isinf(u_lb).all():
-        u_lb = None
-        u_ub = None
-        n_u = 2
+    n_t = n_nodes
+
+    u_ub = u_bound
+    if u_bound is None:
+        u_lb = u_ub
+        n_u = n_t - 1
     else:
-        u_lb = np.reshape(u_lb, (-1, 1))
-        u_ub = - u_lb
-        n_u = u_lb.shape[0]
+        u_lb = - np.asarray(u_ub)
+        n_u = u_lb.size
 
-    n_x, n_t = 3, n_nodes
-
-    constr = setup_nlp.make_bound_constraint(u_lb, u_ub, n_x, n_t, order=order)
-
-    if u_lb is None and u_ub is None:
-        assert constr is None
+    x_ub = x_bound
+    if x_bound is None:
+        x_lb = x_ub
+        n_x = n_t - 1
     else:
-        assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
+        x_lb = - np.asarray(x_ub)
+        n_x = x_lb.size
 
-        # No state constraints
-        assert np.isinf(constr.lb[:n_x * n_nodes]).all()
-        assert np.isinf(constr.ub[:n_x * n_nodes]).all()
+    A, B, Q, R, xf, uf = make_LQ_params(n_x, n_u)
+    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
+                                 x0_lb=-1., x0_ub=1.,
+                                 u_lb=u_lb, u_ub=u_ub, x_lb=x_lb, x_ub=x_ub)
 
-        if u_lb is None:
-            assert np.isinf(constr.lb[n_x * n_nodes:]).all()
-        else:
-            u = np.tile(u_lb, (1, n_nodes))
-            xu = setup_nlp.collect_vars(rng.normal(size=(n_x, n_t)), u,
-                                        order=order)
-            np.testing.assert_allclose(constr.lb[n_x * n_nodes:],
-                                       xu[n_x * n_nodes:], atol=1e-10)
+    x0 = ocp.sample_initial_conditions()
 
-        if u_ub is None:
-            assert np.isinf(constr.ub[n_x * n_nodes:]).all()
-        else:
-            u = np.tile(u_ub, (1, n_nodes))
-            xu = setup_nlp.collect_vars(rng.normal(size=(n_x, n_t)), u,
-                                        order=order)
-            np.testing.assert_allclose(constr.ub[n_x * n_nodes:],
-                                       xu[n_x * n_nodes:], atol=1e-10)
+    constr = setup_nlp.make_bound_constraint(ocp, x0, n_t, order=order)
+
+    assert constr.lb.shape == constr.ub.shape == ((n_x + n_u) * n_t,)
+
+    x_lb_c, u_lb_c = setup_nlp.separate_vars(constr.lb, n_x, n_u, order=order)
+    x_ub_c, u_ub_c = setup_nlp.separate_vars(constr.ub, n_x, n_u, order=order)
+
+    # Initial condition constraint
+    np.testing.assert_allclose(x_lb_c[:, 0], x0, atol=1e-14)
+    np.testing.assert_allclose(x_ub_c[:, 0], x0, atol=1e-14)
+
+    # State bounds
+    if x_bound is None:
+        np.testing.assert_allclose(x_lb_c[:, 1:], -np.inf)
+        np.testing.assert_allclose(x_ub_c[:, 1:], np.inf)
+    else:
+        for k in range(1, n_t):
+            np.testing.assert_allclose(x_lb_c[:, k], x_lb, atol=1e-14)
+            np.testing.assert_allclose(x_ub_c[:, k], x_ub, atol=1e-14)
+
+    # Control bounds
+    if u_bound is None:
+        np.testing.assert_allclose(u_lb_c, -np.inf)
+        np.testing.assert_allclose(u_ub_c, np.inf)
+    else:
+        for k in range(n_t):
+            np.testing.assert_allclose(u_lb_c[:, k], u_lb, atol=1e-14)
+            np.testing.assert_allclose(u_ub_c[:, k], u_ub, atol=1e-14)

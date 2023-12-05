@@ -94,5 +94,4 @@ class DirectSolution(OpenLoopSolution):
 
         return cls(t, x, u, p, v, minimize_result.status,
                    minimize_result.message, tau=tau,
-                   u_lb=getattr(ocp.parameters, 'u_lb', None),
-                   u_ub=getattr(ocp.parameters, 'u_ub', None))
+                   u_lb=ocp.control_lb, u_ub=ocp.control_ub)

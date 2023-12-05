@@ -3,7 +3,7 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.optimize import minimize, Bounds
 from scipy.spatial.distance import cdist
 
-from ..utilities import approx_derivative, saturate, find_saturated
+from optimalcontrol.utilities import approx_derivative, saturate
 
 
 class OptimalControlProblem:
@@ -16,7 +16,7 @@ class OptimalControlProblem:
     # required and optional parameters. To be overwritten by subclass
     # implementations.
     _required_parameters = {}
-    _optional_parameters = {'u_lb': None, 'u_ub': None}
+    _optional_parameters = {}
     # Finite difference method for default gradient, Jacobian, and Hessian
     # approximations
     _fin_diff_method = '3-point'
@@ -58,10 +58,36 @@ class OptimalControlProblem:
         `np.inf`)."""
         raise NotImplementedError
 
+    @property
+    def control_lb(self):
+        """(`n_controls`,) array or None. Lower bounds on controls `u`. Defaults
+        to `self.parameters.u_lb`."""
+        return getattr(self.parameters, 'u_lb', None)
+
+    @property
+    def control_ub(self):
+        """(`n_controls`,) array or None. Upper bounds on controls `u`. Defaults
+        to `self.parameters.u_ub`."""
+        return getattr(self.parameters, 'u_ub', None)
+
+    @property
+    def state_lb(self):
+        """(`n_states`,) array or None. Simple lower bound state constraints
+        defined by `x >= state_lb`. Defaults to `self.parameters.x_lb`.
+        WARNING: currently ignored by `indirect` open loop solvers."""
+        return getattr(self.parameters, 'x_lb', None)
+
+    @property
+    def state_ub(self):
+        """(`n_states`,) array or None. Simple upper bound state constraints
+        defined by `x <= state_ub`. Defaults to `self.parameters.x_ub`.
+        WARNING: currently ignored by `indirect` open loop solvers."""
+        return getattr(self.parameters, 'x_ub', None)
+
     def _saturate(self, u):
         """
-        Saturate control inputs between lower bound `self.parameters.u_lb` and
-        upper bound `self.parameters.u_ub`, if one or both of these are defined.
+        Saturate control inputs between lower bound `control_lb` and upper bound
+        `control_ub`, if one or both of these are defined.
 
         Parameters
         ----------
@@ -73,8 +99,7 @@ class OptimalControlProblem:
         u_sat : (n_controls,) or (n_controls, n_points) array
             Saturated control inputs arranged by (dimension, time).
         """
-        return saturate(u, lb=getattr(self.parameters, 'u_lb'),
-                        ub=getattr(self.parameters, 'u_ub'))
+        return saturate(u, lb=self.control_lb, ub=self.control_ub)
 
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
@@ -424,8 +449,8 @@ class OptimalControlProblem:
         u0 = np.resize(u0, (self.n_controls,))
         u0 = np.tile(u0, u_shape[1:])
 
-        lb = getattr(self.parameters, 'u_lb', None)
-        ub = getattr(self.parameters, 'u_ub', None)
+        lb = self.control_lb
+        ub = self.control_ub
         if lb is None and ub is None:
             bounds = None
         else:
@@ -531,71 +556,6 @@ class OptimalControlProblem:
             return dxpdt[:, 0]
 
         return dxpdt
-
-    def constraint_fun(self, x):
-        """
-        A (vector-valued) function which is zero when the state constraints are
-        satisfied.
-
-        TODO: Replace with a @property returning a list of
-            scipy.optimize.Constraint objects, or something else compatible with
-            constrained optimization
-
-        Parameters
-        ----------
-        x : (n_states, n_points) or (n_states,) array
-            State(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        c : (n_constraints,) or (n_constraints, n_points) array or None
-            Algebraic equation such that `c(x)==0` means that `x` satisfies the
-            state constraints.
-        """
-        return
-
-    def constraint_jac(self, x, c0=None):
-        """
-        Constraint function Jacobian $dc/dx$ of `self.constraint_fun`. Default
-        implementation approximates this with finite differences.
-
-        Parameters
-        ----------
-        x : (n_states, n_points) or (n_states,) array
-            State(s) arranged by (dimension, time).
-        c0 : (n_constraints,) or (n_constraints, n_points) array, optional
-            `self.constraint_fun(x)`, pre-evaluated at `x`.
-
-        Returns
-        -------
-        dcdx : (n_constraints, n_states) or (n_constraints, n_points, n_points)\
-                 array or None
-            $dc/dx (x)$ evaluated at the point `x`, where $c(x)$ denotes
-            `self.constraint_fun(x)`.
-        """
-        if c0 is None:
-            c0 = self.constraint_fun(x)
-        if c0 is None:
-            return
-
-        return approx_derivative(self.constraint_fun, x, f0=c0,
-                                 method=self._fin_diff_method)
-
-    @property
-    def integration_events(self):
-        """
-        Get a (list of) callables that are tracked during integration for times
-        at which they cross zero. Such events can terminate integration early.
-
-        Returns
-        -------
-        events : None, callable, or list of callables
-            Each callable has a function signature `e = event(t, x)`. If the ODE
-            integrator finds a sign change in `e` then it searches for the time
-            `t` at which this occurs. If `event.terminal = True` then
-            integration stops.
-        """
-        return
 
     def _reshape_inputs(self, x, u):
         """

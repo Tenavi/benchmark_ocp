@@ -289,8 +289,10 @@ class LinearQuadraticRegulator(Controller):
         else:
             dudx = np.tile(- self.K[:, None], (1, np.shape(x)[1], 1))
             dudx = np.moveaxis(dudx, 1, 2)
+            zero_idx = np.tile(zero_idx[:, None, :], (1, np.shape(x)[0], 1))
 
         dudx[zero_idx] = 0.
+
         return dudx
 
 

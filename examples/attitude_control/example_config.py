@@ -17,8 +17,8 @@ params = {}
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
-n_train = 50
-n_test = 50
+n_train = 30
+n_test = 30
 
 # Distance in radians and radians/s (by default in l-infinity and l2 norm) of
 # initial condition samples
@@ -29,10 +29,10 @@ rate_distance = np.deg2rad(5.)
 t_int = 60.
 
 # Maximum integration time allowed
-t_max = 180.
+t_max = 300.
 
 # Keyword arguments for closed-loop simulation
-sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
+sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23', 'ftol': 1e-05}
 
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {}

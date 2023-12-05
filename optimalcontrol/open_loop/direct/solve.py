@@ -5,6 +5,7 @@ from ._optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.open_loop.solutions import CombinedSolution
 from optimalcontrol.simulate._ivp import solve_ivp
+from optimalcontrol.simulate.simulate import _make_state_bound_events
 
 
 __all__ = ['solve_fixed_time', 'solve_infinite_horizon']
@@ -114,10 +115,12 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=64
         Number of nodes to use in the pseudospectral discretization for the
-        final solution.
-    n_nodes_init : int, default=`n_nodes // 2`
+        final solution. `n_nodes` must be at least 4.
+    n_nodes_init : array of ints, default=`n_nodes // 2`
         Number of nodes to use in the pseudospectral discretization of the
-        rough warm start solution.
+        rough warm start solution. If multiple `n_nodes_init` are specified,
+        performs warm start with each of these. We require
+        `3 <= n_nodes_init <= n_nodes`.
     tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
@@ -159,7 +162,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
     n_nodes = max(4, int(n_nodes))
     if n_nodes_init is None:
         n_nodes_init = n_nodes / 2
-    n_nodes_init = np.clip(n_nodes_init, 3, n_nodes - 1).astype(int)
+    n_nodes_init = np.clip(n_nodes_init, 3, n_nodes - 1)
+    n_nodes_init = np.unique(n_nodes_init.astype(int))
 
     tol = max(float(tol), np.finfo(float).eps)
     t1_tol = max(float(t1_tol), np.finfo(float).eps)
@@ -168,6 +172,11 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
     max_n_segments = max(int(max_n_segments), 1)
 
     f, converge_event, interp_event = _setup_open_loop(ocp, t1_tol, interp_tol)
+    bound_events = _make_state_bound_events(ocp)
+
+    events = (converge_event, interp_event)
+    if bound_events is not None:
+        events = events + tuple(bound_events)
 
     sols, t_break = [], []
 
@@ -175,21 +184,25 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
                     'reshape_order': reshape_order, 'verbose': verbose}
 
     for k in range(max_n_segments):
-        warm_start_sol = _solve_infinite_horizon(ocp, t, x, u,
-                                                 n_nodes=n_nodes_init,
-                                                 **solve_kwargs)
+        for n in n_nodes_init:
+            warm_start_sol = _solve_infinite_horizon(ocp, t, x, u, n_nodes=n,
+                                                     **solve_kwargs)
 
-        t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
+            if warm_start_sol.status in [0, 9]:
+                # Accept successful solutions or solutions which maxed out the
+                # allowed number of iterations
+                t, x, u = warm_start_sol.t, warm_start_sol.x, warm_start_sol.u
+            elif verbose:
+                print("Ignoring failed warm start solution...")
 
         sols.append(_solve_infinite_horizon(ocp, t, x, u,
                                             n_nodes=n_nodes,
                                             **solve_kwargs))
 
         ode_sol = solve_ivp(f, [0., sols[-1].t[-1]], sols[-1].x[:, 0],
-                            events=(converge_event, interp_event),
-                            args=(sols[-1],), exact_event_times=True,
-                            method=integration_method, atol=atol, rtol=rtol,
-                            vectorized=True)
+                            events=events, args=(sols[-1],),
+                            exact_event_times=True, method=integration_method,
+                            atol=atol, rtol=rtol, vectorized=True)
 
         # Integration failed
         if ode_sol.status == -1:
@@ -212,7 +225,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
 
         # Otherwise, the interpolation error is greater than the tolerance, so
         # solve a new OCP
-        t1 = ode_sol.t[-1]
+        t1 = np.maximum(ode_sol.t[-1], np.finfo(float).resolution)
 
         if len(t_break) >= 1:
             t_break.append(t1 + t_break[-1])
@@ -258,7 +271,8 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
     n_nodes : int, default=32
-        Number of nodes to use in the pseudospectral discretization.
+        Number of nodes to use in the pseudospectral discretization. Must be at
+        least 3.
     tol : float, default=1e-06
         Convergence tolerance for the SLSQP optimizer.
     max_iter : int, default=500
@@ -280,15 +294,12 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
         `sol.status==0`.
     """
     tau, w, D = radau.make_scaled_lgr(n_nodes)
-    cost_fun, dyn_constr, bound_constr = setup_nlp.setup(
-        ocp, tau, w, D, order=reshape_order)
+    cost_fun, dyn_constr, bounds = setup_nlp.setup(ocp, x[:, 0], tau, w, D,
+                                                   order=reshape_order)
 
     # Map initial guess to LGR points
     x, u = setup_nlp.interp_guess(t, x, u, tau, radau.inverse_time_map)
     xu = setup_nlp.collect_vars(x, u, order=reshape_order)
-
-    x0_constr = setup_nlp.make_initial_condition_constraint(
-        x[:, :1], ocp.n_controls, n_nodes, order=reshape_order)
 
     if verbose:
         print(f"\nNumber of LGR nodes: {n_nodes}")
@@ -296,9 +307,9 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
 
     minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
 
-    minimize_result = minimize(cost_fun, xu, bounds=bound_constr,
-                               constraints=[dyn_constr, x0_constr],
-                               tol=tol, jac=True, options=minimize_opts)
+    minimize_result = minimize(cost_fun, xu, bounds=bounds,
+                               constraints=dyn_constr, jac=True, tol=tol,
+                               options=minimize_opts)
 
     return DirectSolution.from_minimize_result(minimize_result, ocp, tau, w,
                                                order=reshape_order)
@@ -309,14 +320,14 @@ def _setup_open_loop(ocp, t1_tol, interp_tol):
     def dynamics(t, x, sol):
         u_interp = sol(t, return_x=False, return_p=False, return_v=False)
         if x.ndim < 2:
-            u_interp = u_interp.reshape(-1, )
+            u_interp = u_interp.reshape(-1,)
         return ocp.dynamics(x, u_interp)
 
     # Terminate integration for sufficiently small running cost
     def running_cost_converged(t, x, sol):
         u_interp = sol(t, return_x=False, return_p=False, return_v=False)
         if x.ndim < 2:
-            u_interp = u_interp.reshape(-1, )
+            u_interp = u_interp.reshape(-1,)
         return ocp.running_cost(x, u_interp) - t1_tol
 
     # Terminate integration for exceeding interpolation error tolerance

@@ -213,6 +213,8 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
 
     exact_event_times = bool(exact_event_times)
 
+    y0 = np.reshape(y0, -1)
+
     if args is not None:
         # Wrap the user's fun (and jac, if given) in lambdas to hide the
         # additional parameters.  Pass in the original fun as a keyword
