@@ -354,7 +354,7 @@ def pack_dataframe(t, x, u, p=None, v=None):
     if p is not None:
         if np.shape(x) != np.shape(p):
             raise ValueError('x and p must have the same shape.')
-        p = np.reshape(x, (n_states, -1))
+        p = np.reshape(p, (n_states, -1))
         data = data + (p,)
     if v is not None:
         v = np.reshape(v, (1, -1))

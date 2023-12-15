@@ -14,6 +14,7 @@ from tests.test_open_loop.test_indirect import (setup_lqr_test, get_lqr_sol,
 @pytest.mark.parametrize('order', ('C', 'F'))
 @pytest.mark.parametrize('n_nodes', (36, 37))
 @pytest.mark.parametrize('time_map', (direct.time_maps.TimeMapRational,
+                                      direct.time_maps.TimeMapLog,
                                       direct.time_maps.TimeMapLog2))
 def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes, time_map):
     """
@@ -26,7 +27,7 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes, time_map):
 
     t1 = 30.
 
-    kwargs = {'time_map': time_map, 'n_nodes': n_nodes, 'reshape_order': order}
+    kwargs = {'n_nodes': n_nodes, 'reshape_order': order, 'time_map': time_map}
 
     atol = 0.05
     rtol = 0.05
@@ -44,6 +45,43 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes, time_map):
 
     assert ocp_sol.status == 0
     assert_matches_reference(ocp_sol, t, x, u, atol=atol, rtol=rtol)
+
+
+@pytest.mark.parametrize('n_nodes', (25, 36))
+@pytest.mark.parametrize('time_map', (direct.time_maps.TimeMapRational,
+                                      direct.time_maps.TimeMapLog,
+                                      direct.time_maps.TimeMapLog2))
+@pytest.mark.parametrize('time_scale', (0.55, 1.23))
+def test_solve_infinite_horizon_lqr_scale(n_nodes, time_map, time_scale):
+    n_states = 3
+    n_controls = 2
+
+    t1 = 30.
+
+    kwargs = {'n_nodes': n_nodes, 'time_map': time_map}
+
+    atol = 0.05
+    rtol = 0.05
+
+    ocp, lqr = setup_lqr_test(n_states, n_controls, seed=123)
+    x0 = ocp.sample_initial_conditions(n_samples=1, distance=1.)
+    t, x, p, u = get_lqr_sol(ocp, lqr, x0, t1)
+
+    base_ocp_sol = direct.solve._solve_infinite_horizon(ocp, t, x, u, **kwargs)
+
+    assert base_ocp_sol.status == 0
+    assert_matches_reference(base_ocp_sol, t, x, u, atol=atol, rtol=rtol)
+
+    scaled_ocp_sol = direct.solve._solve_infinite_horizon(ocp, t, x, u,
+                                                          time_scale=time_scale,
+                                                          **kwargs)
+
+    assert scaled_ocp_sol.status == 0
+    assert_matches_reference(scaled_ocp_sol, base_ocp_sol.t, base_ocp_sol.x,
+                             base_ocp_sol.u, v=base_ocp_sol.v,
+                             atol=atol, rtol=rtol)
+
+    np.testing.assert_allclose(scaled_ocp_sol.t, base_ocp_sol.t / time_scale)
 
 
 @pytest.mark.parametrize('t1_tol', ('easy', 'strict'))
@@ -150,11 +188,10 @@ def test_get_next_segment_guess():
 @pytest.mark.parametrize('order', ('C', 'F'))
 @pytest.mark.parametrize('n_nodes', (18, 19))
 @pytest.mark.parametrize('n_nodes_init', (None, [8, 16]))
-@pytest.mark.parametrize('time_map', (direct.time_maps.TimeMapRational,
-                                      direct.time_maps.TimeMapLog2,
-                                      'rational', 'log2'))
+@pytest.mark.parametrize('time_map', ('rational', 'log', 'log2'))
+@pytest.mark.parametrize('time_scale', (0.9, 1.0, 1.1))
 def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes, n_nodes_init,
-                                    time_map):
+                                    time_map, time_scale):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
@@ -167,7 +204,8 @@ def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes, n_nodes_init,
     t1 = 30.
 
     kwargs = {'n_nodes': n_nodes, 'n_nodes_init': n_nodes_init,
-              'time_map': time_map, 'reshape_order': order}
+              'reshape_order': order, 'time_map': time_map,
+              'time_scale': time_scale}
 
     atol = 0.05
     rtol = 0.05

@@ -1,3 +1,5 @@
+# benchmark_ocp
+
 *This software is being developed independently of NASA. It is not endorsed or supported by NASA or the US government.*
 
 ##### Authors
@@ -59,9 +61,7 @@ Install `pdoc` and run
 
 ---
 
-# Overview
-
-This section provides an overview of the `optimalcontrol` software package. The benchmark problems are documented separately.
+# The `optimalcontrol` package
 
 The `optimalcontrol` package is made up of the following modules:
 
@@ -78,3 +78,7 @@ The `optimalcontrol` package is made up of the following modules:
 * `analyze`: Tools for linearization and linear closed-loop stability analysis. In development.
 
 * `utilities`: General utility functions.
+
+---
+
+# The benchmark `examples`

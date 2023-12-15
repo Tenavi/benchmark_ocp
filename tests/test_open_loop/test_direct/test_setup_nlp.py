@@ -83,6 +83,7 @@ class PolynomialDynamics(OptimalControlProblem):
 @pytest.mark.parametrize('n', [11, 12])
 @pytest.mark.parametrize('d', [1, 2])
 @pytest.mark.parametrize('time_map', (time_maps.TimeMapRational,
+                                      time_maps.TimeMapLog,
                                       time_maps.TimeMapLog2))
 def test_interp_initial_guess(n, d, time_map):
     """

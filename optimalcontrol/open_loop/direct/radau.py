@@ -37,7 +37,8 @@ def make_lgr(n_nodes):
     return tau, w, D
 
 
-def make_scaled_lgr(n_nodes, time_map_deriv=TimeMapLog2.derivative):
+def make_scaled_lgr(n_nodes, time_map_deriv=TimeMapLog2.derivative,
+                    time_scale=1.):
     """
     Constructs LGR collocation points, integration weights, and differentiation
     matrix. The weights are scaled by `time_map_deriv(tau)`, the derivative of
@@ -51,6 +52,13 @@ def make_scaled_lgr(n_nodes, time_map_deriv=TimeMapLog2.derivative):
     time_map_deriv : callable, default=`TimeMapLog2.derivative`
         Function which evaluates the derivative of the mapping from LGR points
         `tau` to physical time `t`.
+    time_scale : float, default=1
+        Optional positive constant by which to scale time. The dynamics are
+        re-parameterized in terms of `s = time_scale * t`, such that if
+        `dx_dt = f(x(t), u(t))`, the dynamics are rewritten as
+        `dx_ds = dx_dt * dt_ds = f(x(s), u(s)) / time_scale`. This allows tuning
+        the timescale to match the mapping between physical time and the
+        half-open interval.
 
     Returns
     -------
@@ -58,14 +66,17 @@ def make_scaled_lgr(n_nodes, time_map_deriv=TimeMapLog2.derivative):
         LGR collocation nodes on [-1, 1).
     w : (n_nodes,) array
         LGR quadrature weights corresponding to the collocation points `tau`,
-        scaled by `time_map_deriv(tau)`.
+        scaled by `time_map_deriv(tau) / time_scale`.
     D : (n_nodes, n_nodes) array
         LGR differentiation matrix corresponding to the collocation points
-        `tau`, scaled by `1 / time_map_deriv(tau)`.
+        `tau`, scaled by `time_scale / time_map_deriv(tau)`.
     """
     tau, w, D = make_lgr(n_nodes)
 
-    r_tau = time_map_deriv(tau)
+    if time_scale <= 0.:
+        raise ValueError("time_scale must be a positive float")
+
+    r_tau = time_map_deriv(tau) / time_scale
     w = w * r_tau
     D = np.einsum('i,ij->ij', 1. / r_tau, D)
 

@@ -144,6 +144,7 @@ def test_lgr_multivariate_differentiate(n, n_dims):
 
 
 @pytest.mark.parametrize('time_map', (time_maps.TimeMapRational,
+                                      time_maps.TimeMapLog,
                                       time_maps.TimeMapLog2))
 def test_time_maps(time_map):
     t_orig = np.linspace(0., 10.)

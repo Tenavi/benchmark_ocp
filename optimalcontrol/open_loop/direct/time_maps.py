@@ -83,6 +83,26 @@ class TimeMapRational(TimeMapRadau):
         return 2. / (1. - np.asarray(tau)) ** 2
 
 
+class TimeMapLog(TimeMapRadau):
+    """
+    Maps physical time `t` to the half-open interval [-1, 1) by the map
+    `tau = 1 - 2 * exp(- t)`. This is the map given by eq. (3) in Garg
+    (2011).
+    """
+
+    @staticmethod
+    def physical_to_radau(t):
+        return 1. - 2. * np.exp(-np.asarray(t))
+
+    @staticmethod
+    def radau_to_physical(tau):
+        return np.log(2. / (1. - np.asarray(tau)))
+
+    @staticmethod
+    def derivative(tau):
+        return 1. / (1. - np.asarray(tau))
+
+
 class TimeMapLog2(TimeMapRadau):
     """
     Maps physical time `t` to the half-open interval [-1, 1) by the map

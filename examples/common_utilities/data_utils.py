@@ -78,8 +78,8 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
 
     print("\nSolving open loop optimal control problems...")
     w = str(len('attempted') + 2)
-    row = '{:^' + w + '}|{:^' + w + '}|{:^' + w + '}'
-    h1 = row.format('solved', 'attempted', 'desired')
+    row = '{:^' + w + '}|{:^' + w + '}|{:^' + w + '}|{:^' + w + '}'
+    h1 = row.format('solved', 'attempted', 'desired', 'elapsed')
     headers = ('\n' + h1, len(h1) * '-')
 
     for header in headers:
@@ -113,8 +113,12 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
         if verbose:
             for header in headers:
                 print(header)
+
         overwrite = not verbose and i + 1 < len(guesses)
-        print(row.format(n_succeed, i + 1, len(guesses)),
+
+        total_time = sol_time + fail_time
+        total_time = ("{:" + str(int(w) - 6) + ".0f} s").format(total_time)
+        print(row.format(n_succeed, i + 1, len(guesses), total_time),
               end='\r' if overwrite else None)
 
     print("\nTotal solution time:")

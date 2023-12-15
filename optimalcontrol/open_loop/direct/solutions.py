@@ -9,13 +9,14 @@ from .setup_nlp import separate_vars
 
 class DirectSolution(OpenLoopSolution):
     def __init__(self, t, x, u, p, v, status, message, time_map=TimeMapLog2,
-                 tau=None, u_lb=None, u_ub=None):
+                 time_scale=1., tau=None, u_lb=None, u_ub=None):
         self._u_lb, self._u_ub = u_lb, u_ub
 
         if tau is None:
-            tau = time_map.physical_to_radau(t)
+            tau = time_map.physical_to_radau(t * time_scale)
 
         self._time_map = time_map
+        self._time_scale = float(time_scale)
 
         # BarycentricInterpolator uses np.random.permutation at initialization,
         # so control the random behavior
@@ -32,7 +33,7 @@ class DirectSolution(OpenLoopSolution):
 
     def __call__(self, t, return_x=True, return_u=True, return_p=True,
                  return_v=True):
-        tau = self._time_map.physical_to_radau(t)
+        tau = self._time_map.physical_to_radau(t * self._time_scale)
 
         if return_x:
             x = self._x_interp(tau)
@@ -54,7 +55,7 @@ class DirectSolution(OpenLoopSolution):
 
     @classmethod
     def from_minimize_result(cls, minimize_result, ocp, tau, w,
-                             time_map=TimeMapLog2, order='F'):
+                             time_map=TimeMapLog2, time_scale=1., order='F'):
         """
         Instantiate a `DirectSolution` from the result of calling
         `scipy.optimize.minimize` on a nonlinear programming problem set up with
@@ -72,10 +73,14 @@ class DirectSolution(OpenLoopSolution):
             LGR collocation nodes on [-1, 1). See `.radau.make_lgr`.
         w : (n_nodes,) array
             LGR quadrature weights corresponding to the collocation points
-            `tau`.  See `.radau.make_lgr`.
+            `tau`. See `.radau.make_lgr`.
         time_map : `TimeMapRadau`, default=`TimeMapLog2`
             `TimeMapRadau` subclass implementing `physical_to_radau` and
             `radau_to_physical` methods.
+        time_scale : float, default=1
+            Time scaling constant. It is assumed that the problem was solved
+            with dynamics that were re-parameterized in terms of
+            `s = time_scale * t`.
         order : {'C', 'F'}, default='F'
             If the problem was set up with C ('C', row-major) or Fortran
             ('F', column-major) ordering.
@@ -85,7 +90,7 @@ class DirectSolution(OpenLoopSolution):
         ocp_sol : `DirectSolution`
             The open-loop solution to `ocp` extracted from `minimize_result`.
         """
-        t = time_map.radau_to_physical(tau)
+        t = time_map.radau_to_physical(tau) / time_scale
         x, u = separate_vars(minimize_result.x, ocp.n_states, ocp.n_controls,
                              order=order)
 
@@ -98,6 +103,7 @@ class DirectSolution(OpenLoopSolution):
         for k in range(v.shape[0]):
             v[k] = np.matmul(L[k:], w[k:])
 
-        return cls(t, x, u, p, v, minimize_result.status,
-                   minimize_result.message, time_map=time_map, tau=tau,
+        return cls(t, x, u, p, v,
+                   minimize_result.status, minimize_result.message,
+                   time_map=time_map, time_scale=time_scale, tau=tau,
                    u_lb=ocp.control_lb, u_ub=ocp.control_ub)
