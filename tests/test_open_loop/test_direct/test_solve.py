@@ -13,7 +13,9 @@ from tests.test_open_loop.test_indirect import (setup_lqr_test, get_lqr_sol,
 @pytest.mark.parametrize('u_bound', (None, .75))
 @pytest.mark.parametrize('order', ('C', 'F'))
 @pytest.mark.parametrize('n_nodes', (36, 37))
-def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
+@pytest.mark.parametrize('time_map', (direct.time_maps.TimeMapRational,
+                                      direct.time_maps.TimeMapLog2))
+def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes, time_map):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
@@ -24,7 +26,7 @@ def test_single_solve_infinite_horizon_lqr(u_bound, order, n_nodes):
 
     t1 = 30.
 
-    kwargs = {'n_nodes': n_nodes, 'reshape_order': order}
+    kwargs = {'time_map': time_map, 'n_nodes': n_nodes, 'reshape_order': order}
 
     atol = 0.05
     rtol = 0.05
@@ -148,7 +150,11 @@ def test_get_next_segment_guess():
 @pytest.mark.parametrize('order', ('C', 'F'))
 @pytest.mark.parametrize('n_nodes', (18, 19))
 @pytest.mark.parametrize('n_nodes_init', (None, [8, 16]))
-def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes, n_nodes_init):
+@pytest.mark.parametrize('time_map', (direct.time_maps.TimeMapRational,
+                                      direct.time_maps.TimeMapLog2,
+                                      'rational', 'log2'))
+def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes, n_nodes_init,
+                                    time_map):
     """
     Basic test of an LQR-controlled linear system. The OCP is solved over an
     approximate infinite horizon and compared with LQR, which is known to be
@@ -161,7 +167,7 @@ def test_solve_infinite_horizon_lqr(u_bound, order, n_nodes, n_nodes_init):
     t1 = 30.
 
     kwargs = {'n_nodes': n_nodes, 'n_nodes_init': n_nodes_init,
-              'reshape_order': order}
+              'time_map': time_map, 'reshape_order': order}
 
     atol = 0.05
     rtol = 0.05

@@ -15,12 +15,12 @@ directly from `open_loop`, and are also exposed as the
 The direct methods implemented in this module use pseudospectral collocation to
 transform the open-loop OCP into a constrained optimization problem, which is
 then solved using sequential least squares quadratic programming (SLSQP). See
-refs. [1-3] for more details.
+refs. [1-4] for more details.
 
 The indirect method is to solve the two-point boundary value problem (BVP)
 arising from Pontryagin's Maximum Principle (PMP), which provides necessary
 conditions for OCPs. This BVP is solved using `scipy.integrate.solve_bvp`. See
-refs. [4, 5] for more details.
+refs. [5, 6] for more details.
 
 The direct method is generally considered to be more robust than the indirect
 method, which is known to be highly sensitive to the initial guess for the
@@ -29,7 +29,7 @@ more accurate results and can also be faster.
 
 In general, the performance of both approaches depends on the problem scaling,
 problem complexity, and the quality of the initial guess provided to the solver.
-More information and practical considerations are given in refs. [1-5] below.
+More information and practical considerations are given in refs. [1-6] below.
 
 ##### References
 
@@ -42,11 +42,14 @@ More information and practical considerations are given in refs. [1-5] below.
 3. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
     nonlinear optimal control problems*, Journal of Guidance, Control, and
     Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
-4. W. Kang, Q. Gong, T. Nakamura-Zimmerer, and F. Fahroo, *Algorithms of data
+4. D. Garg, W. W. Hager, and A. V. Rao, *Pseudospectral methods for solving
+    infinite-horizon optimal control problems*, Automatica, 47 (2011), pp.
+    829-837. https://doi.org/10.1016/j.automatica.2011.01.085
+5. W. Kang, Q. Gong, T. Nakamura-Zimmerer, and F. Fahroo, *Algorithms of data
     development for deep learning and feedback design: A survey*, Physica D:
     Nonlinear Phenomena (2021), pp. 132955.
     https://doi.org/10.1016/j.physd.2021.132955
-5. I. M. Ross, *A Primer on Pontryagin’s Principle in Optimal Control*,
+6. I. M. Ross, *A Primer on Pontryagin’s Principle in Optimal Control*,
     Collegiate Publishers, San Francisco, CA, 2nd ed., 2015.
 
 ---

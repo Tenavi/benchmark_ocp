@@ -3,7 +3,7 @@ import pytest
 from scipy.optimize._numdiff import approx_derivative
 
 from optimalcontrol.problem import OptimalControlProblem, LinearQuadraticProblem
-from optimalcontrol.open_loop.direct import setup_nlp, radau
+from optimalcontrol.open_loop.direct import setup_nlp, radau, time_maps
 
 from tests._utilities import make_LQ_params
 
@@ -82,14 +82,16 @@ class PolynomialDynamics(OptimalControlProblem):
 
 @pytest.mark.parametrize('n', [11, 12])
 @pytest.mark.parametrize('d', [1, 2])
-def test_interp_initial_guess(n, d):
+@pytest.mark.parametrize('time_map', (time_maps.TimeMapRational,
+                                      time_maps.TimeMapLog2))
+def test_interp_initial_guess(n, d, time_map):
     """
     Test that the interpolation code recovers the original points if tau = t,
     and that extrapolation uses the last values in the guess.
     """
     t1 = 10.
     t = np.linspace(0., t1, n)
-    tau = radau.time_map(t)
+    tau = time_map.physical_to_radau(t)
 
     x = np.cos(t) * t
     u = np.sin(-t)
@@ -100,18 +102,17 @@ def test_interp_initial_guess(n, d):
         x = np.vstack((x, x[0] + k))
         u = np.vstack((u, u[0] - k))
 
-    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau,
-                                                radau.inverse_time_map)
+    t_interp = time_map.radau_to_physical(tau)
+    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, t_interp)
 
     np.testing.assert_allclose(x_interp, x, atol=1e-12)
     np.testing.assert_allclose(u_interp, u, atol=1e-12)
 
-    tau_extra = radau.time_map(np.linspace(t1, 2. * t1, n - 1))
+    t_interp = np.linspace(t1, 2. * t1, n - 1)
 
-    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, tau_extra,
-                                                radau.inverse_time_map)
+    x_interp, u_interp = setup_nlp.interp_guess(t, x, u, t_interp)
 
-    for k in range(tau_extra.shape[0]):
+    for k in range(t_interp.shape[0]):
         np.testing.assert_allclose(x_interp[:, k], x[:, -1], atol=1e-12)
         np.testing.assert_allclose(u_interp[:, k], u[:, -1], atol=1e-12)
 

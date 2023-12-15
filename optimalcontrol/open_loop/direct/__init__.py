@@ -1,7 +1,8 @@
 """
 This submodule implements a direct method for open-loop optimal control, based
 on Legendre Gauss Radau (LGR) pseudospectral collocation. The implementation
-follows the methodology proposed in refs. [1-3].
+follows the methodology proposed in refs. [1-3], with a modification of the time
+mapping as presented in ref. [4].
 
 ##### Functions
 
@@ -15,9 +16,12 @@ follows the methodology proposed in refs. [1-3].
 
 ##### Submodules
 
-* [`Radau`](direct/radau):
+* [`radau`](direct/radau):
     Functions to construct the LGR collocation points, differentiation matrix,
-    and integration weights, and map from physical time in [0, inf) to the
+    and integration weights.
+
+* [`time_maps`](direct/time_maps):
+    Classes implementing various mappings from physical time in [0, inf) to the
     half-open interval [-1, 1).
 
 * [`setup_nlp`](direct/setup_nlp):
@@ -36,6 +40,9 @@ follows the methodology proposed in refs. [1-3].
 3. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
     nonlinear optimal control problems*, Journal of Guidance, Control, and
     Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
+4. D. Garg, W. W. Hager, and A. V. Rao, *Pseudospectral methods for solving
+    infinite-horizon optimal control problems*, Automatica, 47 (2011), pp.
+    829-837. https://doi.org/10.1016/j.automatica.2011.01.085
 """
 
 from .solve import *

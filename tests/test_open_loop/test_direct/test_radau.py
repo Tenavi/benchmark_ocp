@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from scipy.optimize._numdiff import approx_derivative
 
-from optimalcontrol.open_loop.direct import radau
+from optimalcontrol.open_loop.direct import radau, time_maps
 
 
 rng = np.random.default_rng()
@@ -100,7 +100,7 @@ def test_lgr_differentiate(n):
     tau, w, D = radau.make_lgr(n)
     lgr_derivative = np.matmul(D, poly(tau))
 
-    np.testing.assert_allclose(lgr_derivative, poly.deriv()(tau))
+    np.testing.assert_allclose(lgr_derivative, poly.deriv()(tau), atol=1e-12)
 
 
 @pytest.mark.parametrize('n_dims', [1, 2, 3])
@@ -143,13 +143,16 @@ def test_lgr_multivariate_differentiate(n, n_dims):
     np.testing.assert_allclose(lgr_derivative, expected_derivative)
 
 
-def test_time_map():
+@pytest.mark.parametrize('time_map', (time_maps.TimeMapRational,
+                                      time_maps.TimeMapLog2))
+def test_time_maps(time_map):
     t_orig = np.linspace(0., 10.)
-    tau = radau.time_map(t_orig)
-    t = radau.inverse_time_map(tau)
-    assert np.allclose(t, t_orig)
+    tau = time_map.physical_to_radau(t_orig)
+    t = time_map.radau_to_physical(tau)
+    np.testing.assert_allclose(t, t_orig, atol=1e-14)
 
-    r = radau.inverse_time_map_deriv(tau)
+    r = time_map.derivative(tau)
     for k in range(tau.shape[0]):
-        r_num = approx_derivative(radau.inverse_time_map, tau[k], method='cs')
+        r_num = approx_derivative(time_map.radau_to_physical, tau[k],
+                                  method='cs')
         assert(np.isclose(r[k], r_num))

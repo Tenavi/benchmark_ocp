@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.special import legendre, roots_jacobi
 
+from .time_maps import TimeMapLog2
+
 
 def make_lgr(n_nodes):
     """
@@ -35,17 +37,20 @@ def make_lgr(n_nodes):
     return tau, w, D
 
 
-def make_scaled_lgr(n_nodes):
+def make_scaled_lgr(n_nodes, time_map_deriv=TimeMapLog2.derivative):
     """
     Constructs LGR collocation points, integration weights, and differentiation
-    matrix. The weights are scaled by `inverse_time_map_deriv(tau)`, the
-    derivative of the mapping from physical time to LGR points, and the
-    differentiation matrix is scaled by `1 / inverse_time_map_deriv(tau)`.
+    matrix. The weights are scaled by `time_map_deriv(tau)`, the derivative of
+    the mapping from LGR points to physical time, and the differentiation matrix
+    is scaled by `1 / time_map_deriv(tau)`.
 
     Parameters
     ----------
     n_nodes : int
         Number of collocation nodes. Must be `n_nodes >= 3`.
+    time_map_deriv : callable, default=`TimeMapLog2.derivative`
+        Function which evaluates the derivative of the mapping from LGR points
+        `tau` to physical time `t`.
 
     Returns
     -------
@@ -53,14 +58,14 @@ def make_scaled_lgr(n_nodes):
         LGR collocation nodes on [-1, 1).
     w : (n_nodes,) array
         LGR quadrature weights corresponding to the collocation points `tau`,
-        scaled by `inverse_time_map_deriv(tau)`.
+        scaled by `time_map_deriv(tau)`.
     D : (n_nodes, n_nodes) array
         LGR differentiation matrix corresponding to the collocation points
-        `tau`, scaled by `1 / inverse_time_map_deriv(tau)`.
+        `tau`, scaled by `1 / time_map_deriv(tau)`.
     """
     tau, w, D = make_lgr(n_nodes)
 
-    r_tau = inverse_time_map_deriv(tau)
+    r_tau = time_map_deriv(tau)
     w = w * r_tau
     D = np.einsum('i,ij->ij', 1. / r_tau, D)
 
@@ -181,68 +186,6 @@ def make_lgr_diff_matrix(tau, legendre_eval=None):
             else:
                 D[i, j] = 1. / (2. * (1. - tau[i]))
     return D
-
-
-def time_map(t):
-    """
-    Convert physical time `t` to the half-open interval [-1, 1) by the map
-    ```
-    tau = (t - 1) / (t + 1)
-    ```
-
-    Parameters
-    ----------
-    t : (n_points,) array
-        Physical time, `t >= 0`.
-
-    Returns
-    -------
-    tau : (n_points,) array
-        Mapped time points in [-1, 1).
-    """
-    t = np.asarray(t)
-    return (t - 1.) / (t + 1.)
-
-
-def inverse_time_map(tau):
-    """
-    Convert points `tau` from half-open interval [-1, 1) to physical time by the
-    map
-    ```
-    t = (1 + tau) / (1 - tau)
-    ```
-
-    Parameters
-    ----------
-    tau : (n_points,) array
-        Mapped time points in [-1, 1).
-
-    Returns
-    -------
-    t : (n_points,) array
-        Physical time, `t >= 0`.
-    """
-    tau = np.asarray(tau)
-    return (1. + tau) / (1. - tau)
-
-
-def inverse_time_map_deriv(tau):
-    r"""
-    Derivative of the `inverse_time_map` from Radau points `tau` in [-1, 1) to
-    physical time `t`. Used for chain rule.
-
-    Parameters
-    ----------
-    tau : (n_points,) array
-        Mapped time points in [-1, 1).
-
-    Returns
-    -------
-    r : (n_points,) array
-        Derivative of the inverse time map,
-        $r(\tau) = dt/d\tau = 2 / (1 - \tau)^2$.
-    """
-    return 2. / (1. - np.asarray(tau)) ** 2
 
 
 def _check_size_n(n_nodes):

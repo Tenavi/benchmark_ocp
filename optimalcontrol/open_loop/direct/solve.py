@@ -1,6 +1,6 @@
 import numpy as np
 
-from . import setup_nlp, radau
+from . import setup_nlp, radau, time_maps
 from ._optimize import minimize
 from .solutions import DirectSolution
 from optimalcontrol.open_loop.solutions import CombinedSolution
@@ -59,11 +59,12 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, n_nodes_init=None, tol=1e-06,
     raise NotImplementedError
 
 
-def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
-                           tol=1e-06, max_iter=500, t1_tol=1e-06,
-                           interp_tol=1e-03, max_n_segments=10,
-                           integration_method='RK45', atol=1e-08, rtol=1e-04,
-                           reshape_order='F', verbose=0):
+def solve_infinite_horizon(ocp, t, x, u, time_map=time_maps.TimeMapLog2,
+                           n_nodes=64, n_nodes_init=None, tol=1e-06,
+                           max_iter=500, t1_tol=1e-06, interp_tol=1e-03,
+                           max_n_segments=10, integration_method='RK45',
+                           atol=1e-08, rtol=1e-04, reshape_order='F',
+                           verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
     an infinite horizon optimal control problem for a single initial condition.
@@ -100,6 +101,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
     1. I. M. Ross, Q. Gong, and P. Sekhavat, *Low-thrust, high-accuracy
         trajectory optimization*, Journal of Guidance, Control, and Dynamics, 30
         (2007), pp. 921-933. https://doi.org/10.2514/1.23181
+    2. D. Garg, W. W. Hager, and A. V. Rao, *Pseudospectral methods for solving
+        infinite-horizon optimal control problems*, Automatica, 47 (2011), pp.
+        829-837. https://doi.org/10.1016/j.automatica.2011.01.085
 
     Parameters
     ----------
@@ -113,6 +117,11 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
         condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
+    time_map : `TimeMapRadau`, default=`TimeMapLog2`
+        `TimeMapRadau` subclass implementing `physical_to_radau`,
+        `radau_to_physical`, and `derivative` methods. The default maps
+        `radau_to_physical(tau) = log(4 / (1 - tau) ** 2)` as in eq (4) from
+        ref. [2] above.
     n_nodes : int, default=64
         Number of nodes to use in the pseudospectral discretization for the
         final solution. `n_nodes` must be at least 4.
@@ -159,6 +168,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
+
     n_nodes = max(4, int(n_nodes))
     if n_nodes_init is None:
         n_nodes_init = n_nodes / 2
@@ -171,6 +181,15 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
 
     max_n_segments = max(int(max_n_segments), 1)
 
+    if isinstance(time_map, str):
+        if time_map == 'log2':
+            time_map = time_maps.TimeMapLog2
+        elif time_map == 'rational':
+            time_map = time_maps.TimeMapRational
+        else:
+            raise ValueError(f"time_map = {time_map} is not recognized. Valid "
+                             f"options are 'log2' and 'rational'")
+
     f, converge_event, interp_event = _setup_open_loop(ocp, t1_tol, interp_tol)
     bound_events = _make_state_bound_events(ocp)
 
@@ -180,7 +199,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
 
     sols, t_break = [], []
 
-    solve_kwargs = {'tol': tol, 'max_iter': max_iter,
+    solve_kwargs = {'time_map': time_map, 'tol': tol, 'max_iter': max_iter,
                     'reshape_order': reshape_order, 'verbose': verbose}
 
     for k in range(max_n_segments):
@@ -195,8 +214,7 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
             elif verbose:
                 print("Ignoring failed warm start solution...")
 
-        sols.append(_solve_infinite_horizon(ocp, t, x, u,
-                                            n_nodes=n_nodes,
+        sols.append(_solve_infinite_horizon(ocp, t, x, u, n_nodes=n_nodes,
                                             **solve_kwargs))
 
         ode_sol = solve_ivp(f, [0., sols[-1].t[-1]], sols[-1].x[:, 0],
@@ -225,7 +243,9 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
 
         # Otherwise, the interpolation error is greater than the tolerance, so
         # solve a new OCP
-        t1 = np.maximum(ode_sol.t[-1], np.finfo(float).resolution)
+        # Sometimes when the ODE solution fails too early we run into problems,
+        # so make sure we advance time at least a little
+        t1 = np.maximum(ode_sol.t[-1], sols[-1].t[1])
 
         if len(t_break) >= 1:
             t_break.append(t1 + t_break[-1])
@@ -246,7 +266,8 @@ def solve_infinite_horizon(ocp, t, x, u, n_nodes=64, n_nodes_init=None,
     return CombinedSolution(sols, t_break)
 
 
-def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
+def _solve_infinite_horizon(ocp, t, x, u, time_map=time_maps.TimeMapLog2,
+                            n_nodes=32, tol=1e-06, max_iter=500,
                             reshape_order='F', verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
@@ -270,6 +291,10 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
         condition is assumed to be contained in `x[:, 0]`.
     u : (n_controls, n_points) array
         Initial guess for the optimal control at times `t`.
+    time_map : `TimeMapRadau`, default=`TimeMapLog2`
+        `TimeMapRadau` subclass implementing `physical_to_radau`,
+        `radau_to_physical`, and `derivative` methods. The default maps
+        `radau_to_physical(tau) = log(4 / (1 - tau) ** 2)`.
     n_nodes : int, default=32
         Number of nodes to use in the pseudospectral discretization. Must be at
         least 3.
@@ -293,12 +318,15 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-    tau, w, D = radau.make_scaled_lgr(n_nodes)
+
+    tau, w, D = radau.make_scaled_lgr(n_nodes,
+                                      time_map_deriv=time_map.derivative)
     cost_fun, dyn_constr, bounds = setup_nlp.setup(ocp, x[:, 0], tau, w, D,
                                                    order=reshape_order)
 
     # Map initial guess to LGR points
-    x, u = setup_nlp.interp_guess(t, x, u, tau, radau.inverse_time_map)
+    t_interp = time_map.radau_to_physical(tau)
+    x, u = setup_nlp.interp_guess(t, x, u, t_interp)
     xu = setup_nlp.collect_vars(x, u, order=reshape_order)
 
     if verbose:
@@ -312,6 +340,7 @@ def _solve_infinite_horizon(ocp, t, x, u, n_nodes=32, tol=1e-06, max_iter=500,
                                options=minimize_opts)
 
     return DirectSolution.from_minimize_result(minimize_result, ocp, tau, w,
+                                               time_map=time_map,
                                                order=reshape_order)
 
 
