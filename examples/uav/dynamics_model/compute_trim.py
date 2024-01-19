@@ -108,7 +108,7 @@ def _obj_and_jac(
 
         obj.attitude -= psi_dot_star
 
-    obj = obj.as_array()
+    obj = obj.to_array()
 
     if callable(jacobians):
         dFdX, dFdU = jacobians(states, controls)
@@ -336,8 +336,8 @@ def compute_trim(
     success = all((
         NLP_res.success,
         NLP_res.fun <= fun_tol,
-        np.all(trim_controls.as_array() >= constants.min_controls.as_array() + solver_tol),
-        np.all(trim_controls.as_array() <= constants.max_controls.as_array() - solver_tol)
+        np.all(trim_controls.to_array() >= constants.min_controls.to_array() + solver_tol),
+        np.all(trim_controls.to_array() <= constants.max_controls.to_array() - solver_tol)
     ))
 
     return trim_states, trim_controls, success

@@ -38,7 +38,7 @@ def control(states, costates, R_inverse, trim_controls):
     if isinstance(states, np.ndarray):
         states = VehicleState(states)
     if isinstance(costates, VehicleState):
-        costates = costates.as_array()
+        costates = costates.to_array()
     if isinstance(trim_controls, Controls):
         trim_controls = trim_controls.as_array()
     if isinstance(R_inverse, Controls):
@@ -103,7 +103,7 @@ def jacobian(states, costates, R_inverse, controls):
     if isinstance(states, np.ndarray):
         states = VehicleState(states)
     if isinstance(costates, VehicleState):
-        costates = costates.as_array()
+        costates = costates.to_array()
     if isinstance(controls, Controls):
         controls = controls.as_array()
     if isinstance(R_inverse, Controls):
@@ -175,8 +175,8 @@ def jacobian(states, costates, R_inverse, controls):
         controls_jac = - np.einsum('ij,jhk->ihk', R_inverse/2., controls_jac)
 
     sat_idx = [
-        controls <= constants.min_controls.as_array()[:,None],
-        controls >= constants.max_controls.as_array()[:,None]
+        controls <= constants.min_controls.to_array()[:, None],
+        controls >= constants.max_controls.to_array()[:, None]
     ]
     sat_idx = np.where(np.any(sat_idx, axis=0))
     controls_jac[sat_idx[0],:,sat_idx[1]] = 0.
@@ -210,7 +210,7 @@ def controls_and_jac(states, costates, R_inverse, trim_controls):
     if isinstance(states, np.ndarray):
         states = VehicleState(states)
     if isinstance(costates, VehicleState):
-        costates = costates.as_array()
+        costates = costates.to_array()
     if isinstance(trim_controls, Controls):
         trim_controls = trim_controls.as_array()
     if isinstance(R_inverse, Controls):
@@ -295,8 +295,8 @@ def controls_and_jac(states, costates, R_inverse, trim_controls):
         controls_jac = - np.einsum('ij,jhk->ihk', R_inverse, controls_jac)
 
     # Saturate controls and set Jacobian elements to zero where saturated
-    U_lb = constants.min_controls.as_array()[:,None]
-    U_ub = constants.max_controls.as_array()[:,None]
+    U_lb = constants.min_controls.to_array()[:, None]
+    U_ub = constants.max_controls.to_array()[:, None]
 
     sat_idx = [controls < U_lb, U_ub < controls]
 

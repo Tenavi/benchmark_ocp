@@ -24,7 +24,7 @@ def test_state_shapes(attitude_shape, vel_shape):
             state = containers.VehicleState(attitude=attitude, u=u, v=v, w=w)
     else:
         state = containers.VehicleState(attitude=attitude, u=u, v=v, w=w)
-        state = state.as_array()
+        state = state.to_array()
 
         u_idx = np.argwhere(np.array(containers.STATES_ORDER) == 'u')[0,0]
         v_idx = np.argwhere(np.array(containers.STATES_ORDER) == 'v')[0,0]

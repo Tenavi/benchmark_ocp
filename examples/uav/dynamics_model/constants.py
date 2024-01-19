@@ -2,18 +2,18 @@ import numpy as np
 
 from .containers import Controls
 
-mass = 11. # [kg]
-rho = 1.2682 # air density, [kg / m^3]
-g0 = 9.81 # gravity, [m/s^2]
-b = 2.8956 # wing-span [m]
-c = 0.18994 # wing chord [m]
-S = 0.55 # wing area [m^2]
-e = 0.9 # Oswald's Efficiency Factor []
+mass = 11.  # [kg]
+rho = 1.2682  # air density, [kg / m^3]
+g0 = 9.81  # gravity, [m/s^2]
+b = 2.8956  # wing-span [m]
+c = 0.18994  # wing chord [m]
+S = 0.55  # wing area [m^2]
+e = 0.9  # Oswald's Efficiency Factor []
 
 AR = b ** 2 / S
 
-blending_const = 50. # barrier function coefficient for stall angle of attack
-alpha0 = np.deg2rad(20.) # angle at which stall occurs [deg]
+blending_const = 50.  # barrier function coefficient for stall angle of attack
+alpha0 = np.deg2rad(20.)  # stall angle of attack [deg]
 
 Jxx = 0.8244  # [kg m^2]
 Jyy = 1.135  # [kg m^2]
@@ -21,7 +21,7 @@ Jzz = 1.759  # [kg m^2]
 Jxz = 0.1204  # [kg m^2]
 
 J_body = np.array([[Jxx, 0., -Jxz], [0., Jyy, 0.], [-Jxz, 0., Jzz]])
-J_det = (Jxx * Jzz - Jxz ** 2)
+J_det = Jxx * Jzz - Jxz ** 2
 J_inv_body = np.array([[Jzz, 0., Jxz], [0., J_det / Jyy, 0.], [Jxz, 0., Jxx]])
 J_inv_body /= J_det
 
@@ -80,7 +80,7 @@ Cprop = 0.45  # thrust efficiency coefficient, DIFFERENT FROM BEARD
 # Alternate propeller Model
 D_prop = 0.508  # prop diameter [m]
 KV = 145.  # from datasheet [RPM/V]
-KQ = 60. / (2.*np.pi*KV)  # [V-s/rad]
+KQ = 60. / (2. * np.pi * KV)  # [V-s/rad]
 R_motor = 0.042  # [ohms]
 i0 = 1.5  # no-load (zero-torque) current [A]
 ncells = 12.
@@ -99,23 +99,11 @@ zero_throttle = i0 * R_motor / V_max
 
 # Control constraints
 max_angle = np.radians(25.)
-min_controls = Controls(
-    throttle=0., aileron=-max_angle, elevator=-max_angle, rudder=-max_angle
-)
-max_controls = Controls(
-    throttle=1., aileron=max_angle, elevator=max_angle, rudder=max_angle
-)
-
-# roll rate and yaw rate derived parameters
-'''Cp0 = JinvBody[0][0] * Cl0 + JinvBody[0][2] * Cn0
-Cpbeta = JinvBody[0][0] * Clbeta + JinvBody[0][2] * Cnbeta
-Cpp = JinvBody[0][0] * Clp + JinvBody[0][2] * Cnp
-Cpr = JinvBody[0][0] * Clr + JinvBody[0][2] * Cnr
-CpdeltaA = JinvBody[0][0] * CldeltaA + JinvBody[0][2] * CndeltaA
-CpdeltaR = JinvBody[0][0] * CldeltaR + JinvBody[0][2] * CndeltaR
-Cr0 = JinvBody[0][2] * Cl0 + JinvBody[2][2] * Cn0
-Crbeta = JinvBody[0][2] * Clbeta + JinvBody[2][2] * Cnbeta
-Crp = JinvBody[0][2] * Clp + JinvBody[2][2] * Cnp
-Crr = JinvBody[0][2] * Clr + JinvBody[2][2] * Cnr
-CrdeltaA = JinvBody[0][2] * CldeltaA + JinvBody[2][2] * CndeltaA
-CrdeltaR = JinvBody[0][2] * CldeltaR + JinvBody[2][2] * CndeltaR'''
+min_controls = Controls(throttle=0.,
+                        aileron=-max_angle,
+                        elevator=-max_angle,
+                        rudder=-max_angle)
+max_controls = Controls(throttle=1.,
+                        aileron=max_angle,
+                        elevator=max_angle,
+                        rudder=max_angle)

@@ -26,7 +26,7 @@ def dynamics_wrapper(X, U):
     dXdt = dynamics.dynamics(states, controls)
 
     if not isinstance(X, VehicleState):
-        dXdt = dXdt.as_array().reshape(X.shape)
+        dXdt = dXdt.to_array().reshape(X.shape)
 
     return dXdt
 
@@ -162,7 +162,7 @@ def test_aero_jac_states(shape):
 
     assert d_forces.shape == d_moments.shape == (3,11,n_points)
 
-    X = states.as_array().reshape(-1,n_points)
+    X = states.to_array().reshape(-1, n_points)
     U = controls.as_array().reshape(-1,n_points)
 
     for k in range(n_points):
@@ -197,7 +197,7 @@ def test_aero_jac_controls(shape):
 
     assert d_forces.shape == d_moments.shape == (3,4,n_points)
 
-    X = states.as_array().reshape(-1,n_points)
+    X = states.to_array().reshape(-1, n_points)
     U = controls.as_array().reshape(-1,n_points)
 
     for k in range(n_points):
@@ -228,7 +228,7 @@ def test_jac_states(shape):
         n_points = shape[0]
 
     states, controls = _make_test_states(n_points, seed=123)
-    X = states.as_array().reshape(-1,n_points)
+    X = states.to_array().reshape(-1, n_points)
     U = controls.as_array().reshape(-1,n_points)
 
     dFdX = jacobians.jac_states(states, controls)
@@ -252,7 +252,7 @@ def test_jac_controls(shape):
         n_points = shape[0]
 
     states, controls = _make_test_states(n_points, seed=123)
-    X = states.as_array().reshape(-1,n_points)
+    X = states.to_array().reshape(-1, n_points)
     U = controls.as_array().reshape(-1,n_points)
 
     dFdU = jacobians.jac_controls(states, controls)
@@ -276,7 +276,7 @@ def test_opt_control_jac(shape, saturated):
         n_points = shape[0]
 
     states, _ = _make_test_states(n_points, seed=123)
-    X = states.as_array().reshape(-1,n_points)
+    X = states.to_array().reshape(-1, n_points)
     dVdX = np.random.randn(*X.shape)
 
     if saturated:

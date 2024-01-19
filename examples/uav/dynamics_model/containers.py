@@ -1,121 +1,151 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+
 STATES_ORDER = ('pd', 'u', 'v', 'w', 'p', 'q', 'r', 'attitude')
 CONTROLS_ORDER = ('throttle', 'aileron', 'elevator', 'rudder')
 
+
 class VehicleState:
+    """Container holding the vehicle state(s)."""
     n_states = 11
 
-    def __init__(
-            self, X=None,
-            pd=0., u=0., v=0., w=0., p=0., q=0., r=0., attitude=[0.,0.,0.,1.]
-        ):
-        '''
-        Container holding the vehicle state(s). Can be initialized from an array
-        or by setting each state individually by name.
+    def __init__(self, pd=0., u=0., v=0., w=0., p=0., q=0., r=0.,
+                 attitude=[0., 0., 0., 1.], x=None):
+        if x is not None:
+            self._array = np.asarray(x)
+
+            if self._array.shape[0] != self.n_states:
+                raise ValueError(f"Tried to set the state with an array x with "
+                                 f"shape {self._array.shape}, but x.shape[0] "
+                                 f"must be {self.n_states}.")
+        else:
+            x = [np.reshape(arg, -1) for arg in [pd, u, v, w, p, q, r]]
+            x.append(np.reshape(attitude, (4, -1)))
+
+            n_points = np.max([arg.shape[-1] for arg in x])
+
+            if n_points == 0:
+                raise ValueError("VehicleState cannot be set with empty arrays")
+
+            self._array = np.empty((11, n_points))
+
+            self.pd = x[0]
+            self.u = x[1]
+            self.v = x[2]
+            self.w = x[3]
+            self.p = x[4]
+            self.q = x[5]
+            self.r = x[6]
+            self.attitude = x[7]
+
+        self._Va, self._alpha, self._beta, self._chi = None, None, None, None
+
+    @classmethod
+    def from_array(cls, x):
+        """
+        Initialize the vehicle state from a numpy array.
 
         Parameters
         ----------
-        X : {(11,) array, (11, n_points) array}, optional
-            State(s) as a numpy array. If provided, other inputs are ignored.
-        pd : {float, (n_points,) array, (1, n_points) array}, optional
-            Inertial down position (negative altitude) [m].
-        u : {float, (n_points,) array, (1, n_points) array}, optional
-            Ground speed in body x-axis [m/s].
-        v : {float, (n_points,) array, (1, n_points) array}, optional
-            Ground speed in body y-axis [m/s].
-        w : {float, (n_points,) array, (1, n_points) array}, optional
-            Ground speed in body z-axis [m/s].
-        p : {float, (n_points,) array, (1, n_points) array}, optional
-            Body roll rate about body-x axis [rad/s].
-        q : {float, (n_points,) array, (1, n_points) array}, optional
-            Body pitch rate about body-y axis [rad/s].
-        r : {float, (n_points,) array, (1, n_points) array}, optional
-            Body yaw rate about body-z axis [rad/s].
-        attitude : {(4,) array, (4, n_points) array}, optional
-            Quaternion of body frame attitude relative to inertial frame. The
-            vector components are indices 0:3 and the scalar quaternion is in
-            index 3.
-        '''
-        self.set_state(X, pd, u, v, w, p, q, r, attitude)
+        x : (11,) or (11, n_points) array
+            The vehicle state(s) in the following order:
+            ```
+            x[0] = pd
+            x[1] = u
+            x[2] = v
+            x[3] = w
+            x[4] = p
+            x[5] = q
+            x[6] = r
+            x[7:11] = attitude
+            ```
 
-    def set_state(
-            self, X=None,
-            pd=None, u=None, v=None, w=None,
-            p=None, q=None, r=None, attitude=None
-        ):
-        '''
-        Set (some parts of) the vehicle state(s) by an array or by name.
+        Returns
+        -------
+        state : VehicleState
+            Vehicle state initialized with `x`.
+        """
+        return cls(x=x)
+
+    def to_array(self, copy=False):
+        """
+        Represent the `VehicleState` as a numpy array.
 
         Parameters
         ----------
-        X : {(11,) array, (11, n_points) array}, optional
-            State(s) as a numpy array. If provided, other inputs are ignored.
-        pd : {float, (n_points,) array, (1, n_points) array}, optional
-            Inertial down position (negative altitude) [m].
-        u : {float, (n_points,) array, (1, n_points) array}, optional
-            Ground speed in body x-axis [m/s].
-        v : {float, (n_points,) array, (1, n_points) array}, optional
-            Ground speed in body y-axis [m/s].
-        w : {float, (n_points,) array, (1, n_points) array}, optional
-            Ground speed in body z-axis [m/s].
-        p : {float, (n_points,) array, (1, n_points) array}, optional
-            Body roll rate about body-x axis [rad/s].
-        q : {float, (n_points,) array, (1, n_points) array}, optional
-            Body pitch rate about body-y axis [rad/s].
-        r : {float, (n_points,) array, (1, n_points) array}, optional
-            Body yaw rate about body-z axis [rad/s].
-        attitude : {(4,) array, (4, n_points) array}, optional
-            Quaternion of body frame attitude relative to inertial frame. The
-            vector components are indices 0:3 and the scalar quaternion is in
-            index 3.
-        '''
-        # Initialize from numpy array
-        if X is not None:
-            if not X.shape[0] == self.n_states:
-                err_msg = 'Tried to set the state with an array X of shape '
-                err_msg += str(X.shape) + ', but X.shape[0] must be '
-                err_msg += self.n_states + '.'
-                raise ValueError(err_msg)
-            pd, u, v, w, p, q, r = X[:self.n_states-4]
-            attitude = X[self.n_states-4:]
+        copy : bool, default=False
+            If copy=False (default), returns a reference to the vehicle
+            array. Modifying that reference in place will also modify the
+            vehicle state. If copy=True, returns a copy of the array
+            representing the vehicle state.
 
-        # Altitude
-        if pd is not None:
-            self.pd = np.atleast_2d(pd)
-        # Body frame velocities
-        if u is not None:
-            self.u = np.atleast_2d(u)
-        if v is not None:
-            self.v = np.atleast_2d(v)
-        if w is not None:
-            self.w = np.atleast_2d(w)
-        # Body frame angular rates
-        if p is not None:
-            self.p = np.atleast_2d(p)
-        if q is not None:
-            self.q = np.atleast_2d(q)
-        if r is not None:
-            self.r = np.atleast_2d(r)
-        # Quaternion attitude representation
-        if attitude is not None:
-            self.attitude = np.reshape(attitude, (4,-1))
-            self._rotation = None
+        Returns
+        -------
+        x : (11, n_points) array
+            The vehicle state represented as an array:
+            ```
+            x[0] = pd
+            x[1] = u
+            x[2] = v
+            x[3] = w
+            x[4] = p
+            x[5] = q
+            x[6] = r
+            x[7:11] = attitude
+            ```
+        """
+        if copy:
+            return self._array.copy()
+        return self._array
 
-        self.Va, self.alpha, self.beta, self.chi = None, None, None, None
+    pd = property(lambda self: _generic_array_getter(self, 0),
+                  lambda self, val: _generic_array_setter(self, val, 0))
+    pd.__doc__ = ("(n_points,) array. Inertial down position (negative "
+                  "altitude) [m].")
 
-        _fix_shapes(self, STATES_ORDER, 'state')
+    u = property(lambda self: _generic_array_getter(self, 1),
+                 lambda self, val: _generic_array_setter(self, val, 1))
+    u.__doc__ = "(n_points,) array. Velocity in body x-axis [m/s]."
 
-    def as_array(self):
-        X = np.vstack([getattr(self, var) for var in STATES_ORDER])
-        return np.squeeze(X)
+    v = property(lambda self: _generic_array_getter(self, 2),
+                 lambda self, val: _generic_array_setter(self, val, 2))
+    v.__doc__ = "(n_points,) array. Velocity in body y-axis [m/s]."
 
+    w = property(lambda self: _generic_array_getter(self, 3),
+                 lambda self, val: _generic_array_setter(self, val, 3))
+    w.__doc__ = "(n_points,) array. Velocity in body z-axis [m/s]."
+
+    p = property(lambda self: _generic_array_getter(self, 4),
+                 lambda self, val: _generic_array_setter(self, val, 4))
+    p.__doc__ = "(n_points,) array. Roll rate about body-x axis [rad/s]."
+
+    q = property(lambda self: _generic_array_getter(self, 5),
+                 lambda self, val: _generic_array_setter(self, val, 5))
+    q.__doc__ = "(n_points,) array. Roll rate about body-y axis [rad/s]."
+
+    r = property(lambda self: _generic_array_getter(self, 6),
+                 lambda self, val: _generic_array_setter(self, val, 6))
+    r.__doc__ = "(n_points,) array. Roll rate about body-x axis [rad/s]."
+
+    @property
+    def attitude(self):
+        """
+        (4, n_points,) array. Quaternion of body frame attitude relative to
+        inertial frame. The vector components are indices `attitude[:3]` and the
+        scalar quaternion is in `attitude[3]`.
+        """
+        return self._array[7:11]
+
+    @attitude.setter
+    def attitude(self, attitude):
+        self._array[7:11] = attitude
+        self._rotation = None
+
+    @property
     def rotation(self):
         if not isinstance(self._rotation, Rotation):
-            self._rotation = Rotation(
-                np.squeeze(self.attitude.T), normalize=False, copy=False
-            )
+            self._rotation = Rotation(self.attitude.T, copy=False)
         return self._rotation
 
     def inertial_to_body(self, X_inertial):
@@ -183,6 +213,7 @@ class VehicleState:
 
         return self.chi
 
+
 class Controls:
     n_controls = 4
 
@@ -246,6 +277,15 @@ class Controls:
         U = np.vstack([getattr(self, var) for var in CONTROLS_ORDER])
         return np.squeeze(U)
 
+
+def _generic_array_getter(self, idx):
+    return self._array[idx]
+
+
+def _generic_array_setter(self, val, idx):
+    self._array[idx] = val
+
+
 def _fix_shapes(container, order, attr_name):
     '''
     Utility function which makes sure that all the states or controls are the
@@ -283,7 +323,7 @@ def _fix_shapes(container, order, attr_name):
 def _make_indices(classdef, ordering):
     '''
     Make a dictionary of variable names (for VehicleState or Controls) and
-    slices to retrieve their corresponding rows from the as_array() method.
+    slices to retrieve their corresponding rows from the to_array() method.
 
     Parameters
     ----------
@@ -298,7 +338,7 @@ def _make_indices(classdef, ordering):
     indices : dict
         Keys are the entries of ordering and values are slices. For a string var
         in ordering, we get
-        classdef().as_array()[indices[var]] == getattr(classdef(), var)
+        classdef().to_array()[indices[var]] == getattr(classdef(), var)
     '''
     dummy_class = classdef()
     name_length_pairs = [
@@ -313,5 +353,5 @@ def _make_indices(classdef, ordering):
 
     return indices
 
-STATES_IDX = _make_indices(VehicleState, STATES_ORDER)
-CONTROLS_IDX = _make_indices(Controls, CONTROLS_ORDER)
+#STATES_IDX = _make_indices(VehicleState, STATES_ORDER)
+#CONTROLS_IDX = _make_indices(Controls, CONTROLS_ORDER)

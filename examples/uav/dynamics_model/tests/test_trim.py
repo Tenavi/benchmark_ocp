@@ -24,7 +24,7 @@ def dynamics_wrapper(X, U):
     dXdt = dynamics(states, controls)
 
     if not isinstance(X, containers.VehicleState):
-        dXdt = dXdt.as_array().reshape(X.shape)
+        dXdt = dXdt.to_array().reshape(X.shape)
 
     return dXdt
 
@@ -52,7 +52,7 @@ def _make_test_states(n_points=1):
 
 def test_make_indices():
     test_state_dict, _ = _make_test_states(n_points=8)
-    test_states = containers.VehicleState(**test_state_dict).as_array()
+    test_states = containers.VehicleState(**test_state_dict).to_array()
 
     state_idx = containers.STATES_IDX
     for var_name, expected in test_state_dict.items():

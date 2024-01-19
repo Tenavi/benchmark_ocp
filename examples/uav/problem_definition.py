@@ -84,8 +84,8 @@ class MakeOCP(TemplateOCP):
         self.R_elevator = 1. / constants.max_controls.elevator**2
         self.R_rudder = 1. / constants.max_controls.rudder**2
 
-        U_lb = constants.min_controls.as_array()
-        U_ub = constants.max_controls.as_array()
+        U_lb = constants.min_controls.to_array()
+        U_ub = constants.max_controls.to_array()
 
         # Cost matrices
         Q = VehicleState(
@@ -93,7 +93,7 @@ class MakeOCP(TemplateOCP):
             p=self.Q_p, q=self.Q_q, r=self.Q_r,
             attitude=[self.Q_attitude]*3 + [0.]
         )
-        Q = np.diag(Q.as_array())
+        Q = np.diag(Q.to_array())
 
         R = Controls(
             throttle=self.R_throttle, aileron=self.R_aileron,
@@ -112,7 +112,7 @@ class MakeOCP(TemplateOCP):
             print('Creating new LQR controller...')
 
         super().__init__(
-            X_bar.as_array(), U_bar.as_array(),
+            X_bar.to_array(), U_bar.as_array(),
             Q=Q, R=R, P=P, U_lb=U_lb, U_ub=U_ub
         )
 
@@ -142,7 +142,7 @@ class MakeOCP(TemplateOCP):
         '''
         if from_equilibrium:
             if isinstance(X, VehicleState):
-                X = X.as_array()
+                X = X.to_array()
             if isinstance(U, Controls):
                 U = U.as_array()
 
@@ -196,7 +196,7 @@ class MakeOCP(TemplateOCP):
             attitude=euler_to_quat(course, pitch, roll)
         )
 
-        return X0.as_array()
+        return X0.to_array()
 
     def running_cost(self, X, U):
         '''
@@ -288,7 +288,7 @@ class MakeOCP(TemplateOCP):
                 attitude=dLdquat
             )
             if not return_dLdU:
-                return dLdX.as_array()
+                return dLdX.to_array()
 
         if return_dLdU:
             err_controls = err_controls.as_array()
@@ -298,7 +298,7 @@ class MakeOCP(TemplateOCP):
             if not return_dLdX:
                 return dLdU
 
-        return dLdX.as_array(), dLdU
+        return dLdX.to_array(), dLdU
 
     def dynamics(self, X, U):
         '''
@@ -321,7 +321,7 @@ class MakeOCP(TemplateOCP):
         dXdt = uav_dynamics(states, controls)
 
         if not isinstance(X, VehicleState):
-            dXdt = dXdt.as_array().reshape(X.shape)
+            dXdt = dXdt.to_array().reshape(X.shape)
 
         return dXdt
 
