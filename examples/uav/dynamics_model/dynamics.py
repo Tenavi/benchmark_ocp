@@ -377,13 +377,3 @@ def dynamics(states, controls):
     '''
     forces, moments = forces_and_moments(states, controls)
     return rigid_body_dynamics(states, forces, moments)
-
-def saturate(controls):
-    for var in ['throttle', 'aileron', 'elevator', 'rudder']:
-        setattr(controls, var, np.maximum(
-            getattr(controls,var), getattr(constants.min_controls,var).flatten()
-        ))
-        setattr(controls, var, np.minimum(
-            getattr(controls,var), getattr(constants.max_controls,var).flatten()
-        ))
-    return controls

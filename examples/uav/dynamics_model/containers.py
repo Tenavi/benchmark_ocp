@@ -147,35 +147,64 @@ class VehicleState(Container):
     attitude = property(lambda self: np.squeeze(
                             _generic_array_getter(self, range(7, 11))),
                         lambda self, val: _generic_array_setter(
-                            self, val, range(7, 11), '_course', '_rotation'))
+                            self, np.reshape(val, (4, -1)), range(7, 11),
+                            '_course', '_rotation'))
     attitude.__doc__ = ("(4,) or (4, n_points,) array. Quaternion of vehicle "
                         "attitude relative to the inertial frame. The vector "
                         "components are indices `attitude[:3]` and the scalar "
                         "quaternion is in `attitude[3]`.")
 
-    def velocity(self, copy=False):
-        """
-        Get the vehicle's velocity in the body frame.
+    @property
+    def _velocity(self):
+        """Reference to subset of `to_array()` containing the vehicle's velocity
+        in the body frame."""
+        return self._array[1:4]
 
-        Parameters
-        ----------
-        copy : bool, default=False
-            If copy=False (default), returns a reference to the vehicle
-            array. Modifying that reference in place will also modify the
-            vehicle state. If copy=True, returns a copy of the array
-            representing the velocity.
+    @property
+    def airspeed(self):
+        """
+        Get current airspeed magnitude, angle of attack, and sideslip, assuming
+        zero wind.
 
         Returns
         -------
-        vel : (3,) or (3, n_points) array
-            Vehicle velocity, with
-            ```
-            vel[0] = u
-            vel[1] = v
-            vel[2] = w
-            ```
+        Va : (n_points,) array
+            Airspeed [m/s] for each state.
+        alpha : (n_points,) array
+            Angle of attack [rad] for each state.
+        beta : (n_points,) array
+            Sideslip [rad] for each state.
         """
-        return self.to_array(copy=copy)[1:4]
+        if self._airspeed is None:
+            self._airspeed = np.zeros((3, self.n_points))
+
+            # Va
+            self._airspeed[0] = np.sqrt(np.sum(self._velocity ** 2, axis=0))
+            # alpha
+            self._airspeed[1] = np.arctan2(self.w, self.u)
+            # beta (avoid dividing by zero)
+            idx = self._airspeed[0] > 1e-14
+            self._airspeed[2, idx] = np.arcsin(
+                self.v[idx] / self._airspeed[0, idx])
+
+        return self._airspeed
+
+    @property
+    def course(self):
+        """
+        Get the current course angle, computed by rotating the body velocity
+        into the inertial frame.
+
+        Returns
+        -------
+        chi : (n_points,) array
+            Course angle [rad] for each state.
+        """
+        if self._course is None:
+            vel = self.body_to_inertial(self._velocity)
+            self._course = np.arctan2(vel[1], vel[0])
+
+        return self._course
 
     @property
     def rotation(self):
@@ -200,15 +229,19 @@ class VehicleState(Container):
             `vec_inertial` expressed in the body frame.
         """
         vec_inertial = np.asarray(vec_inertial)
+        shape = vec_inertial.shape
+        vec_inertial = vec_inertial.reshape(3, -1)
 
         # The scipy Rotation class treats rotation as expressing a rotated
         # inertial vector in the inertial frame, rather than in the body frame.
         # Thus, we implement the transformation using inverse=True.
-        vec_body = self.rotation().apply(vec_inertial.T, inverse=True).T
+        vec_body = self.rotation.apply(vec_inertial.T, inverse=True).T
 
         # Make the output shape the same as the input, if it didn't increase in
         # size due to multiple rotations.
-        return vec_body.reshape(vec_inertial.shape)
+        if vec_body.shape[1] > vec_inertial.shape[1]:
+            return vec_body
+        return vec_body.reshape(shape)
 
     def body_to_inertial(self, vec_body):
         """
@@ -225,62 +258,22 @@ class VehicleState(Container):
              `vec_body` expressed in the inertial frame.
         """
         vec_body = np.asarray(vec_body)
+        shape = vec_body.shape
+        vec_body = vec_body.reshape(3, -1)
 
         # The scipy Rotation class treats rotation as expressing a rotated
         # inertial vector in the inertial frame, rather than in the body frame.
         # Thus, we implement the inverse transformation using inverse=False.
-        vec_inertial = self.rotation().apply(vec_body.T).T
+        vec_inertial = self.rotation.apply(vec_body.T).T
 
         # Make the output shape the same as the input, if it didn't increase in
         # size due to multiple rotations.
-        return vec_inertial.reshape(vec_body.shape)
-
-    def airspeed(self):
-        """
-        Get current airspeed magnitude, angle of attack, and sideslip, assuming
-        zero wind.
-
-        Returns
-        -------
-        Va : (n_points,) array
-            Airspeed [m/s] for each state.
-        alpha : (n_points,) array
-            Angle of attack [rad] for each state.
-        beta : (n_points,) array
-            Sideslip [rad] for each state.
-        """
-        if self._airspeed is None:
-            self._airspeed = np.zeros((3, self.n_points))
-
-            # Va
-            self._airspeed[0] = np.sqrt(np.sum(self.velocity() ** 2, axis=0))
-            # alpha
-            self._airspeed[1] = np.arctan2(self.w, self.u)
-            # beta (avoid dividing by zero)
-            idx = self._airspeed[0] > 1e-14
-            self._airspeed[2, idx] = np.arcsin(
-                self.v[idx] / self._airspeed[0, idx])
-
-        return self._airspeed
-
-    def course(self):
-        """
-        Get the current course angle, computed by rotating the body velocity
-        into the inertial frame.
-
-        Returns
-        -------
-        chi : (n_points,) array
-            Course angle [rad] for each state.
-        """
-        if self._course is None:
-            vel = self.body_to_inertial(self.velocity())
-            self._course = np.arctan2(vel[1], vel[0])
-
-        return self._course
+        if vec_inertial.shape[1] > vec_body.shape[1]:
+            return vec_inertial
+        return vec_inertial.reshape(shape)
 
 
-class Controls:
+class Controls(Container):
     """Container holding the vehicle controls(s).
 
     When initializing or representing the `Controls` container with an array,
@@ -330,6 +323,22 @@ class Controls:
     rudder = property(lambda self: _generic_array_getter(self, 3),
                     lambda self, val: _generic_array_setter(self, val, 3))
     rudder.__doc__ = "(n_points,) array. Rudder position [rad]."
+
+    def saturate(self, lb, ub):
+        """
+        Saturate the controls container between lower and upper bound control
+        containers.
+
+        Parameters
+        ----------
+        lb : `Controls`
+            Container of lower control bounds. Must satisfy `lb.n_points == 1`
+            or `lb.n_points == self.n_points`.
+        ub : `Controls`
+            Container of upper control bounds. Must satisfy `ub.n_points == 1`
+            or `ub.n_points == self.n_points`.
+        """
+        self.__init__(array=np.clip(self._array, lb._array, ub._array))
 
 
 def _generic_array_getter(obj, idx):

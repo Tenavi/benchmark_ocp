@@ -25,10 +25,22 @@ def cross_product_matrix(w):
         If `w` is a 2d array, then `w_x[:, :, i]` is the cross product matrix
         (see above) for `w[:, i]`.
     """
-    zeros = np.zeros_like(w[0])
-    return np.array([[zeros, -w[2], w[1]],
-                     [w[2], zeros, -w[0]],
-                     [-w[1], w[0], zeros]])
+    w = np.asarray(w)
+
+    if w.shape[0] != 3:
+        raise ValueError(f"Cannot form cross product matrices from array with "
+                         f"shape {w.shape}. Expected w.shape = (3, ...)")
+
+    w_x = np.zeros((3,) + w.shape)
+
+    w_x[0, 1] = -w[2]
+    w_x[0, 2] = w[1]
+    w_x[1, 0] = w[2]
+    w_x[1, 2] = -w[0]
+    w_x[2, 0] = -w[1]
+    w_x[2, 1] = w[0]
+
+    return w_x
 
 
 def quaternion_to_euler(quat, degrees=False, normalize=True,
