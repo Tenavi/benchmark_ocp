@@ -2,10 +2,6 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-STATES_ORDER = ('pd', 'u', 'v', 'w', 'p', 'q', 'r', 'attitude')
-CONTROLS_ORDER = ('throttle', 'aileron', 'elevator', 'rudder')
-
-
 class Container:
     """Base class for state and control containers."""
     dim = None
@@ -155,10 +151,16 @@ class VehicleState(Container):
                         "quaternion is in `attitude[3]`.")
 
     @property
-    def _velocity(self):
+    def velocity(self):
         """Reference to subset of `to_array()` containing the vehicle's velocity
-        in the body frame."""
-        return self._array[1:4]
+        in the body frame, `u`, `v`, and `w`."""
+        return self.to_array()[1:4]
+
+    @property
+    def rates(self):
+        """Reference to subset of `to_array()` containing the vehicle's body
+        rotation rates, `p`, `q`, and `r`."""
+        return self.to_array()[4:7]
 
     @property
     def airspeed(self):
@@ -179,7 +181,9 @@ class VehicleState(Container):
             self._airspeed = np.zeros((3, self.n_points))
 
             # Va
-            self._airspeed[0] = np.sqrt(np.sum(self._velocity ** 2, axis=0))
+            #self._airspeed[0] = np.sqrt(np.sum(self.velocity ** 2, axis=0))
+            self._airspeed[0] = np.sqrt(np.einsum('i...,i...->...',
+                                                  self.velocity, self.velocity))
             # alpha
             self._airspeed[1] = np.arctan2(self.w, self.u)
             # beta (avoid dividing by zero)
@@ -201,8 +205,8 @@ class VehicleState(Container):
             Course angle [rad] for each state.
         """
         if self._course is None:
-            vel = self.body_to_inertial(self._velocity)
-            self._course = np.arctan2(vel[1], vel[0])
+            vel_i = self.body_to_inertial(self.velocity)
+            self._course = np.arctan2(vel_i[1], vel_i[0])
 
         return self._course
 
@@ -349,40 +353,3 @@ def _generic_array_setter(obj, val, idx, *reset_attrs):
     obj._array[idx] = val
     for attr_name in reset_attrs:
         setattr(obj, attr_name, None)
-
-"""
-def _make_indices(classdef, ordering):
-    '''
-    Make a dictionary of variable names (for VehicleState or Controls) and
-    slices to retrieve their corresponding rows from the to_array() method.
-
-    Parameters
-    ----------
-    classdef : {VehicleState, Controls} class definition
-        Which class to make the index slicing for.
-    ordering : list of strings
-        List of variables for which to get slices. Normally this is STATES_ORDER
-        or CONTROLS_ORDER, but could also be any subset.
-
-    Returns
-    -------
-    indices : dict
-        Keys are the entries of ordering and values are slices. For a string var
-        in ordering, we get
-        classdef().to_array()[indices[var]] == getattr(classdef(), var)
-    '''
-    dummy_class = classdef()
-    name_length_pairs = [
-        [var, getattr(dummy_class, var).shape[0]] for var in ordering
-    ]
-    indices = {}
-    i = 0
-    for pair in name_length_pairs:
-        var, length = pair
-        indices[var] = slice(i, i + length)
-        i = i + length
-
-    return indices
-
-STATES_IDX = _make_indices(VehicleState, STATES_ORDER)
-CONTROLS_IDX = _make_indices(Controls, CONTROLS_ORDER)"""

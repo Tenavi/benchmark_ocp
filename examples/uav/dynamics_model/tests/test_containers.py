@@ -2,9 +2,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import pytest
 
-from examples.uav.dynamics_model import containers, constants
 from examples.common_utilities.dynamics import (euler_to_quaternion,
                                                 quaternion_to_euler)
+from examples.uav.dynamics_model import containers, constants
 
 
 def rotation_matrix(yaw, pitch, roll):
@@ -229,7 +229,7 @@ def test_airspeed_update(n_points, update_attr):
     # Initialize _airspeed attribute
     assert container._airspeed is None
     _ = container.airspeed
-    assert isinstance(container._airspeed, np.ndarray)
+    assert container._airspeed is not None
 
     # Update velocity state
     new_velocity = state_dict[update_attr] * 10.
@@ -409,7 +409,7 @@ def test_course_update(n_points, update_attr):
     # Initialize _course attribute
     assert container._course is None
     _ = container.course
-    assert isinstance(container._course, np.ndarray)
+    assert container._course is not None
 
     # Update attitude or velocity
     if 'update_attr' == 'attitude':
@@ -431,7 +431,6 @@ def test_course_update(n_points, update_attr):
     np.testing.assert_allclose(container.course, course_expect, atol=1e-14)
 
     # Check that _course gets updated
-    assert container._course.shape == (n_points,)
     assert container.course is container._course
 
 

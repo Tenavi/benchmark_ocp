@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 from ..dynamics import dynamics
-from .. import constants, containers, rotations, jacobians, compute_trim
+from .. import constants, containers, rotations, jacobians, trim
 
 def _array_to_container(X, U):
     if isinstance(X, containers.VehicleState):

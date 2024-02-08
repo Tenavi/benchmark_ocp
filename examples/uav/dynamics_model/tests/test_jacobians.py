@@ -97,58 +97,6 @@ def test_prop_jac_controls(shape):
         expected_jac = approx_derivative(prop_moments, throttle[0,k])
         assert np.allclose(d_moments[:,k:k+1], expected_jac)
 
-@pytest.mark.parametrize('shape', [(),(1,),(1000,)])
-def test_blending_jac(shape):
-    if len(shape) == 0:
-        n_points = 1
-    else:
-        n_points = shape[0]
-
-    if n_points == 1:
-        alpha = 3. * constants.alpha0 * (np.random.rand(1, *shape) - 0.5)
-    else:
-        alpha = constants.alpha0 * np.linspace(-1.5, 1.5, n_points)
-        alpha = np.atleast_2d(alpha)
-
-    expected_jac = np.diag(approx_derivative(
-        dynamics.blending_fun, alpha.flatten()
-    ))
-    _, jac = dynamics.blending_fun(alpha, jac=True)
-
-    assert np.allclose(jac, expected_jac)
-
-@pytest.mark.parametrize('shape', [(),(1,),(100,),(1,1),(1,100)])
-def test_coefs_alpha_jac(shape):
-    if len(shape) == 0:
-        n_points = 1
-    else:
-        n_points = shape[0]
-
-    alpha = np.pi * 2. * (np.random.rand(*shape) - 0.5)
-
-    alpha = np.reshape(alpha, shape)
-
-    def CL(alpha):
-        return dynamics.coefs_alpha(alpha)[0]
-    def CD(alpha):
-        return dynamics.coefs_alpha(alpha)[1]
-    def CM(alpha):
-        return dynamics.coefs_alpha(alpha)[2]
-
-    _, _, _, d_CL, d_CD, d_CM = dynamics.coefs_alpha(alpha, jac=True)
-
-    if shape == ():
-        shape = (1,)
-
-    d_CL_expected = np.diag(approx_derivative(CL, alpha.flatten())).reshape(shape)
-    d_CD_expected = np.diag(approx_derivative(CD, alpha.flatten())).reshape(shape)
-    d_CM_expected = np.diag(approx_derivative(CM, alpha.flatten())).reshape(shape)
-
-    assert d_CL.shape == d_CD.shape == d_CM.shape == shape
-
-    assert np.allclose(d_CL, d_CL_expected)
-    assert np.allclose(d_CD, d_CD_expected)
-    assert np.allclose(d_CM, d_CM_expected)
 
 @pytest.mark.parametrize('shape', [(),(1,),(3,)])
 def test_aero_jac_states(shape):

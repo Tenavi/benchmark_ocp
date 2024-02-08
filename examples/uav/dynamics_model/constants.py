@@ -10,10 +10,13 @@ c = 0.18994  # wing chord [m]
 S = 0.55  # wing area [m^2]
 e = 0.9  # Oswald's Efficiency Factor []
 
+# Some derived quantities
 AR = b ** 2 / S
+mg = mass * g0
+rhoS = 0.5 * rho * S
 
-blending_const = 50.  # barrier function coefficient for stall angle of attack
-alpha0 = np.deg2rad(20.)  # stall angle of attack [deg]
+alpha_stall = np.deg2rad(20.)  # stall angle of attack [deg]
+aero_blend_rate = 50.  # barrier function coefficient for stall angle of attack
 
 Jxx = 0.8244  # [kg m^2]
 Jyy = 1.135  # [kg m^2]
@@ -34,7 +37,7 @@ CLq = 7.95  # needs to be normalized by c/2*Va
 CLdeltaE = 0.13  # lift due to elevator deflection
 
 # Drag
-CD0 = 0.0437 # parasitic drag
+CD0 = 0.0437  # parasitic drag
 CDalpha = 0.03  # drag slope
 CDq = 0.  # drag wrt pitch rate
 CDdeltaE = 0.0135  # drag due to elevator deflection
@@ -44,7 +47,6 @@ CM0 = 0.0135  # intercept of pitching moment
 CMalpha = -2.74  # pitching moment slope
 CMq = -38.21  # pitching moment wrt q
 CMdeltaE = -0.99  # pitching moment from elevator
-CMinf = 0.8 # largest post-stall pitching moment
 
 # Sideforce
 CY0 = 0.
@@ -71,7 +73,7 @@ CndeltaA = -0.011
 CndeltaR = -0.069
 
 # Basic propeller model
-Sprop = 0.2027 # propeller area [m^2]
+Sprop = 0.2027  # propeller area [m^2]
 kmotor = 32.  # motor constant, DIFFERENT FROM BEARD
 kTp = 0.  # motor torque constant
 kOmega = 0.  # motor speed constant
@@ -98,7 +100,7 @@ C_T0 = 0.09357
 zero_throttle = i0 * R_motor / V_max
 
 # Control constraints
-max_angle = np.radians(25.)
+max_angle = np.deg2rad(25.)
 min_controls = Controls(throttle=0.,
                         aileron=-max_angle,
                         elevator=-max_angle,

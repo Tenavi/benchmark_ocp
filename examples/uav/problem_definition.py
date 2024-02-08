@@ -7,7 +7,7 @@ from qrnet.problem_template import TemplateOCP, MakeConfig
 from .dynamics_model.containers import VehicleState, Controls, STATES_IDX
 from .dynamics_model.rotations import euler_to_quat
 from .dynamics_model.dynamics import dynamics as uav_dynamics
-from .dynamics_model.compute_trim import compute_trim
+from .dynamics_model.trim import compute_trim
 from .dynamics_model import constants, jacobians, optimal_controls
 
 config = {
