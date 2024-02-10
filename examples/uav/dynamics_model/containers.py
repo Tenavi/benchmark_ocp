@@ -52,14 +52,9 @@ class Container:
         array : (dim,) or (dim, n_points) array
             Array containing the vehicle state or control(s).
         """
-        if self.n_points == 1:
-            if copy:
-                return self._array.flatten()
-            return self._array[:, 0]
-
         if copy:
-            return self._array.copy()
-        return self._array
+            return np.squeeze(self._array).copy()
+        return np.squeeze(self._array)
 
 
 class VehicleState(Container):
@@ -181,7 +176,6 @@ class VehicleState(Container):
             self._airspeed = np.zeros((3, self.n_points))
 
             # Va
-            #self._airspeed[0] = np.sqrt(np.sum(self.velocity ** 2, axis=0))
             self._airspeed[0] = np.sqrt(np.einsum('i...,i...->...',
                                                   self.velocity, self.velocity))
             # alpha
@@ -224,7 +218,7 @@ class VehicleState(Container):
 
         Parameters
         ----------
-        vec_inertial : (3, n_points) array
+        vec_inertial : (3, n_points) or (3,) array
             Vector(s) expressed in the inertial frame.
 
         Returns
@@ -253,7 +247,7 @@ class VehicleState(Container):
 
         Parameters
         ----------
-        vec_body : (3, n_points) array
+        vec_body : (3, n_points) or (3,) array
             Vector(s) expressed in the body frame.
 
         Returns
@@ -328,7 +322,7 @@ class Controls(Container):
                     lambda self, val: _generic_array_setter(self, val, 3))
     rudder.__doc__ = "(n_points,) array. Rudder position [rad]."
 
-    def saturate(self, lb, ub):
+    def saturate(self, lb, ub, inplace=False):
         """
         Saturate the controls container between lower and upper bound control
         containers.
@@ -342,7 +336,12 @@ class Controls(Container):
             Container of upper control bounds. Must satisfy `ub.n_points == 1`
             or `ub.n_points == self.n_points`.
         """
-        self.__init__(array=np.clip(self._array, lb._array, ub._array))
+
+        if inplace:
+            self.__init__(array=np.clip(self._array, lb._array, ub._array))
+            return self
+
+        return Controls(array=np.clip(self._array, lb._array, ub._array))
 
 
 def _generic_array_getter(obj, idx):

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from examples.common_utilities.dynamics import quaternion_to_euler
-from examples.uav.dynamics_model import containers, constants, dynamics
+from examples.uav.dynamics_model import constants, dynamics
 from examples.uav.dynamics_model.tests.test_containers import random_states
 
 
@@ -11,8 +11,7 @@ rng = np.random.default_rng()
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_dynamics_position(n_points):
-    state_dict, _ = random_states(n_points, rng)
-    states = containers.VehicleState(**state_dict)
+    states = random_states(n_points)
 
     _, pitch, roll = quaternion_to_euler(states.attitude)
 
@@ -30,8 +29,7 @@ def test_dynamics_position(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_dynamics_velocity(n_points):
-    state_dict, _ = random_states(n_points, rng)
-    states = containers.VehicleState(**state_dict)
+    states = random_states(n_points)
 
     forces = rng.normal(size=(3, n_points))
     moments = rng.normal(size=(3, n_points))
@@ -50,8 +48,7 @@ def test_dynamics_velocity(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_dynamics_quaternion(n_points):
-    state_dict, _ = random_states(n_points)
-    states = containers.VehicleState(**state_dict)
+    states = random_states(n_points)
 
     forces = rng.normal(size=(3, n_points))
     moments = rng.normal(size=(3, n_points))
@@ -74,8 +71,7 @@ def test_dynamics_quaternion(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_dynamics_rates(n_points):
-    state_dict, _ = random_states(n_points)
-    states = containers.VehicleState(**state_dict)
+    states = random_states(n_points)
 
     forces = rng.normal(size=(3, n_points))
     moments = rng.normal(size=(3, n_points))
@@ -96,8 +92,7 @@ def test_dynamics_rates(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_gravity(n_points):
-    state_dict, _ = random_states(n_points)
-    states = containers.VehicleState(**state_dict)
+    states = random_states(n_points)
 
     _, pitch, roll = quaternion_to_euler(states.attitude)
 

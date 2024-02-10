@@ -8,7 +8,7 @@ g0 = 9.81  # gravity, [m/s^2]
 b = 2.8956  # wing-span [m]
 c = 0.18994  # wing chord [m]
 S = 0.55  # wing area [m^2]
-e = 0.9  # Oswald's Efficiency Factor []
+eos = 0.9  # Oswald's Efficiency Factor [dimensionless between 0 and 1]
 
 # Some derived quantities
 AR = b ** 2 / S
@@ -43,10 +43,10 @@ CDq = 0.  # drag wrt pitch rate
 CDdeltaE = 0.0135  # drag due to elevator deflection
 
 # Pitching Moment
-CM0 = 0.0135  # intercept of pitching moment
-CMalpha = -2.74  # pitching moment slope
-CMq = -38.21  # pitching moment wrt q
-CMdeltaE = -0.99  # pitching moment from elevator
+Cm0 = 0.0135  # intercept of pitching moment
+Cmalpha = -2.74  # pitching moment slope
+Cmq = -38.21  # pitching moment wrt q
+CmdeltaE = -0.99  # pitching moment from elevator
 
 # Sideforce
 CY0 = 0.

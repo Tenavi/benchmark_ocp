@@ -410,10 +410,10 @@ class OptimalControlProblem:
         if return_dHdu:
             dLdu = self.running_cost_grad(x, u, return_dLdx=False, L0=L)
             dfdu = self.jac(x, u, return_dfdx=False, f0=f)
-            dHdx = dLdu + np.einsum('ijk,ik->jk', dfdu, p)
+            dHdu = dLdu + np.einsum('ijk,ik->jk', dfdu, p)
             if np.ndim(u) < 2:
-                dHdx = dHdx.reshape(-1)
-            return H, dHdx
+                dHdu = dHdu.reshape(-1)
+            return H, dHdu
 
         return H
 

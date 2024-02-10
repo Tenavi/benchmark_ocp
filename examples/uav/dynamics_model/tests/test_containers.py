@@ -48,6 +48,16 @@ def random_attitude(n_points, seed=None):
 
 
 def random_states(n_points, seed=None):
+    state_dict, _ = _random_state_array(n_points, seed)
+    return containers.VehicleState(**state_dict)
+
+
+def random_controls(n_points, seed=None):
+    control_dict, _ = _random_control_array(n_points, seed)
+    return containers.Controls(**control_dict)
+
+
+def _random_state_array(n_points, seed=None):
     rng = np.random.default_rng(seed)
 
     yaw, pitch, roll = random_attitude(n_points, rng)
@@ -67,7 +77,7 @@ def random_states(n_points, seed=None):
     return state_dict, np.squeeze(state_array)
 
 
-def random_controls(n_points, seed=None):
+def _random_control_array(n_points, seed=None):
     rng = np.random.default_rng(seed)
 
     control_array = np.vstack([rng.uniform(size=(1, n_points)),
@@ -139,8 +149,7 @@ def test_angle_conversions(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_VehicleState_init(n_points):
-    state_dict, state_array = random_states(n_points)
-
+    state_dict, state_array = _random_state_array(n_points)
     container = containers.VehicleState(**state_dict)
 
     assert container._array.shape == (11, n_points)
@@ -160,7 +169,7 @@ def test_VehicleState_init(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_Controls_init(n_points):
-    ctrl_dict, ctrl_array = random_controls(n_points)
+    ctrl_dict, ctrl_array = _random_control_array(n_points)
 
     container = containers.Controls(**ctrl_dict)
 
@@ -181,8 +190,8 @@ def test_Controls_init(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_VehicleState_update(n_points):
-    state_dict, state_array = random_states(n_points)
-    state_dict2, state_array2 = random_states(n_points)
+    state_dict, state_array = _random_state_array(n_points)
+    state_dict2, state_array2 = _random_state_array(n_points)
 
     assert not np.any(state_array == state_array2)
 
@@ -205,8 +214,8 @@ def test_VehicleState_update(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_Controls_update(n_points):
-    ctrl_dict, ctrl_array = random_controls(n_points)
-    ctrl_dict2, ctrl_array2 = random_controls(n_points)
+    ctrl_dict, ctrl_array = _random_control_array(n_points)
+    ctrl_dict2, ctrl_array2 = _random_control_array(n_points)
 
     assert not np.any(ctrl_array == ctrl_array2)
 
@@ -222,9 +231,7 @@ def test_Controls_update(n_points):
 @pytest.mark.parametrize('n_points', [1, 2])
 @pytest.mark.parametrize('update_attr', ['u', 'v', 'w'])
 def test_airspeed_update(n_points, update_attr):
-    state_dict, _ = random_states(n_points)
-
-    container = containers.VehicleState(**state_dict)
+    container = random_states(n_points)
 
     # Initialize _airspeed attribute
     assert container._airspeed is None
@@ -232,7 +239,7 @@ def test_airspeed_update(n_points, update_attr):
     assert container._airspeed is not None
 
     # Update velocity state
-    new_velocity = state_dict[update_attr] * 10.
+    new_velocity = getattr(container, update_attr) * 10.
 
     setattr(container, update_attr, new_velocity)
 
@@ -260,7 +267,7 @@ def test_airspeed_update(n_points, update_attr):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_zero_airspeed(n_points):
-    state_dict, _ = random_states(n_points)
+    state_dict, _ = _random_state_array(n_points)
 
     # Set the first airspeed states to zero
     state_dict['u'][0] = 0.
@@ -287,9 +294,7 @@ def test_zero_airspeed(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_rotation(n_points):
-    state_dict, _ = random_states(n_points)
-
-    container = containers.VehicleState(**state_dict)
+    container = random_states(n_points)
 
     yaw, pitch, roll = quaternion_to_euler(container.attitude)
     rot_mat = rotation_matrix(yaw, pitch, roll)
@@ -318,7 +323,7 @@ def test_rotation(n_points):
 @pytest.mark.parametrize('fun', ['inertial_to_body', 'body_to_inertial'])
 def test_rotation_shape(fun):
     # Make two rotations and containers for each and both
-    _, state_array = random_states(2)
+    _, state_array = _random_state_array(2)
     state_array[:7] = 0.
 
     cont1 = containers.VehicleState.from_array(state_array[:, 0])
@@ -369,9 +374,7 @@ def test_rotation_shape(fun):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_rotation_update(n_points):
-    state_dict, _ = random_states(n_points)
-
-    container = containers.VehicleState(**state_dict)
+    container = random_states(n_points)
 
     # Initialize _rotation attribute
     assert container._rotation is None
@@ -402,9 +405,7 @@ def test_rotation_update(n_points):
 @pytest.mark.parametrize('n_points', [1, 2])
 @pytest.mark.parametrize('update_attr', ['u', 'v', 'w', 'attitude'])
 def test_course_update(n_points, update_attr):
-    state_dict, _ = random_states(n_points)
-
-    container = containers.VehicleState(**state_dict)
+    container = random_states(n_points)
 
     # Initialize _course attribute
     assert container._course is None
@@ -417,7 +418,7 @@ def test_course_update(n_points, update_attr):
         quat = euler_to_quaternion([yaw, pitch, roll])
         container.attitude = quat
     else:
-        new_velocity = state_dict[update_attr] * -10.
+        new_velocity = getattr(container, update_attr) * -10.
         setattr(container, update_attr, new_velocity)
 
     # Check that _course has been reset
@@ -436,7 +437,8 @@ def test_course_update(n_points, update_attr):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 @pytest.mark.parametrize('multiplier', [-1., 1/2, 1.])
-def test_saturate(n_points, multiplier):
+@pytest.mark.parametrize('inplace', [True, False])
+def test_saturate(n_points, multiplier, inplace):
     rng = np.random.default_rng()
 
     ctrl_array = np.vstack([rng.uniform(low=1., high=2., size=(1, n_points)),
@@ -445,9 +447,18 @@ def test_saturate(n_points, multiplier):
                                         size=(3, n_points))])
     ctrl_array *= multiplier
 
-    container = containers.Controls.from_array(ctrl_array)
+    unsat_container = containers.Controls.from_array(ctrl_array)
 
-    container.saturate(constants.min_controls, constants.max_controls)
+    container = unsat_container.saturate(constants.min_controls,
+                                         constants.max_controls,
+                                         inplace=inplace)
+    if inplace:
+        assert container is unsat_container
+    else:
+        assert container is not unsat_container
+        np.testing.assert_array_equal(unsat_container.to_array(),
+                                      np.squeeze(ctrl_array))
+
     sat_ctrl_array = container.to_array().reshape(ctrl_array.shape)
 
     for i in range(n_points):
