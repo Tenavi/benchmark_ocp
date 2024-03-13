@@ -227,3 +227,47 @@ def test_aero_forces(n_points, zero_idx):
         np.testing.assert_array_equal(moments[0, non_zero_idx], Mx * pressure)
         np.testing.assert_array_equal(moments[1, non_zero_idx], My * pressure)
         np.testing.assert_array_equal(moments[2, non_zero_idx], Mz * pressure)
+
+
+@pytest.mark.parametrize('n_points', [1, 2])
+def test_prop_forces_output_shape(n_points):
+    states = random_states(n_points)
+    controls = random_controls(n_points)
+
+    va, _, _ = states.airspeed
+
+    assert va.shape == controls.throttle.shape == (n_points,)
+
+    thrust, torque = aero.prop_forces(va, controls.throttle, constants)
+
+    assert thrust.shape == torque.shape == (n_points,)
+
+
+def test_prop_forces_zero_rotation():
+    """
+    Special case where omega = 0 [rad/s]. From Beard supplement,
+        thrust = rho * D_prop ** 2 * C_T2 * va ** 2
+    and
+        torque = rho * D_prop ** 3 * C_Q2 * va ** 2
+    At the same time, this requires
+        torque = KQ * (voltage / R_motor - i0)
+    which implies
+        va ** 2 = KQ / (rho * D_prop ** 3 * C_Q2) * (voltage / R_motor - i0)
+    Since C_Q2 < 0, this is only valid for voltage <= i0 * R_motor.
+    """
+    max_volt = constants.i0 * constants.R_motor
+    max_throttle = max_volt / constants.V_max
+
+    throttle = np.linspace(0., max_throttle)
+    voltage = throttle * constants.V_max
+
+    va = np.sqrt(constants.KQ * (voltage / constants.R_motor - constants.i0)
+                 / (constants.rho * constants.D_prop ** 3 * constants.C_Q2))
+
+    thrust = constants.rho * constants.D_prop ** 2 * constants.C_T2 * va ** 2
+    torque = constants.KQ * (voltage / constants.R_motor - constants.i0)
+
+    comp_thrust, comp_torque = aero.prop_forces(va, throttle, constants)
+
+    np.testing.assert_allclose(comp_thrust, thrust, atol=1e-14, rtol=1e-14)
+    np.testing.assert_allclose(comp_torque, torque, atol=1e-14, rtol=1e-14)

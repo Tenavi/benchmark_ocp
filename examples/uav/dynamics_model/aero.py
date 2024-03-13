@@ -1,6 +1,39 @@
 import numpy as np
 
 
+def aeroprop_forces(states, controls, parameters):
+    """
+    Compute the aero-propulsive (aerodynamic and propulsive) forces and moments
+    based on airspeed, angle of attack, sideslip, angular rates, and control
+    inputs.
+
+    Parameters
+    ----------
+    states : VehicleState
+        Current states.
+    controls : Controls
+        Control inputs.
+    parameters : ProblemParameters
+
+    Returns
+    -------
+    forces : (3,) or (3, n_points) array
+        Forces acting along body x, y, and z axes.
+    moments : (3,) or (3, n_points) array
+        Moments acting in body roll, pitch, and yaw directions.
+    """
+
+    va, _, _ = states.airspeed
+
+    forces, moments = aero_forces(states, controls, parameters)
+    prop_thrust, prop_torque = prop_forces(va, controls.throttle, parameters)
+
+    forces[:1] += prop_thrust
+    moments[:1] -= prop_torque
+
+    return forces, moments
+
+
 def aero_forces(states, controls, parameters):
     """
     Compute the aerodynamic forces and moments based on airspeed, angle of
@@ -19,7 +52,7 @@ def aero_forces(states, controls, parameters):
     forces : (3,) or (3, n_points) array
         Forces acting along body x, y, and z axes.
     moments : (3,) or (3, n_points) array
-        Moments acting in body yaw, pitch, and roll directions.
+        Moments acting in body roll, pitch, and yaw directions.
     """
 
     va, alpha, beta = states.airspeed
@@ -277,29 +310,64 @@ def _blending_fun(alpha, alpha_stall, aero_blend_rate=50., jac=False):
     return sigma, d_sigma
 
 
-def prop_forces(va, throttle):
-    '''
-    Simple propellor model, modified from Beard Chapter 4.3.
+def prop_forces(va, throttle, parameters):
+    """
+    Propeller model from Beard supplement Chapter 4.3.
 
     Parameters
     ----------
-    va : (1, n_points) array
+    va : (n_points) array
         Airspeed for each state [m/s].
-    throttle : (1, n_points) array
+    throttle : (n_points) array
         Throttle setting corresponding to each state.
+    parameters : ProblemParameters
 
     Returns
     -------
-    forces : (3,) or (3, n_points) array
-        Forces acting along body x, y, and z axes.
-    moments : (3,) or (3, n_points) array
-        Moments acting in body yaw, pitch, and roll directions.
-    '''
-    forces = np.zeros((3, va.shape[1]))
-    moments = np.zeros((3, va.shape[1]))
+    thrust : (n_points,) array
+        Force acting along body x-axis.
+    torque : (n_points,) array
+        Moment acting in negative roll direction.
+    """
 
-    coef = 0.5 * parameters.rho * parameters.Sprop * parameters.Cprop
-    forces[0] = coef * (parameters.kmotor**2 * throttle - va**2)
-    moments[0] = -parameters.kTp * parameters.kOmega**2 * throttle
+    va = np.asarray(va)
+    va_2 = va ** 2
 
-    return np.squeeze(forces), np.squeeze(moments)
+    # Throttle to voltage
+    voltage = np.asarray(throttle) * parameters.V_max
+
+    # Compute propeller speed
+    rho_D_2 = parameters.rho * parameters.D_prop ** 2
+    rho_D_3 = rho_D_2 * parameters.D_prop
+    rho_D_4 = rho_D_3 * parameters.D_prop
+    rho_D_5 = rho_D_4 * parameters.D_prop
+
+    a = parameters.C_Q0 * rho_D_5 / (4. * np.pi ** 2)
+    b = ((parameters.C_Q1 * rho_D_4 / (2. * np.pi)) * va
+         + parameters.KQ * parameters.KV / parameters.R_motor)
+    c = ((parameters.C_Q2 * rho_D_3) * va_2
+         - (parameters.KQ / parameters.R_motor) * voltage
+         + parameters.KQ * parameters.i0)
+
+    # Propeller speed in [rad/s]
+    omega = (- b + np.sqrt(b ** 2 - 4. * a * c)) / (2. * a)
+
+    # Convert to [rot/s]
+    omega = omega / (2. * np.pi)
+
+    # Instead of computing advance ratio and dimensionless thrust and torque
+    # coefficients, multiply airspeed (va) and propeller diameter (D_prop)
+    # through thrust and torque equations
+    D_omega = parameters.D_prop * omega
+    D_2_omega_2 = D_omega ** 2
+    va_D_omega = va * D_omega
+
+    thrust = rho_D_2 * (parameters.C_T2 * va_2
+                        + parameters.C_T1 * va_D_omega
+                        + parameters.C_T0 * D_2_omega_2)
+
+    torque = rho_D_3 * (parameters.C_Q2 * va_2
+                        + parameters.C_Q1 * va_D_omega
+                        + parameters.C_Q0 * D_2_omega_2)
+
+    return thrust, torque

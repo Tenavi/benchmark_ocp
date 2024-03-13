@@ -79,25 +79,24 @@ kTp = 0.  # motor torque constant
 kOmega = 0.  # motor speed constant
 Cprop = 0.45  # thrust efficiency coefficient, DIFFERENT FROM BEARD
 
-# Alternate propeller Model
-D_prop = 0.508  # prop diameter [m]
-KV = 145.  # from datasheet [RPM/V]
-KQ = 60. / (2. * np.pi * KV)  # [V-s/rad]
+# Alternate propeller model from Beard supplement. Code adapted from
+#   https://github.com/randybeard/mavsim_public/blob/main/mavsim_python/parameters/aerosonde_parameters.py
+D_prop = 20. * 0.0254  # prop diameter [m]
+KV_rpm_per_volt = 145.  # Motor speed constant [RPM/V]
+KV = 60. / (2. * np.pi * KV_rpm_per_volt)  # Back-emf constant, [Vsec/rad]
+KQ = KV  # Motor torque constant [N-m/A]
 R_motor = 0.042  # [ohms]
 i0 = 1.5  # no-load (zero-torque) current [A]
 ncells = 12.
 V_max = 3.7 * ncells  # max voltage for specified number of battery cells
 
 # Propeller coefficients
-C_Q2 = -0.01664
-C_Q1 = 0.004970
-C_Q0 = 0.005230
 C_T2 = -0.1079
 C_T1 = -0.06044
 C_T0 = 0.09357
-
-# Throttle setting for zero torque
-zero_throttle = i0 * R_motor / V_max
+C_Q2 = -0.01664
+C_Q1 = 0.004970
+C_Q0 = 0.005230
 
 # Control constraints
 max_angle = np.deg2rad(25.)

@@ -3,7 +3,8 @@ import pytest
 
 from examples.common_utilities.dynamics import quaternion_to_euler
 from examples.uav.dynamics_model import constants, dynamics
-from examples.uav.dynamics_model.tests.test_containers import random_states
+from examples.uav.dynamics_model.tests.test_containers import (random_states,
+                                                               random_controls)
 
 
 rng = np.random.default_rng()
@@ -110,3 +111,13 @@ def test_gravity(n_points):
     gravity = dynamics.gravity(states, constants.mg)
 
     np.testing.assert_allclose(gravity, g_expect, atol=1e-14)
+
+
+@pytest.mark.parametrize('n_points', [1, 2])
+def test_dynamics_shapes(n_points):
+    states = random_states(n_points)
+    controls = random_controls(n_points)
+
+    dxdt = dynamics.dynamics(states, controls, constants)
+
+    assert dxdt.to_array().shape == states.to_array().shape
