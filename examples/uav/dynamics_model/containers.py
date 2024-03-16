@@ -7,12 +7,7 @@ class Container:
     dim = None
 
     def __init__(self, array):
-        self._array = np.asarray(array)
-
-        if self._array.shape[0] != self.dim or self._array.ndim > 2:
-            raise ValueError(f"Tried to set the {type(self.__name__)} with an "
-                             f"array with shape {self._array.shape}, but the "
-                             f"shape must be ({self.dim}, n_points).")
+        self._array = np.asarray(array).reshape(self.dim, -1)
 
     @property
     def n_points(self):

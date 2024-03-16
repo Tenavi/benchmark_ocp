@@ -163,6 +163,7 @@ def test_VehicleState_init(n_points):
     # Initialized from array
     for array in [state_array, state_array.reshape(11, -1)]:
         container = containers.VehicleState.from_array(array)
+        assert container._array.shape == (11, n_points)
 
     assert_container_equal(container, state_array, state_dict)
 
@@ -184,6 +185,7 @@ def test_Controls_init(n_points):
     # Initialized from array
     for array in [ctrl_array, ctrl_array.reshape(4, -1)]:
         container = containers.Controls.from_array(array)
+        assert container._array.shape == (4, n_points)
 
     assert_container_equal(container, ctrl_array, ctrl_dict)
 
