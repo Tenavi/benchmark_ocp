@@ -1,504 +1,245 @@
-import os
 import numpy as np
-import scipy.io
 
-from qrnet.problem_template import TemplateOCP, MakeConfig
+from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.utilities import resize_vector
+from optimalcontrol.sampling import UniformSampler
 
-from .dynamics_model.containers import VehicleState, Controls, STATES_IDX
-from .dynamics_model.rotations import euler_to_quat
-from .dynamics_model.dynamics import dynamics as uav_dynamics
+from examples.common_utilities.dynamics import (euler_to_quaternion,
+                                                quaternion_to_euler)
+
+from .dynamics_model.containers import VehicleState, Controls
 from .dynamics_model.trim import compute_trim
+from .dynamics_model.dynamics import dynamics as dynamics_fun
+from .dynamics_model.aero import aeroprop_forces
 from .dynamics_model.parameters import aerosonde
 
-config = {
-    'ode_solver': 'LSODA',
-    'ocp_solver': 'direct',
-    'fp_tol': 1e-03,
-    'indirect_tol': 1e-04,
-    'direct_tol': 1e-07,
-    'direct_n_init_nodes': 48,
-    'direct_max_nodes': 64,
-    'direct_n_add_nodes': 16,
-    'direct_max_slsqp_iter': 300,
-    't1_sim': 30.,
-    't1_scale': 3/2,
-    't1_max': 180.,
-    'n_trajectories_train': 16,
-    'n_trajectories_test': 100,
-    'batch_size': 128,
-    'n_epochs': 1000,
-    'callback_epoch': 100,
-    'optimizer': 'AdamOptimizer',
-    'batch_size': 4096
-}
 
-config = MakeConfig(**config)
-
-class MakeOCP(TemplateOCP):
-    def __init__(self):
-        refresh_params = False
-
-        try:
-            if refresh_params:
-                raise
-
-            PARAMS = scipy.io.loadmat(
-                os.path.join('examples', 'uav', 'params.mat')
-            )
-
-            X_bar = VehicleState(PARAMS['X_bar'])
-            U_bar = Controls(PARAMS['U_bar'])
-
-            Va_star, _, _ = X_bar.airspeed()
-            Va_star = float(Va_star)
-        except:
-            PARAMS = {}
-
-            # Linearization point
-            Va_star = 20.
-            X_bar, U_bar, success = compute_trim(
-                self.dynamics, jacobians=self.jacobians,
-                Va_star=Va_star, R_star=np.inf, gamma_star=0.
-            )
-            assert success
-
-        # Cost limiter on altitude command changes
-        self.h_cost_ceil = 50.
-        # Initial condition altitude limit
-        self.h_init_ceil = 3. * self.h_cost_ceil
-        # Absolute altitude limit to stop integration
-        self.h_abs_ceil = 2. * self.h_init_ceil
-
-        # Cost parameters
-        self.Q_h = 1. / self.h_cost_ceil**2
-        self.Q_u = 10. / Va_star**2
-        self.Q_v = 1. / 1.
-        self.Q_w = 1. / 1.
-        self.Q_attitude = 5. / 1.
-        self.Q_p = 1. / np.deg2rad(30.)**2
-        self.Q_q = 1. / np.deg2rad(30.)**2
-        self.Q_r = 1. / np.deg2rad(30.)**2
-
-        self.R_throttle = 0.1 / constants.max_controls.throttle ** 2
-        self.R_aileron = 0.1 / constants.max_controls.aileron ** 2
-        self.R_elevator = 1. / constants.max_controls.elevator ** 2
-        self.R_rudder = 1. / constants.max_controls.rudder ** 2
-
-        U_lb = constants.min_controls.to_array()
-        U_ub = constants.max_controls.to_array()
-
-        # Cost matrices
-        Q = VehicleState(
-            pd=self.Q_h, u=self.Q_u, v=self.Q_v, w=self.Q_w,
-            p=self.Q_p, q=self.Q_q, r=self.Q_r,
-            attitude=[self.Q_attitude]*3 + [0.]
-        )
-        Q = np.diag(Q.to_array())
-
-        R = Controls(
-            throttle=self.R_throttle, aileron=self.R_aileron,
-            elevator=self.R_elevator, rudder=self.R_rudder
-        )
-        self.R_inv = 1./R.as_array().reshape(-1,1)
-        self.R = R.as_array().reshape(-1,1)
-        R = np.diag(self.R.flatten())
-
-        P = None
-        if 'Q' in PARAMS and 'R' in PARAMS:
-            if np.allclose(Q, PARAMS['Q']) and np.allclose(R, PARAMS['R']):
-                P = PARAMS.get('P', None)
-
-        if P is None:
-            print('Creating new LQR controller...')
-
-        super().__init__(
-            X_bar.to_array(), U_bar.as_array(),
-            Q=Q, R=R, P=P, U_lb=U_lb, U_ub=U_ub
-        )
-
-    def _array_to_container(self, X, U, from_equilibrium=False):
-        '''
-        Convert numpy arrays X and U into VehicleState and Controls container
-        class instances. Also allows shifting X and U relative to their
-        respective equilibrium values, X_bar and U_bar. If X and U are already
-        containers, these get passed through, shifting by equilibrium if
-        desired.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array, or VehicleState
-            State(s) arranged by (dimension, time).
-        U : (n_controls,) or (n_controls, n_points) array, or Controls
-            Control(s) arranged by (dimension, time).
-        from_equilibrium : bool, default=False
-            If True, returns VehicleState(X - X_bar) and Controls(U - U_bar).
-
-        Returns
-        -------
-        states : VehicleState
-            State(s), offset from X_bar if from_equilibrium=True.
-        controls : Controls
-            Control input(s), offset from U_bar if from_equilibrium=True.
-        '''
-        if from_equilibrium:
-            if isinstance(X, VehicleState):
-                X = X.to_array()
-            if isinstance(U, Controls):
-                U = U.as_array()
-
-            X = X.reshape(self.n_states, -1) - self.X_bar
-            U = U.reshape(self.n_controls, -1) - self.U_bar
-
-        if isinstance(X, VehicleState):
-            states = X
-        else:
-            states = VehicleState(X)
-
-        if isinstance(U, Controls):
-            controls = U
-        else:
-            controls = Controls(U)
-
-        return states, controls
-
-    def sample_X0(self, Ns, dist=None):
-        X0 = VehicleState(self.X_bar)
-
-        if dist is None:
-            dist = 1.
-        elif dist == 0.:
-            X0 = np.tile(self.X_bar, (1,Ns))
-            return np.squeeze(X0)
-        elif dist < 0. or dist > 1.:
-            raise ValueError('dist argument must be None or in (0,1]')
-
-        # +/- 150 [m] in initial altitude
-        h0 = self.h_init_ceil*(2.*np.random.rand(Ns) - 1.)
-        # +/- 5 [m/s] in each body velocity
-        u_err, v_err, w_err = 5.*(2.*np.random.rand(3,Ns) - 1.)
-        # +/- 30 [deg/s] in each body rate
-        p_err, q_err, r_err = np.deg2rad(30.*(2.*np.random.rand(3,Ns) - 1.))
-        # +/- 180 [deg] in initial heading
-        course = (dist*np.pi)*(2.*np.random.rand(Ns) - 1.)
-        # +/- 90 [deg] in initial pitch angle
-        pitch = (dist*np.pi/2.)*(2.*np.random.rand(Ns) - 1.)
-        # +/- 180 [deg] in initial roll angle
-        roll = (dist*np.pi)*(2.*np.random.rand(Ns) - 1.)
-
-        X0.set_state(
-            pd=dist * -h0,
-            u=X0.u + dist*u_err,
-            v=X0.v + dist*v_err,
-            w=X0.w + dist*w_err,
-            p=X0.p + dist*p_err,
-            q=X0.q + dist*q_err,
-            r=X0.r + dist*r_err,
-            attitude=euler_to_quat(course, pitch, roll)
-        )
-
-        return X0.to_array()
-
-    def running_cost(self, X, U):
-        '''
-        Evaluate the running cost L(X,U) at one or multiple state-control pairs.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array, or VehicleState
-            State(s) arranged by (dimension, time).
-        U : (n_controls,) or (n_controls, n_points) array, or Controls
-            Control(s) arranged by (dimension, time).
-
-        Returns
-        -------
-        L : (1,) or (n_points,) array
-            Running cost(s) L(X,U) evaluated at pair(s) (X,U).
-        '''
-        err_states, err_controls = self._array_to_container(
-            X, U, from_equilibrium=True
-        )
-
-        h_err = self.h_cost_ceil * np.tanh(err_states.pd / self.h_cost_ceil)
-        quat_err = np.sum(err_states.attitude[:-1]**2, axis=0, keepdims=True)
-
-        L_states = np.squeeze(
-            self.Q_h * h_err**2
-            + self.Q_u * err_states.u**2
-            + self.Q_v * err_states.v**2
-            + self.Q_w * err_states.w**2
-            + self.Q_attitude * quat_err
-            + self.Q_p * err_states.p**2
-            + self.Q_q * err_states.q**2
-            + self.Q_r * err_states.r**2
-        )
-
-        L_controls = np.squeeze(
-            self.R_throttle * err_controls.throttle**2
-            + self.R_aileron * err_controls.aileron**2
-            + self.R_elevator * err_controls.elevator**2
-            + self.R_rudder * err_controls.rudder**2
-        )
-
-        return L_states + L_controls
-
-    def running_cost_gradient(self, X, U, return_dLdX=True, return_dLdU=True):
-        '''
-        Evaluate the gradients of the running cost, dL/dX (X,U) and dL/dU (X,U),
-        at one or multiple state-control pairs.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        U : (n_controls,) or (n_controls, n_points) array
-            Control(s) arranged by (dimension, time).
-        return_dLdX : bool, default=True
-            Set to True to compute the gradient with respect to states, dL/dX.
-        return_dLdU : bool, default=True
-            Set to True to compute the gradient with respect to controls, dL/dU.
-
-        Returns
-        -------
-        dLdX : (n_states,) or (n_states, n_points) array
-            Gradient dL/dX (X,U) evaluated at pair(s) (X,U).
-        dLdU : (n_states,) or (n_states, n_points) array
-            Gradient dL/dU (X,U) evaluated at pair(s) (X,U).
-        '''
-        err_states, err_controls = self._array_to_container(
-            X, U, from_equilibrium=True
-        )
-
-        if return_dLdX:
-            dLdpd = (
-                (2.*self.Q_h*self.h_cost_ceil)
-                * np.sinh(err_states.pd / self.h_cost_ceil)
-                / np.cosh(err_states.pd / self.h_cost_ceil)**3
-            )
-            dLdquat = (2.*self.Q_attitude) * err_states.attitude
-            dLdquat[-1] = 0.
-
-            dLdX = VehicleState(
-                pd=dLdpd,
-                u=(2.*self.Q_u)*err_states.u,
-                v=(2.*self.Q_v)*err_states.v,
-                w=(2.*self.Q_w)*err_states.w,
-                p=(2.*self.Q_p)*err_states.p,
-                q=(2.*self.Q_q)*err_states.q,
-                r=(2.*self.Q_r)*err_states.r,
-                attitude=dLdquat
-            )
-            if not return_dLdU:
-                return dLdX.to_array()
-
-        if return_dLdU:
-            err_controls = err_controls.as_array()
-            if err_controls.ndim < 2:
-                err_controls = err_controls[:,None]
-            dLdU = (2.*self.R) * err_controls
-            if not return_dLdX:
-                return dLdU
-
-        return dLdX.to_array(), dLdU
-
-    def dynamics(self, X, U):
-        '''
-        Evaluate the closed-loop dynamics at single or multiple time instances.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current state.
-        U : (n_controls,) or (n_controls, n_points) array
-            Feedback control U=U(X).
-
-        Returns
-        -------
-        dXdt : (n_states,) or (n_states, n_points) array
-            Dynamics dXdt = F(X,U).
-        '''
-        states, controls = self._array_to_container(X, U)
-
-        dXdt = uav_dynamics(states, controls)
-
-        if not isinstance(X, VehicleState):
-            dXdt = dXdt.to_array().reshape(X.shape)
-
-        return dXdt
-
-    def jacobians(self, X, U, F0=None):
-        '''
-        Evaluate the Jacobians of the dynamics with respect to states and
-        controls at single or multiple time instances. Default implementation
-        approximates the Jacobians with central differences.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            Current states.
-        U : (n_controls,) or (n_controls, n_points)  array
-            Control inputs.
-        F0 : ignored
-            For API consistency only.
-
-        Returns
-        -------
-        dFdX : (n_states, n_states) or (n_states, n_states, n_points) array
-            Jacobian with respect to states, dF/dX.
-        dFdU : (n_states, n_controls) or (n_states, n_controls, n_points) array
-            Jacobian with respect to controls, dF/dX.
-        '''
-        states, controls = self._array_to_container(X, U)
-
-        dFdX = jacobians.jac_states(states, controls)
-        dFdU = jacobians.jac_controls(states, controls)
-
-        return dFdX, dFdU
-
-    def U_star(self, X, dVdX, jac=False):
-        '''
-        Evaluate the optimal control as a function of state and costate.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
-        jac : bool, default=False
-            If True, also return the Jacobian of the controls with respect to
-            states.
-
-        Returns
-        -------
-        U : (n_controls,) or (n_controls, n_points) array
-            Optimal control(s) arranged by (dimension, time).
-        dUdX : (n_controls, n_states, n_points) or (n_controls, n_states) array
-            Jacobian of the optimal control with respect to states leaving
-            costates fixed, dU/dX (X; dVdX). Only returned if jac=True.
-        '''
-        if jac:
-            U, dUdX = optimal_controls.controls_and_jac(
-                X, dVdX, self.R_inv, self.U_bar
-            )
-        else:
-            U = optimal_controls.control(X, dVdX, self.R_inv, self.U_bar)
-
-        U = U.as_array()
-
-        if U.ndim < 2 and X.ndim >= 2:
-            U = U[...,None]
-
-        if jac:
-            return U, dUdX
-
-        return U
-
-    def jac_U_star(self, X, dVdX, U0=None):
-        '''
-        Evaluate the Jacobian of the optimal control with respect to the state,
-        leaving the costate fixed.
-
-        Parameters
-        ----------
-        X : (n_states,) or (n_states, n_points) array
-            State(s) arranged by (dimension, time).
-        dVdX : (n_states,) or (n_states, n_points) array
-            Costate(s) arranged by (dimension, time).
-        U0 : (n_controls,) or (n_controls, n_points) array, optional
-            U_star(X, dVdX), pre-evaluated at the inputs.
-
-        Returns
-        -------
-        dUdX : (n_controls, n_states, n_points) or (n_controls, n_states) array
-            Jacobian of the optimal control with respect to states leaving
-            costates fixed, dU/dX (X; dVdX).
-        '''
-        if U0 is None:
-            U0 = optimal_controls.control(X, dVdX, self.R_inv, self.U_bar)
-        return optimal_controls.jacobian(X, dVdX, self.R_inv, U0)
-
-    def make_U_NN(self, X, dVdX):
-        '''
-        Makes TensorFlow graph of the optimal control as a function of the state
-        and NN value gradient.
-
-        Parameters
-        ----------
-        X : (n_states, None) tensor
-            States arranged by (dimension, time).
-        dVdX : (n_states, None) tensor
-            Costates arranged by (dimension, time).
-
-        Returns
-        -------
-        U : (n_controls, None) tensor
-            Optimal controls arranged by (dimension, time).
-        '''
-        raise NotImplementedError
-
-    def bvp_dynamics(self, t, X_aug):
-        '''
-        Evaluate the augmented dynamics for Pontryagin's Minimum Principle.
-        Default implementation uses finite differences for the costate dynamics.
-
-        Parameters
-        ----------
-        t : (n_points,) array
-            Time collocation points for each state.
-        X_aug : (2*n_states+1, n_points) array
-            Current state, costate, and running cost.
-
-        Returns
-        -------
-        dX_aug_dt : (2*n_states+1, n_points) array
-            Concatenation of dynamics dXdt = F(X,U^*), costate dynamics,
-            dAdt = -dH/dX(X,U^*,dVdX), and change in cost dVdt = -L(X,U*),
-            where U^* is the optimal control.
-        '''
-        X = X_aug[:self.n_states]
-        dVdX = X_aug[self.n_states:2*self.n_states]
-
-        U, dUdX = self.U_star(X, dVdX, jac=True)
-
-        # State dynamics
-        dXdt = self.dynamics(X, U)
-
-        # Evaluate closed loop Jacobian using chain rule
-        dFdX, dFdU = self.jacobians(X, U, F0=dXdt)
-
-        dFdX += np.einsum('ijk,jhk->ihk', dFdU, dUdX)
-
-        # Lagrangian and Lagrangian gradient
-        L = np.atleast_2d(self.running_cost(X, U))
-        dLdX, dLdU = self.running_cost_gradient(X, U)
-
-        if dLdX.ndim < 2:
-            dLdX = dLdX[:,None]
-        if dLdU.ndim < 2:
-            dLdU = dLdU[:,None]
-
-        dLdX = dLdX + np.einsum('ik,ijk->jk', dLdU, dUdX)
-
-        # Costate dynamics (gradient of optimized Hamiltonian)
-        dHdX = dLdX + np.einsum('ijk,ik->jk', dFdX, dVdX)
-
-        return np.vstack((dXdt, -dHdX, -L))
+class FixedWing(OptimalControlProblem):
+    _required_parameters = {'vehicle_parameters': aerosonde,
+                            'aeroprop_fun': aeroprop_forces,
+                            'va_target': 25.,
+                            'h_cost_ceil': 50.,
+                            'Q': VehicleState(
+                                pd=1. / 50. ** 2,
+                                u=1. / 25. ** 2,
+                                v=1.,
+                                w=1.,
+                                p=1. / np.deg2rad(30.) ** 2,
+                                q=1. / np.deg2rad(30.) ** 2,
+                                r=1. / np.deg2rad(30.) ** 2,
+                                attitude=[1., 1., 1., 0.]).to_array(),
+                            'R': (aerosonde.max_controls.to_array()
+                                  - aerosonde.min_controls.to_array()) ** -2,
+                            'x0_max_perturb': VehicleState(
+                                pd=100.,
+                                u=5.,
+                                v=5.,
+                                w=5.,
+                                p=np.deg2rad(30.),
+                                q=np.deg2rad(30.),
+                                r=np.deg2rad(30.),
+                                attitude=euler_to_quaternion([180., 15., 30.], degrees=True))}
+    _optional_parameters = {'x0_sample_seed': None}
 
     @property
-    def integration_events(self):
-        '''
-        Get a callable that checks if altitude `pd` is outside the bound
-        specified by `self.parameters.altitude_ceiling` and stops integration
-        early to save time.
+    def n_states(self):
+        return VehicleState.dim
+
+    @property
+    def n_controls(self):
+        return Controls.dim
+
+    @property
+    def final_time(self):
+        return np.inf
+
+    @property
+    def state_lb(self):
+        """(`n_states`,) array. Lower bounds on `pd` (upper bound on altitude)
+        and quaternion states, specifying that the scalar quaternion must be
+        positive."""
+        x_lb = VehicleState(pd=-2.*np.abs(self.parameters.x0_max_perturb.pd),
+                            u=-np.inf, v=-np.inf, w=-np.inf,
+                            p=-np.inf, q=-np.inf, r=-np.inf,
+                            attitude=[-1., -1., -1., 0.])
+        return x_lb.to_array()
+
+    @property
+    def state_ub(self):
+        """(`n_states`,) array. Upper bound on `pd`, translating to a lower
+        bound on altitude."""
+        x_ub = VehicleState(pd=2. * np.abs(self.parameters.x0_max_perturb.pd),
+                            u=np.inf, v=np.inf, w=np.inf,
+                            p=np.inf, q=np.inf, r=np.inf,
+                            attitude=[1., 1., 1., 1.])
+        return x_ub.to_array()
+
+    @staticmethod
+    def _parameter_update_fun(obj, **new_params):
+        if 'vehicle_parameters' in new_params:
+            obj.control_lb = obj.vehicle_parameters.min_controls.to_array(copy=True)
+            obj.control_ub = obj.vehicle_parameters.max_controls.to_array(copy=True)
+
+        if 'va_target' in new_params:
+            obj.trim_state, obj.trim_controls, dxdt = compute_trim(
+                obj.va_target, obj.vehicle_parameters,
+                aeroprop_fun=obj.aeroprop_fun)
+
+            # Confirm that aircraft is in trim
+            if not np.allclose(dxdt.to_array(), 0., atol=1e-02):
+                raise RuntimeError(f"Trim not achieved for "
+                                   f"va_target={obj.va_target:.1f}")
+
+        for var in ('Q', 'R'):
+            if var in new_params:
+                var_val = getattr(obj, var)
+                setattr(obj, var + '_2_diag', np.diag(var_val / 2.))
+                setattr(obj, var, var_val.reshape(-1, 1))
+
+        if any([not hasattr(obj, '_x0_sampler'),
+                'x0_sample_seed' in new_params,
+                'x0_max_perturb' in new_params]):
+            xf = np.concatenate([obj.trim_state.to_array()[:-4],
+                                 quaternion_to_euler(obj.trim_state.attitude)])
+            x0_perturb = np.concatenate([
+                obj.x0_max_perturb.to_array()[:-4],
+                quaternion_to_euler(obj.x0_max_perturb.attitude)])
+
+            if not hasattr(obj, '_x0_sampler'):
+                obj._x0_sampler = UniformSampler(
+                    lb=xf - x0_perturb, ub=xf + x0_perturb, xf=xf, norm=np.inf,
+                    seed=getattr(obj, 'x0_sample_seed', None))
+            else:
+                obj._x0_sampler.update(
+                    lb=xf - x0_perturb, ub=xf + x0_perturb, xf=xf,
+                    seed=new_params.get('attitude_sample_seed', None))
+
+    def sample_initial_conditions(self, n_samples=1, distance=None):
+        """
+        Generate initial conditions. Euler angles yaw, pitch, roll are sampled
+        uniformly from a hypercube, then converted to quaternions, while other
+        states are sampled uniformly from a hypercube. The bounds of the
+        hypercube are defined by `self.parameters.initial_condition_lb` and
+        `self.parameters.initial_condition_ub`. Optionally, the initial condition
+        may be sampled with a specified distance from equilibrium.
+
+        Parameters
+        ----------
+        n_samples : int, default=1
+            Number of sample points to generate.
+        distance : positive float, optional
+            Desired infinity norm of initial condition. Note that depending on how
+            `distance` is specified, samples may be outside the hypercube defined by
+            `self.parameters.initial_condition_lb` and
+            `self.parameters.initial_condition_ub`.
 
         Returns
         -------
-        altitude_event : callable
-            Functions returning `abs(pd - self.parameters.altitude_ceiling)`,
-            with `altitude_event.terminal = True`.
-        '''
-        def altitude_event(t, x):
-            #print(t, X[STATES_IDX['pd']].flatten())
-            return np.abs(x[STATES_IDX['pd']].flatten()) - self.h_abs_ceil
-        altitude_event.terminal = True
-        return altitude_event
+        x0 : (11, n_samples) or (11,) array
+            Samples of the system state, where each column is a different
+            sample. If `n_samples==1` then `x0` will be a 1d array.
+        """
+
+        # Sample from the hypercube
+        x0 = self.parameters._x0_sampler(n_samples=n_samples,
+                                         distance=distance)
+
+        # Convert Euler angles to quaternions
+        angles = x0[-3:]
+        quat = euler_to_quaternion(angles)
+        # Set scalar quaternion positive
+        quat[-1] = np.abs(quat[-1])
+
+        x0 = np.concatenate([x0[:-3], quat], axis=0)
+
+        return x0
+
+    def running_cost(self, x, u):
+        x_err, u_err, squeeze = self._center_inputs(
+            x, u, self.parameters.trim_state.to_array(),
+            self.parameters.trim_controls.to_array())
+
+        x_err[0] = self.parameters.h_cost_ceil * np.tanh(
+            x_err[0] / self.parameters.h_cost_ceil)
+
+        L = (np.sum((self.parameters.Q / 2.) * x_err ** 2, axis=0)
+             + np.sum((self.parameters.R / 2.) * u_err ** 2, axis=0))
+
+        if squeeze:
+            return L[0]
+
+        return L
+
+    def running_cost_grad(self, x, u, return_dLdx=True, return_dLdu=True,
+                          L0=None):
+        x_err, u_err, squeeze = self._center_inputs(
+            x, u, self.parameters.trim_state.to_array(),
+            self.parameters.trim_controls.to_array())
+
+        if return_dLdx:
+            # Chain rule for tanh
+            x_err[0] /= self.parameters.h_cost_ceil
+            x_err[0] = (self.parameters.h_cost_ceil
+                        * np.sinh(x_err[0])
+                        / np.cosh(x_err[0]) ** 3)
+
+            dLdx = self.parameters.Q * x_err
+
+            if squeeze:
+                dLdx = dLdx[..., 0]
+            if not return_dLdu:
+                return dLdx
+
+        if return_dLdu:
+            dLdu = self.parameters.R * u_err
+
+            if squeeze:
+                dLdu = dLdu[..., 0]
+            if not return_dLdx:
+                return dLdu
+
+        return dLdx, dLdu
+
+    def running_cost_hess(self, x, u, return_dLdx=True, return_dLdu=True,
+                          L0=None):
+        x, u, squeeze = self._reshape_inputs(x, u)
+
+        if return_dLdx:
+            # Chain rule for tanh
+            h_err = x[0] / self.parameters.h_cost_ceil
+            h_err = (1. - 2. * np.sinh(h_err) ** 2) / np.cosh(h_err) ** 4
+
+            if squeeze:
+                Q = self.parameters.Q_2_diag.copy()
+
+                Q[0, 0] *= h_err[0]
+            else:
+                Q = self.parameters.Q_2_diag[..., None]
+
+                if x.shape[1] > 1:
+                    Q = np.tile(Q, (1, 1, np.shape(x)[1]))
+
+                Q[0, 0] *= h_err
+
+            if not return_dLdu:
+                return Q
+
+        if return_dLdu:
+            R = self.parameters.R_2_diag
+
+            if not squeeze:
+                R = R[..., None]
+
+                if u.shape[1] > 1:
+                    R = np.tile(R, (1, 1, np.shape(u)[1]))
+
+            if not return_dLdx:
+                return R
+
+        return Q, R
+
+    def dynamics(self, x, u):
+        dxdt = dynamics_fun(VehicleState(array=x), Controls(array=u),
+                            self.parameters.vehicle_parameters,
+                            aeroprop_fun=self.parameters.aeroprop_fun)
+        return dxdt.to_array().reshape(x.shape)

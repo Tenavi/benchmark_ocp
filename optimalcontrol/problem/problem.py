@@ -410,7 +410,7 @@ class OptimalControlProblem:
         if return_dHdu:
             dLdu = self.running_cost_grad(x, u, return_dLdx=False, L0=L)
             dfdu = self.jac(x, u, return_dfdx=False, f0=f)
-            dHdu = dLdu + np.einsum('ijk,ik->jk', dfdu, p)
+            dHdu = dLdu + np.einsum('ij...,i...->j...', dfdu, p)
             if np.ndim(u) < 2:
                 dHdu = dHdu.reshape(-1)
             return H, dHdu
@@ -528,6 +528,9 @@ class OptimalControlProblem:
         p = xp[self.n_states:-1]
         u = self.hamiltonian_minimizer(x, p)
 
+        x, u, squeeze = self._reshape_inputs(x, u)
+        p = p.reshape(x.shape)
+
         # State dynamics
         dxdt = self.dynamics(x, u)
 
@@ -552,7 +555,7 @@ class OptimalControlProblem:
 
         dxpdt = np.vstack((dxdt, -dHdx, -L))
 
-        if np.ndim(x) < 2:
+        if squeeze:
             return dxpdt[:, 0]
 
         return dxpdt

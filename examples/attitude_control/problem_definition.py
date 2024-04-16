@@ -137,12 +137,11 @@ class AttitudeControl(OptimalControlProblem):
                                   rate_distance=None):
         """
         Generate initial conditions. Euler angles yaw, pitch, roll are sampled
-        uniformly from hypercubes defined by
-        `self.parameters.initial_max_attitude`, then converted to
-        quaternions. Angular rates are sampled uniformly
-        from a hypercube defined by `self.parameters.initial_max_rate`.
-        Optionally, one or both of these may be sampled a specified distance
-        from equilibrium.
+        uniformly from a hypercube defined by
+        `self.parameters.initial_max_attitude`, then converted to quaternions.
+        Angular rates are sampled uniformly from a hypercube defined by
+        `self.parameters.initial_max_rate`. Optionally, one or both of these
+        may be sampled a specified distance from equilibrium.
 
         Parameters
         ----------
@@ -152,12 +151,12 @@ class AttitudeControl(OptimalControlProblem):
             Desired distance of euler angles from
             `self.parameters.final_attitude`, in radians. The type of norm is
             determined by `self.parameters.attitude_sample_norm`. Note that
-            depending on how `distance` is specified, samples may be outside the
-            hypercube defined by `self.parameters.initial_max_attitude`.
+            depending on how `attitude_distance` is specified, samples may be
+            outside the hypercube defined by `self.parameters.initial_max_attitude`.
         rate_distance : positive float, optional
             Desired distance of angular rates from zero, in radians/s. The type
             of norm is determined by `self.parameters.rate_sample_norm`. Note
-            that depending on how `distance` is specified, samples may be
+            that depending on how `rate_distance` is specified, samples may be
             outside the hypercube defined by `self.parameters.initial_max_rate`.
 
         Returns

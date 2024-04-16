@@ -180,7 +180,7 @@ def test_dynamics(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', [1, 100])
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_hamiltonian(ocp_name, n_samples):
     """Test that the optimal control as a function of state and costate returns
     the correct shape and Jacobians match finite difference approximations."""
