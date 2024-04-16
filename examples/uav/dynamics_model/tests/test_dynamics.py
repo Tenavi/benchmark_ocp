@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from examples.common_utilities.dynamics import quaternion_to_euler
-from examples.uav.dynamics_model import constants, dynamics
+from examples.uav.dynamics_model import dynamics
+from examples.uav.dynamics_model.parameters import aerosonde as constants
 from examples.uav.dynamics_model.tests.test_containers import (random_states,
                                                                random_controls)
 

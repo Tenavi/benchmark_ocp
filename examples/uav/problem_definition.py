@@ -8,7 +8,7 @@ from .dynamics_model.containers import VehicleState, Controls, STATES_IDX
 from .dynamics_model.rotations import euler_to_quat
 from .dynamics_model.dynamics import dynamics as uav_dynamics
 from .dynamics_model.trim import compute_trim
-from .dynamics_model import constants, jacobians, optimal_controls
+from .dynamics_model.parameters import aerosonde
 
 config = {
     'ode_solver': 'LSODA',
@@ -79,10 +79,10 @@ class MakeOCP(TemplateOCP):
         self.Q_q = 1. / np.deg2rad(30.)**2
         self.Q_r = 1. / np.deg2rad(30.)**2
 
-        self.R_throttle = 0.1 / constants.max_controls.throttle**2
-        self.R_aileron = 0.1 / constants.max_controls.aileron**2
-        self.R_elevator = 1. / constants.max_controls.elevator**2
-        self.R_rudder = 1. / constants.max_controls.rudder**2
+        self.R_throttle = 0.1 / constants.max_controls.throttle ** 2
+        self.R_aileron = 0.1 / constants.max_controls.aileron ** 2
+        self.R_elevator = 1. / constants.max_controls.elevator ** 2
+        self.R_rudder = 1. / constants.max_controls.rudder ** 2
 
         U_lb = constants.min_controls.to_array()
         U_ub = constants.max_controls.to_array()

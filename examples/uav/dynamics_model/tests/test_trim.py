@@ -2,7 +2,8 @@ import pytest
 
 import numpy as np
 
-from examples.uav.dynamics_model import constants, trim
+from examples.uav.dynamics_model import trim
+from examples.uav.dynamics_model.parameters import aerosonde as constants
 
 
 @pytest.mark.parametrize('va', np.arange(18., 33., 2.))

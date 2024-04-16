@@ -3,7 +3,8 @@ import pytest
 
 from optimalcontrol.utilities import approx_derivative
 
-from examples.uav.dynamics_model import aero, constants
+from examples.uav.dynamics_model import aero
+from examples.uav.dynamics_model.parameters import aerosonde as constants
 from examples.uav.dynamics_model.tests.test_containers import (random_states,
                                                                random_controls)
 
