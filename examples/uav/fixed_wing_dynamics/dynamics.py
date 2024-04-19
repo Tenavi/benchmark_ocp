@@ -1,10 +1,9 @@
 import numpy as np
 
-from .aero import aeroprop_forces
 from .containers import VehicleState
 
 
-def dynamics(states, controls, parameters, aeroprop_fun=aeroprop_forces):
+def dynamics(states, controls, parameters, aero_model):
     """
     Evaluate the state derivatives given states and controls.
 
@@ -16,7 +15,7 @@ def dynamics(states, controls, parameters, aeroprop_fun=aeroprop_forces):
         Control inputs.
     parameters : ProblemParameters
         Object containing mass and aerodynamic properties of the vehicle.
-    aeroprop_fun : callable, default = `aero.aeroprop_forces`
+    aero_model : callable
         Function returning aero-propulsive forces and moments.
 
     Returns
@@ -24,7 +23,7 @@ def dynamics(states, controls, parameters, aeroprop_fun=aeroprop_forces):
     derivatives : VehicleState
         State dynamics, dx/dt.
     """
-    forces, moments = aeroprop_fun(states, controls, parameters)
+    forces, moments = aero_model(states, controls)
     forces += gravity(states, parameters.mg)
 
     return rigid_body_dynamics(states, forces, moments, parameters)

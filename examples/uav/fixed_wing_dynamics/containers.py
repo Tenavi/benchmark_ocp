@@ -314,7 +314,7 @@ class Controls(Container):
     elevator.__doc__ = "(n_points,) array. Elevator position [rad]."
 
     rudder = property(lambda self: _generic_array_getter(self, 3),
-                    lambda self, val: _generic_array_setter(self, val, 3))
+                      lambda self, val: _generic_array_setter(self, val, 3))
     rudder.__doc__ = "(n_points,) array. Rudder position [rad]."
 
     def saturate(self, lb, ub, inplace=False):

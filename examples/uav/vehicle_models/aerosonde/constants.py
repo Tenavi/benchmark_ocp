@@ -1,6 +1,6 @@
 import numpy as np
 
-from examples.uav.dynamics_model.containers import Controls
+from examples.uav.fixed_wing_dynamics.containers import Controls
 
 mass = 11.  # [kg]
 rho = 1.2682  # air density, [kg / m^3]

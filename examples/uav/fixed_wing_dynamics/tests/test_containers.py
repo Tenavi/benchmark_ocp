@@ -4,8 +4,8 @@ import pytest
 
 from examples.common_utilities.dynamics import (euler_to_quaternion,
                                                 quaternion_to_euler)
-from examples.uav.dynamics_model import containers
-from examples.uav.dynamics_model.parameters import aerosonde as constants
+from examples.uav.fixed_wing_dynamics import containers
+from examples.uav.vehicle_models.aerosonde import constants
 
 
 def rotation_matrix(yaw, pitch, roll):

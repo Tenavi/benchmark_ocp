@@ -3,10 +3,9 @@ import pytest
 
 from optimalcontrol.utilities import approx_derivative
 
-from examples.uav.dynamics_model import aero
-from examples.uav.dynamics_model.parameters import aerosonde as constants
-from examples.uav.dynamics_model.tests.test_containers import (random_states,
-                                                               random_controls)
+from examples.uav.vehicle_models.aerosonde import aero, constants
+from examples.uav.fixed_wing_dynamics.tests.test_containers import (random_states,
+                                                                    random_controls)
 
 
 rng = np.random.default_rng()
@@ -48,7 +47,7 @@ def test_coefs_alpha_small_alpha(n_points):
     the case of CD) close to alpha = 0."""
     alpha = rng.normal(scale=1e-07, size=(n_points,))
 
-    CL, CD, Cm = aero._coefs_alpha(alpha, constants)
+    CL, CD, Cm = aero._coefs_alpha(alpha)
 
     CL_expect = constants.CL0 + constants.CLalpha * alpha
 
@@ -69,7 +68,7 @@ def test_coefs_alpha_high_alpha(n_points):
     a0 = constants.alpha_stall
     alpha = rng.uniform(low=2. * a0, high=np.pi, size=(n_points,))
 
-    CL, CD, Cm = aero._coefs_alpha(alpha, constants)
+    CL, CD, Cm = aero._coefs_alpha(alpha)
 
     CL_expect = 2. * np.sign(alpha) * (np.sin(alpha) ** 2 * np.cos(alpha))
 
@@ -86,14 +85,14 @@ def test_coefs_alpha_high_alpha(n_points):
 def test_coefs_alpha_jac(n_points):
     alpha = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
 
-    _, jac = aero._coefs_alpha(alpha, constants, jac=True)
+    _, jac = aero._coefs_alpha(alpha, jac=True)
     d_CL, d_CD, d_Cm = jac
 
     assert d_CL.shape == d_CD.shape == d_Cm.shape == alpha.shape
 
     for i in range(n_points):
         d_coef_expect = np.squeeze(approx_derivative(
-            lambda a: aero._coefs_alpha(a, constants), alpha[i]))
+            lambda a: aero._coefs_alpha(a), alpha[i]))
         np.testing.assert_allclose(d_CL[i], d_coef_expect[0], atol=1e-07)
         np.testing.assert_allclose(d_CD[i], d_coef_expect[1], atol=1e-07)
         np.testing.assert_allclose(d_Cm[i], d_coef_expect[2], atol=1e-07)
@@ -106,7 +105,7 @@ def test_longitudinal_aero_zero_alpha(n_points):
     q = rng.normal(size=n_points)
     elevator = rng.normal(size=n_points)
 
-    CX, CZ, Cm = aero._longitudinal_aero(alpha, va, q, elevator, constants)
+    CX, CZ, Cm = aero._longitudinal_aero(alpha, va, q, elevator)
 
     q_bar = q * constants.c / (2. * va)
 
@@ -133,11 +132,11 @@ def test_longitudinal_aero_high_alpha():
     q = rng.normal(size=2)
     elevator = rng.normal(size=2)
 
-    CX, CZ, Cm = aero._longitudinal_aero(alpha, va, q, elevator, constants)
+    CX, CZ, Cm = aero._longitudinal_aero(alpha, va, q, elevator)
 
     q_bar = q * constants.c / (2. * va)
 
-    CL_expect, CD_expect, Cm_expect = aero._coefs_alpha(alpha, constants)
+    CL_expect, CD_expect, Cm_expect = aero._coefs_alpha(alpha)
 
     CL_expect += constants.CLq * q_bar + constants.CLdeltaE * elevator
     CD_expect += constants.CDq * q_bar + constants.CDdeltaE * elevator
@@ -166,7 +165,7 @@ def test_lateral_aero(n_points, non_zero_arg):
 
     args[non_zero_arg] = rng.normal(size=n_points)
 
-    CY, Cl, Cn = aero._lateral_aero(*args.values(), constants)
+    CY, Cl, Cn = aero._lateral_aero(*args.values())
 
     expected = {}
     for coef in ['CY', 'Cl', 'Cn']:
@@ -192,7 +191,7 @@ def test_aero_forces(n_points, zero_idx):
 
     np.testing.assert_equal(va.reshape(-1)[zero_idx], 0.)
 
-    forces, moments = aero.aero_forces(states, controls, constants)
+    forces, moments = aero.aero_forces(states, controls)
 
     # Before reshaping, confirm that the correct shape was produced
     assert forces.shape == moments.shape == states.velocity.shape
@@ -211,16 +210,14 @@ def test_aero_forces(n_points, zero_idx):
         Cx, Cz, My = aero._longitudinal_aero(alpha[non_zero_idx],
                                              va[non_zero_idx],
                                              states.q[non_zero_idx],
-                                             controls.elevator[non_zero_idx],
-                                             constants)
+                                             controls.elevator[non_zero_idx])
 
         Cy, Mx, Mz = aero._lateral_aero(beta[non_zero_idx],
                                         va[non_zero_idx],
                                         states.p[non_zero_idx],
                                         states.r[non_zero_idx],
                                         controls.aileron[non_zero_idx],
-                                        controls.rudder[non_zero_idx],
-                                        constants)
+                                        controls.rudder[non_zero_idx])
 
         np.testing.assert_array_equal(forces[0, non_zero_idx], Cx * pressure)
         np.testing.assert_array_equal(forces[1, non_zero_idx], Cy * pressure)
@@ -239,7 +236,7 @@ def test_prop_forces_output_shape(n_points):
 
     assert va.shape == controls.throttle.shape == (n_points,)
 
-    thrust, torque = aero.prop_forces(va, controls.throttle, constants)
+    thrust, torque = aero.prop_forces(va, controls.throttle)
 
     assert thrust.shape == torque.shape == (n_points,)
 
@@ -268,7 +265,7 @@ def test_prop_forces_zero_rotation():
     thrust = constants.rho * constants.D_prop ** 2 * constants.C_T2 * va ** 2
     torque = constants.KQ * (voltage / constants.R_motor - constants.i0)
 
-    comp_thrust, comp_torque = aero.prop_forces(va, throttle, constants)
+    comp_thrust, comp_torque = aero.prop_forces(va, throttle)
 
     np.testing.assert_allclose(comp_thrust, thrust, atol=1e-14, rtol=1e-14)
     np.testing.assert_allclose(comp_torque, torque, atol=1e-14, rtol=1e-14)

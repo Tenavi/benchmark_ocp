@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 
 from examples.common_utilities.dynamics import quaternion_to_euler
-from examples.uav.dynamics_model import dynamics
-from examples.uav.dynamics_model.parameters import aerosonde as constants
-from examples.uav.dynamics_model.tests.test_containers import (random_states,
-                                                               random_controls)
+from examples.uav.fixed_wing_dynamics import dynamics
+from examples.uav.vehicle_models.aerosonde import constants, aero_model
+
+from .test_containers import random_states, random_controls
 
 
 rng = np.random.default_rng()
@@ -119,6 +119,6 @@ def test_dynamics_shapes(n_points):
     states = random_states(n_points)
     controls = random_controls(n_points)
 
-    dxdt = dynamics.dynamics(states, controls, constants)
+    dxdt = dynamics.dynamics(states, controls, constants, aero_model)
 
     assert dxdt.to_array().shape == states.to_array().shape
