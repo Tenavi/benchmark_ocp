@@ -13,7 +13,7 @@ def dynamics(states, controls, parameters, aero_model):
         Current states.
     controls : Controls
         Control inputs.
-    parameters : ProblemParameters
+    parameters : object
         Object containing mass and aerodynamic properties of the vehicle.
     aero_model : callable
         Function returning aero-propulsive forces and moments.
@@ -42,7 +42,7 @@ def rigid_body_dynamics(states, forces, moments, parameters):
         Forces acting in body frame along body x, y, and z axes.
     moments : (3,) or (3, n_points) array
         Moments acting in body yaw, pitch, and roll directions.
-    parameters : ProblemParameters
+    parameters : object
         Object containing mass properties of the vehicle. Must have the
         following attributes:
             * `mass` (float): vehicle mass

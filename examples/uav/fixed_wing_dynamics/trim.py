@@ -71,7 +71,8 @@ def _trim_obj_fun(states, controls, parameters, aero_model):
         Trim state.
     controls : Controls
         Trim controls.
-    parameters : ProblemParameters
+    parameters : object
+    aero_model : callable
 
     Returns
     -------

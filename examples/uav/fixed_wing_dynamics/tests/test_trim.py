@@ -24,5 +24,4 @@ def test_trim_cruise(va):
     sat_controls = trim_controls.saturate(constants.min_controls,
                                           constants.max_controls,
                                           inplace=False)
-    np.testing.assert_array_equal(trim_controls.to_array(),
-                                  sat_controls.to_array())
+    assert trim_controls == sat_controls

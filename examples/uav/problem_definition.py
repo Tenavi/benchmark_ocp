@@ -22,8 +22,8 @@ _Q_default = VehicleState(pd=_h_cost_ceil_default ** -2,
                           q=np.deg2rad(30.) ** -2,
                           r=np.deg2rad(30.) ** -2,
                           attitude=[1., 1., 1., 0.]).to_array()
-_R_default = (aerosonde.constants.max_controls.to_array()
-              - aerosonde.constants.min_controls.to_array()) ** -2
+_R_default = ((aerosonde.constants.max_controls
+              - aerosonde.constants.min_controls) ** -2).to_array()
 _x0_max_perturb_default = VehicleState(pd=100.,
                                        u=5.,
                                        v=5.,
@@ -62,7 +62,7 @@ class FixedWing(OptimalControlProblem):
         """(`n_states`,) array. Lower bounds on `pd` (upper bound on altitude)
         and quaternion states, specifying that the scalar quaternion must be
         positive."""
-        x_lb = VehicleState(pd=-2.*np.abs(self.parameters.x0_max_perturb.pd),
+        x_lb = VehicleState(pd=-2. * np.abs(self.parameters.x0_max_perturb.pd),
                             u=-np.inf, v=-np.inf, w=-np.inf,
                             p=-np.inf, q=-np.inf, r=-np.inf,
                             attitude=[-1., -1., -1., 0.])
@@ -241,7 +241,8 @@ class FixedWing(OptimalControlProblem):
         return Q, R
 
     def dynamics(self, x, u):
-        dxdt = dynamics_fun(VehicleState(array=x), Controls(array=u),
+        dxdt = dynamics_fun(VehicleState.from_array(x),
+                            Controls.from_array(u),
                             self.parameters.vehicle_parameters,
                             self.parameters.aero_model)
         return dxdt.to_array().reshape(x.shape)
