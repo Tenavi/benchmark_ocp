@@ -350,7 +350,8 @@ def prop_forces(va, throttle, parameters):
          + parameters.KQ * parameters.i0)
 
     # Propeller speed in [rad/s]
-    omega = (- b + np.sqrt(b ** 2 - 4. * a * c)) / (2. * a)
+    omega = np.maximum(b ** 2 - 4. * a * c, 0.)
+    omega = (- b + np.sqrt(omega)) / (2. * a)
 
     # Convert to [rot/s]
     omega = omega / (2. * np.pi)

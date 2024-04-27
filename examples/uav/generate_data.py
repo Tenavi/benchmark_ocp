@@ -2,7 +2,9 @@ import os
 import time
 
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.interpolate import make_interp_spline
+from tqdm import tqdm
 
 from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.controls import LinearQuadraticRegulator
@@ -13,6 +15,7 @@ from examples.common_utilities.dynamics import quaternion_to_euler, euler_to_qua
 
 from examples.uav.problem_definition import FixedWing
 from examples.uav import example_config as config
+from examples.uav.plot_uav import plot_closed_loop
 
 
 if __name__ == '__main__':
@@ -34,6 +37,7 @@ if __name__ == '__main__':
     Q, R = ocp.running_cost_hess(xf, uf)
 
     lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
+                                   xf=ocp.trim_state, uf=ocp.trim_controls,
                                    u_lb=ocp.control_lb, u_ub=ocp.control_ub)
 
     # Generate some training and test data
@@ -41,13 +45,43 @@ if __name__ == '__main__':
     # First sample initial conditions
     x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
                                             distance=config.x0_distance)
-
-    """
     
     # Warm start the optimal control solver by integrating the system with LQR
+    lqr_sims = []
+    for x0 in x0_pool.T:
+        dt = 0.0025
+        t = np.arange(0., config.t_int + dt / 2., dt)
+        n_t = t.shape[-1]
+
+        sim = {'t': t,
+               'x': np.empty((ocp.n_states, n_t)),
+               'u': np.empty((ocp.n_controls, n_t)),
+               'L': np.empty(n_t)}
+
+        sim['x'][:, 0] = x0
+
+        for k in tqdm(range(n_t)):
+            sim['u'][:, k] = lqr(sim['x'][:, k])
+
+            if k < n_t - 1:
+                f = ocp.dynamics(sim['x'][:, k], sim['u'][:, k])
+                sim['x'][:, k + 1] = sim['x'][:, k] + dt * f
+
+        lqr_sims.append(sim)
+
+    """
+
     lqr_sims, status = simulate.monte_carlo_to_converge(
         ocp, lqr, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
     lqr_sims = np.asarray(lqr_sims, dtype=object)
+    
+    """
+
+    plot_closed_loop(lqr_sims, ocp)
+
+    plt.show()
+
+    """
     
     for i, sim in enumerate(lqr_sims):
         # If the simulation failed to converge to equilibrium, reset the guess to

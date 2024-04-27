@@ -20,13 +20,13 @@ class FixedWing(OptimalControlProblem):
                             'va_target': 25.,
                             'h_cost_ceil': 50.,
                             'Q': VehicleState(
-                                pd=1. / 50. ** 2,
-                                u=1. / 25. ** 2,
+                                pd=1.,
+                                u=25. ** -2,
                                 v=1.,
                                 w=1.,
-                                p=1. / np.deg2rad(30.) ** 2,
-                                q=1. / np.deg2rad(30.) ** 2,
-                                r=1. / np.deg2rad(30.) ** 2,
+                                p=np.deg2rad(15.) ** -2,
+                                q=np.deg2rad(15.) ** -2,
+                                r=np.deg2rad(15.) ** -2,
                                 attitude=[1., 1., 1., 0.]).to_array(),
                             'R': (aerosonde.max_controls.to_array()
                                   - aerosonde.min_controls.to_array()) ** -2,
@@ -35,9 +35,9 @@ class FixedWing(OptimalControlProblem):
                                 u=5.,
                                 v=5.,
                                 w=5.,
-                                p=np.deg2rad(30.),
-                                q=np.deg2rad(30.),
-                                r=np.deg2rad(30.),
+                                p=np.deg2rad(15.),
+                                q=np.deg2rad(15.),
+                                r=np.deg2rad(15.),
                                 attitude=euler_to_quaternion([180., 15., 30.], degrees=True))}
     _optional_parameters = {'x0_sample_seed': None}
 
@@ -58,27 +58,31 @@ class FixedWing(OptimalControlProblem):
         """(`n_states`,) array. Lower bounds on `pd` (upper bound on altitude)
         and quaternion states, specifying that the scalar quaternion must be
         positive."""
-        x_lb = VehicleState(pd=-2.*np.abs(self.parameters.x0_max_perturb.pd),
-                            u=-np.inf, v=-np.inf, w=-np.inf,
-                            p=-np.inf, q=-np.inf, r=-np.inf,
-                            attitude=[-1., -1., -1., 0.])
-        return x_lb.to_array()
+        return self.parameters.x_lb.to_array()
 
     @property
     def state_ub(self):
         """(`n_states`,) array. Upper bound on `pd`, translating to a lower
         bound on altitude."""
-        x_ub = VehicleState(pd=2. * np.abs(self.parameters.x0_max_perturb.pd),
-                            u=np.inf, v=np.inf, w=np.inf,
-                            p=np.inf, q=np.inf, r=np.inf,
-                            attitude=[1., 1., 1., 1.])
-        return x_ub.to_array()
+        return self.parameters.x_ub.to_array()
+
+    @property
+    def trim_state(self):
+        """(`n_states`,) array. Vector containing the states for which
+        $dx/dt=0$."""
+        return self.parameters.trim_state.to_array()
+
+    @property
+    def trim_controls(self):
+        """(`n_controls`,) array. Vector containing the controls for which
+        $dx/dt=0$."""
+        return self.parameters.trim_controls.to_array()
 
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
         if 'vehicle_parameters' in new_params:
-            obj.control_lb = obj.vehicle_parameters.min_controls.to_array(copy=True)
-            obj.control_ub = obj.vehicle_parameters.max_controls.to_array(copy=True)
+            obj.u_lb = obj.vehicle_parameters.min_controls.to_array(copy=True)
+            obj.u_ub = obj.vehicle_parameters.max_controls.to_array(copy=True)
 
         if 'va_target' in new_params:
             obj.trim_state, obj.trim_controls, dxdt = compute_trim(
@@ -95,6 +99,17 @@ class FixedWing(OptimalControlProblem):
                 var_val = getattr(obj, var)
                 setattr(obj, var + '_2_diag', np.diag(var_val / 2.))
                 setattr(obj, var, var_val.reshape(-1, 1))
+
+        if 'x0_max_perturb' in new_params:
+            obj.x_lb = VehicleState(pd=-2. * np.abs(obj.x0_max_perturb.pd),
+                                    u=-np.inf, v=-np.inf, w=-np.inf,
+                                    p=-np.inf, q=-np.inf, r=-np.inf,
+                                    attitude=[-1., -1., -1., 0.])
+
+            obj.x_ub = VehicleState(pd=2. * np.abs(obj.x0_max_perturb.pd),
+                                    u=np.inf, v=np.inf, w=np.inf,
+                                    p=np.inf, q=np.inf, r=np.inf,
+                                    attitude=[1., 1., 1., 1.])
 
         if any([not hasattr(obj, '_x0_sampler'),
                 'x0_sample_seed' in new_params,
@@ -159,8 +174,7 @@ class FixedWing(OptimalControlProblem):
             x, u, self.parameters.trim_state.to_array(),
             self.parameters.trim_controls.to_array())
 
-        x_err[0] = self.parameters.h_cost_ceil * np.tanh(
-            x_err[0] / self.parameters.h_cost_ceil)
+        x_err[0] = np.tanh(x_err[0] / self.parameters.h_cost_ceil)
 
         L = (np.sum((self.parameters.Q / 2.) * x_err ** 2, axis=0)
              + np.sum((self.parameters.R / 2.) * u_err ** 2, axis=0))
@@ -179,9 +193,8 @@ class FixedWing(OptimalControlProblem):
         if return_dLdx:
             # Chain rule for tanh
             x_err[0] /= self.parameters.h_cost_ceil
-            x_err[0] = (self.parameters.h_cost_ceil
-                        * np.sinh(x_err[0])
-                        / np.cosh(x_err[0]) ** 3)
+            x_err[0] = np.sinh(x_err[0]) / np.cosh(x_err[0]) ** 3
+            x_err[0] /= self.parameters.h_cost_ceil
 
             dLdx = self.parameters.Q * x_err
 
@@ -208,6 +221,7 @@ class FixedWing(OptimalControlProblem):
             # Chain rule for tanh
             h_err = x[0] / self.parameters.h_cost_ceil
             h_err = (1. - 2. * np.sinh(h_err) ** 2) / np.cosh(h_err) ** 4
+            h_err /=  self.parameters.h_cost_ceil ** 2
 
             if squeeze:
                 Q = self.parameters.Q_2_diag.copy()

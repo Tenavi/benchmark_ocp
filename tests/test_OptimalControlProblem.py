@@ -79,7 +79,9 @@ def test_cost_functions(ocp_name, n_samples):
         u_ub = 2. * ocp.control_ub
     except TypeError:
         u_ub = 2.
-    u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
+    u = rng.uniform(low=np.reshape(u_lb, (-1, 1)),
+                    high=np.reshape(u_ub, (-1, 1)),
+                    size=(ocp.n_controls, n_samples))
 
     # Evaluate the cost functions and check that the shapes are correct
     L = ocp.running_cost(x, u)
@@ -153,7 +155,9 @@ def test_dynamics(ocp_name, n_samples):
         u_ub = 2. * ocp.control_ub
     except TypeError:
         u_ub = 2.
-    u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
+    u = rng.uniform(low=np.reshape(u_lb, (-1, 1)),
+                    high=np.reshape(u_ub, (-1, 1)),
+                    size=(ocp.n_controls, n_samples))
 
     # Evaluate the vector field and check that the shape is correct
     f = ocp.dynamics(x, u)
@@ -232,7 +236,9 @@ def test_hamiltonian_grad(ocp_name, n_samples):
         u_lb = -1.
     if u_ub is None or not np.all(np.isfinite(u_ub)):
         u_ub = -1.
-    u = rng.uniform(low=u_lb, high=u_ub, size=(ocp.n_controls, n_samples))
+    u = rng.uniform(low=np.reshape(u_lb, (-1, 1)),
+                    high=np.reshape(u_ub, (-1, 1)),
+                    size=(ocp.n_controls, n_samples))
 
     H, dHdu = ocp.hamiltonian(x, u, p, return_dHdu=True)
     compare_finite_difference(u, dHdu, lambda u: ocp.hamiltonian(x, u, p),
