@@ -6,7 +6,7 @@ from scipy.interpolate import CubicSpline
 
 from examples.common_utilities.dynamics import quaternion_to_euler
 
-from examples.uav.dynamics_model.containers import VehicleState, Controls
+from examples.uav.fixed_wing_dynamics.containers import VehicleState, Controls
 
 
 _control_labels = [r'$\delta_t$', r'$\delta_a$ [deg]',

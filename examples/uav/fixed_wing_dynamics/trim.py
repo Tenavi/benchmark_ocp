@@ -2,12 +2,11 @@ import numpy as np
 from scipy import optimize
 
 from examples.common_utilities.dynamics import euler_to_quaternion
-from . import containers
 from .dynamics import dynamics
-from .aero import aeroprop_forces
+from .containers import VehicleState, Controls
 
 
-_n_free = 1 + containers.Controls.dim
+_n_free = 1 + Controls.dim
 
 
 def _split_opt_variable(xu, va_star):
@@ -22,7 +21,7 @@ def _split_opt_variable(xu, va_star):
     -------
 
     """
-    controls = containers.Controls.from_array(xu[1:])
+    controls = Controls.from_array(xu[1:])
 
     pitch = xu[0]
     zero = np.zeros_like(pitch)
@@ -33,7 +32,7 @@ def _split_opt_variable(xu, va_star):
     u = va_star * np.cos(pitch)
     w = va_star * np.sin(pitch)
 
-    states = containers.VehicleState(u=u, w=w, attitude=quaternion)
+    states = VehicleState(u=u, w=w, attitude=quaternion)
 
     return states, controls
 
@@ -58,13 +57,13 @@ def _make_bounds(parameters):
     ub[0] = np.pi / 4.
 
     # Control constraints
-    lb[1:] = parameters.min_controls.to_array(copy=True)
-    ub[1:] = parameters.max_controls.to_array(copy=True)
+    lb[1:] = parameters.min_controls.to_array()
+    ub[1:] = parameters.max_controls.to_array()
 
     return optimize.Bounds(lb=lb, ub=ub)
 
 
-def _trim_obj_fun(states, controls, parameters, aeroprop_fun=aeroprop_forces):
+def _trim_obj_fun(states, controls, parameters, aero_model):
     """
     Parameters
     ----------
@@ -72,7 +71,8 @@ def _trim_obj_fun(states, controls, parameters, aeroprop_fun=aeroprop_forces):
         Trim state.
     controls : Controls
         Trim controls.
-    parameters : ProblemParameters
+    parameters : object
+    aero_model : callable
 
     Returns
     -------
@@ -80,13 +80,12 @@ def _trim_obj_fun(states, controls, parameters, aeroprop_fun=aeroprop_forces):
         Discrepancy between the vector field evaluated at the current trim state
         and controls, and the desired vector field.
     """
-    dxdt = dynamics(states, controls, parameters, aeroprop_fun)
+    dxdt = dynamics(states, controls, parameters, aero_model)
 
     return np.sum(dxdt.to_array() ** 2, axis=0)
 
 
-def compute_trim(va_star, parameters, aeroprop_fun=aeroprop_forces,
-                 **minimize_opts):
+def compute_trim(va_star, parameters, aero_model, **minimize_opts):
     """
     Compute the trim state given a desired airspeed, constant turn radius, and
     constant flight path angle. Uses constrained optimization.
@@ -112,8 +111,7 @@ def compute_trim(va_star, parameters, aeroprop_fun=aeroprop_forces,
 
     def cost_fun_wrapper(xu):
         states, controls = _split_opt_variable(xu, va_star)
-        return _trim_obj_fun(states, controls, parameters,
-                             aeroprop_fun=aeroprop_fun)
+        return _trim_obj_fun(states, controls, parameters, aero_model)
 
     opt_res = optimize.minimize(fun=cost_fun_wrapper,
                                 x0=xu_guess,
@@ -122,7 +120,6 @@ def compute_trim(va_star, parameters, aeroprop_fun=aeroprop_forces,
 
     trim_states, trim_controls = _split_opt_variable(opt_res.x, va_star)
 
-    dxdt = dynamics(trim_states, trim_controls, parameters,
-                    aeroprop_fun=aeroprop_fun)
+    dxdt = dynamics(trim_states, trim_controls, parameters, aero_model)
 
     return trim_states, trim_controls, dxdt

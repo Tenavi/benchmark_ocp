@@ -1,7 +1,9 @@
 import numpy as np
 
+from .import constants
 
-def aeroprop_forces(states, controls, parameters):
+
+def aeroprop_forces(states, controls):
     """
     Compute the aero-propulsive (aerodynamic and propulsive) forces and moments
     based on airspeed, angle of attack, sideslip, angular rates, and control
@@ -13,7 +15,6 @@ def aeroprop_forces(states, controls, parameters):
         Current states.
     controls : Controls
         Control inputs.
-    parameters : ProblemParameters
 
     Returns
     -------
@@ -25,8 +26,8 @@ def aeroprop_forces(states, controls, parameters):
 
     va, _, _ = states.airspeed
 
-    forces, moments = aero_forces(states, controls, parameters)
-    prop_thrust, prop_torque = prop_forces(va, controls.throttle, parameters)
+    forces, moments = aero_forces(states, controls)
+    prop_thrust, prop_torque = prop_forces(va, controls.throttle)
 
     forces[:1] += prop_thrust
     moments[:1] -= prop_torque
@@ -34,7 +35,7 @@ def aeroprop_forces(states, controls, parameters):
     return forces, moments
 
 
-def aero_forces(states, controls, parameters):
+def aero_forces(states, controls):
     """
     Compute the aerodynamic forces and moments based on airspeed, angle of
     attack, sideslip, angular rates, and control inputs.
@@ -45,7 +46,6 @@ def aero_forces(states, controls, parameters):
         Current states.
     controls : Controls
         Control inputs.
-    parameters : ProblemParameters
 
     Returns
     -------
@@ -66,23 +66,22 @@ def aero_forces(states, controls, parameters):
     if idx.any():
         # Fx, Fz, My
         forces[0, idx], forces[2, idx], moments[1, idx] = _longitudinal_aero(
-            alpha[idx], va[idx], states.q[idx], controls.elevator[idx],
-            parameters)
+            alpha[idx], va[idx], states.q[idx], controls.elevator[idx])
 
         # Fy, Mx, Mz
         forces[1, idx], moments[0, idx], moments[2, idx] = _lateral_aero(
             beta[idx], va[idx], states.p[idx], states.r[idx],
-            controls.aileron[idx], controls.rudder[idx], parameters)
+            controls.aileron[idx], controls.rudder[idx])
 
         # Multiply by dynamic pressure * S
-        pressure = parameters.rhoS * va[idx] ** 2
+        pressure = constants.rhoS * va[idx] ** 2
         forces[:, idx] *= pressure
         moments[:, idx] *= pressure
 
     return np.squeeze(forces), np.squeeze(moments)
 
 
-def _longitudinal_aero(alpha, va, q, elevator, parameters):
+def _longitudinal_aero(alpha, va, q, elevator):
     """
     Evaluate the longitudinal forces and moments, without multiplying by
     dynamic pressure (this is assumed to be multiplied outside of this
@@ -94,7 +93,6 @@ def _longitudinal_aero(alpha, va, q, elevator, parameters):
     va
     q
     elevator
-    parameters
 
     Returns
     -------
@@ -102,22 +100,21 @@ def _longitudinal_aero(alpha, va, q, elevator, parameters):
     """
 
     # Normalize pitch rate
-    q = (parameters.c / 2.) * q / va
+    q = (constants.c / 2.) * q / va
 
     # CL, CD, Cm due to angle of attack
     sin_alpha, cos_alpha = np.sin(alpha), np.cos(alpha)
 
-    coefs = _coefs_alpha(alpha, parameters,
-                         sin_alpha=sin_alpha, cos_alpha=cos_alpha)
+    coefs = _coefs_alpha(alpha, sin_alpha=sin_alpha, cos_alpha=cos_alpha)
 
     # CL, CD, Cm due to pitch rate and elevator deflection
-    coefs += np.outer([parameters.CLq, parameters.CDq, parameters.Cmq], q)
+    coefs += np.outer([constants.CLq, constants.CDq, constants.Cmq], q)
     coefs += np.outer(
-        [parameters.CLdeltaE, parameters.CDdeltaE, parameters.CmdeltaE],
+        [constants.CLdeltaE, constants.CDdeltaE, constants.CmdeltaE],
         elevator)
 
     # Pitching moment times chord length
-    coefs[2] *= parameters.c
+    coefs[2] *= constants.c
 
     # Lift and drag, rotated into body frame
     coefs[:2] = [sin_alpha * coefs[0] - cos_alpha * coefs[1],
@@ -126,7 +123,7 @@ def _longitudinal_aero(alpha, va, q, elevator, parameters):
     return coefs
 
 
-def _lateral_aero(beta, va, p, r, aileron, rudder, parameters):
+def _lateral_aero(beta, va, p, r, aileron, rudder):
     """
     Evaluate the lateral forces and moments, without multiplying by dynamic
     pressure (this is assumed to be multiplied outside of this function).
@@ -139,7 +136,6 @@ def _lateral_aero(beta, va, p, r, aileron, rudder, parameters):
     r
     aileron
     rudder
-    parameters
 
     Returns
     -------
@@ -147,35 +143,32 @@ def _lateral_aero(beta, va, p, r, aileron, rudder, parameters):
     """
 
     # Normalize angular rates
-    p = (parameters.b / 2.) * p / va
-    r = (parameters.b / 2.) * r / va
+    p = (constants.b / 2.) * p / va
+    r = (constants.b / 2.) * r / va
 
     # Sideslip contributions
-    coefs = np.outer([parameters.CYbeta, parameters.Clbeta, parameters.Cnbeta],
+    coefs = np.outer([constants.CYbeta, constants.Clbeta, constants.Cnbeta],
                      beta)
 
     # Roll and yaw rate contributions
-    coefs += np.outer([parameters.CYp, parameters.Clp, parameters.Cnp], p)
-    coefs += np.outer([parameters.CYr, parameters.Clr, parameters.Cnr], r)
+    coefs += np.outer([constants.CYp, constants.Clp, constants.Cnp], p)
+    coefs += np.outer([constants.CYr, constants.Clr, constants.Cnr], r)
 
     # Control surface contributions
     coefs += np.outer(
-        [parameters.CYdeltaA, parameters.CldeltaA, parameters.CndeltaA],
-        aileron)
+        [constants.CYdeltaA, constants.CldeltaA, constants.CndeltaA], aileron)
     coefs += np.outer(
-        [parameters.CYdeltaR, parameters.CldeltaR, parameters.CndeltaR],
-        rudder)
+        [constants.CYdeltaR, constants.CldeltaR, constants.CndeltaR], rudder)
 
-    coefs += np.reshape([parameters.CY0, parameters.Cl0, parameters.Cn0],
-                        (3, 1))
+    coefs += np.reshape([constants.CY0, constants.Cl0, constants.Cn0], (3, 1))
 
     # Moments
-    coefs[1:] *= parameters.b
+    coefs[1:] *= constants.b
 
     return coefs
 
 
-def _coefs_alpha(alpha, parameters, sin_alpha=None, cos_alpha=None, jac=False):
+def _coefs_alpha(alpha, sin_alpha=None, cos_alpha=None, jac=False):
     """
     Compute contributions to the coefficients of lift (`CL`), drag (`CD`), and
     pitching moment (`Cm`), from angle of attack (`alpha`). Uses the models in
@@ -186,18 +179,6 @@ def _coefs_alpha(alpha, parameters, sin_alpha=None, cos_alpha=None, jac=False):
     ----------
     alpha : (n_points,) array
         Angle of attack [rad].
-    parameters : ProblemParameters
-        Object containing aerodynamic coefficients of the vehicle. Must have the
-        following attributes:
-            * `CL0` (float): intercept of lift coefficient
-            * `CLalpha` (float): lift coefficient slope
-            * `CD0` (float): parasitic drag
-            * `Cm0` (float): intercept of pitching moment
-            * `Cmalpha` (float): pitching moment slope
-            * `e` (float): Oswald's efficiency factor
-            * `AR` (float): aspect ratio
-            * `alpha_stall` (float): stall angle of attack
-            * `aero_blend_rate` (float): parameter in stall blending function
     sin_alpha : (n_points,) array, optional
         Pre-computed `sin(alpha)`, if available.
     cos_alpha : (n_points,) array, optional
@@ -219,16 +200,16 @@ def _coefs_alpha(alpha, parameters, sin_alpha=None, cos_alpha=None, jac=False):
     coefs = np.empty((3,) + alpha.shape)
 
     # Linear components
-    CL_lin = parameters.CL0 + parameters.CLalpha * alpha
-    CD_lin = CL_lin / (np.pi * parameters.eos * parameters.AR)
+    CL_lin = constants.CL0 + constants.CLalpha * alpha
+    CD_lin = CL_lin / (np.pi * constants.eos * constants.AR)
     if jac:
-        d_CD_lin = (2. * parameters.CLalpha) * CD_lin
-    CD_lin = parameters.CD0 + CL_lin * CD_lin
-    coefs[2] = parameters.Cm0 + parameters.Cmalpha * alpha
+        d_CD_lin = (2. * constants.CLalpha) * CD_lin
+    CD_lin = constants.CD0 + CL_lin * CD_lin
+    coefs[2] = constants.Cm0 + constants.Cmalpha * alpha
 
     # Nonlinear adjustment for post-stall model
-    sigma = _blending_fun(alpha, parameters.alpha_stall,
-                          aero_blend_rate=parameters.aero_blend_rate, jac=jac)
+    sigma = _blending_fun(alpha, constants.alpha_stall,
+                          aero_blend_rate=constants.aero_blend_rate, jac=jac)
     if jac:
         sigma, d_sigma = sigma
     sigma_inv = 1. - sigma
@@ -251,16 +232,16 @@ def _coefs_alpha(alpha, parameters, sin_alpha=None, cos_alpha=None, jac=False):
 
     jacs = np.empty_like(coefs)
 
-    jacs[0] = (parameters.CLalpha
+    jacs[0] = (constants.CLalpha
                + sigma * (abs_2_sin_alpha * (2. * cos_alpha ** 2 - sin2_alpha)
-                          - parameters.CLalpha)
+                          - constants.CLalpha)
                + d_sigma * (abs_2_sincos_alpha - CL_lin))
 
     jacs[1] = (sigma_inv * d_CD_lin
                + d_sigma * (2. * sin2_alpha - CD_lin)
                + sigma * 4. * sin_cos_alpha)
 
-    jacs[2] = parameters.Cmalpha
+    jacs[2] = constants.Cmalpha
 
     return coefs, jacs
 
@@ -310,7 +291,7 @@ def _blending_fun(alpha, alpha_stall, aero_blend_rate=50., jac=False):
     return sigma, d_sigma
 
 
-def prop_forces(va, throttle, parameters):
+def prop_forces(va, throttle):
     """
     Propeller model from Beard supplement Chapter 4.3.
 
@@ -320,7 +301,6 @@ def prop_forces(va, throttle, parameters):
         Airspeed for each state [m/s].
     throttle : (n_points) array
         Throttle setting corresponding to each state.
-    parameters : ProblemParameters
 
     Returns
     -------
@@ -334,20 +314,20 @@ def prop_forces(va, throttle, parameters):
     va_2 = va ** 2
 
     # Throttle to voltage
-    voltage = np.asarray(throttle) * parameters.V_max
+    voltage = np.asarray(throttle) * constants.V_max
 
     # Compute propeller speed
-    rho_D_2 = parameters.rho * parameters.D_prop ** 2
-    rho_D_3 = rho_D_2 * parameters.D_prop
-    rho_D_4 = rho_D_3 * parameters.D_prop
-    rho_D_5 = rho_D_4 * parameters.D_prop
+    rho_D_2 = constants.rho * constants.D_prop ** 2
+    rho_D_3 = rho_D_2 * constants.D_prop
+    rho_D_4 = rho_D_3 * constants.D_prop
+    rho_D_5 = rho_D_4 * constants.D_prop
 
-    a = parameters.C_Q0 * rho_D_5 / (4. * np.pi ** 2)
-    b = ((parameters.C_Q1 * rho_D_4 / (2. * np.pi)) * va
-         + parameters.KQ * parameters.KV / parameters.R_motor)
-    c = ((parameters.C_Q2 * rho_D_3) * va_2
-         - (parameters.KQ / parameters.R_motor) * voltage
-         + parameters.KQ * parameters.i0)
+    a = constants.C_Q0 * rho_D_5 / (4. * np.pi ** 2)
+    b = ((constants.C_Q1 * rho_D_4 / (2. * np.pi)) * va
+         + constants.KQ * constants.KV / constants.R_motor)
+    c = ((constants.C_Q2 * rho_D_3) * va_2
+         - (constants.KQ / constants.R_motor) * voltage
+         + constants.KQ * constants.i0)
 
     # Propeller speed in [rad/s]
     omega = np.maximum(b ** 2 - 4. * a * c, 0.)
@@ -359,16 +339,16 @@ def prop_forces(va, throttle, parameters):
     # Instead of computing advance ratio and dimensionless thrust and torque
     # coefficients, multiply airspeed (va) and propeller diameter (D_prop)
     # through thrust and torque equations
-    D_omega = parameters.D_prop * omega
+    D_omega = constants.D_prop * omega
     D_2_omega_2 = D_omega ** 2
     va_D_omega = va * D_omega
 
-    thrust = rho_D_2 * (parameters.C_T2 * va_2
-                        + parameters.C_T1 * va_D_omega
-                        + parameters.C_T0 * D_2_omega_2)
+    thrust = rho_D_2 * (constants.C_T2 * va_2
+                        + constants.C_T1 * va_D_omega
+                        + constants.C_T0 * D_2_omega_2)
 
-    torque = rho_D_3 * (parameters.C_Q2 * va_2
-                        + parameters.C_Q1 * va_D_omega
-                        + parameters.C_Q0 * D_2_omega_2)
+    torque = rho_D_3 * (constants.C_Q2 * va_2
+                        + constants.C_Q1 * va_D_omega
+                        + constants.C_Q0 * D_2_omega_2)
 
     return thrust, torque

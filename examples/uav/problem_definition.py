@@ -1,44 +1,48 @@
 import numpy as np
 
 from optimalcontrol.problem import OptimalControlProblem
-from optimalcontrol.utilities import resize_vector
 from optimalcontrol.sampling import UniformSampler
 
 from examples.common_utilities.dynamics import (euler_to_quaternion,
                                                 quaternion_to_euler)
 
-from .dynamics_model.containers import VehicleState, Controls
-from .dynamics_model.trim import compute_trim
-from .dynamics_model.dynamics import dynamics as dynamics_fun
-from .dynamics_model.aero import aeroprop_forces
-from .dynamics_model.parameters import aerosonde
+from .fixed_wing_dynamics.containers import VehicleState, Controls
+from .fixed_wing_dynamics.trim import compute_trim
+from .fixed_wing_dynamics.dynamics import dynamics as dynamics_fun
+from examples.uav.vehicle_models import aerosonde
+
+
+_va_target_default = 25.
+_h_cost_ceil_default = 50.
+_Q_default = VehicleState(pd=1.,
+                          u=_va_target_default ** -2,
+                          v=1.,
+                          w=1.,
+                          p=np.deg2rad(15.) ** -2,
+                          q=np.deg2rad(15.) ** -2,
+                          r=np.deg2rad(15.) ** -2,
+                          attitude=[1., 1., 1., 0.]).to_array()
+_R_default = ((aerosonde.constants.max_controls
+              - aerosonde.constants.min_controls) ** -2).to_array()
+_x0_max_perturb_default = VehicleState(pd=100.,
+                                       u=5.,
+                                       v=5.,
+                                       w=5.,
+                                       p=np.deg2rad(15.),
+                                       q=np.deg2rad(15.),
+                                       r=np.deg2rad(15.),
+                                       attitude=euler_to_quaternion(
+                                           [180., 15., 30.], degrees=True))
 
 
 class FixedWing(OptimalControlProblem):
-    _required_parameters = {'vehicle_parameters': aerosonde,
-                            'aeroprop_fun': aeroprop_forces,
-                            'va_target': 25.,
-                            'h_cost_ceil': 50.,
-                            'Q': VehicleState(
-                                pd=1.,
-                                u=25. ** -2,
-                                v=1.,
-                                w=1.,
-                                p=np.deg2rad(15.) ** -2,
-                                q=np.deg2rad(15.) ** -2,
-                                r=np.deg2rad(15.) ** -2,
-                                attitude=[1., 1., 1., 0.]).to_array(),
-                            'R': (aerosonde.max_controls.to_array()
-                                  - aerosonde.min_controls.to_array()) ** -2,
-                            'x0_max_perturb': VehicleState(
-                                pd=100.,
-                                u=5.,
-                                v=5.,
-                                w=5.,
-                                p=np.deg2rad(15.),
-                                q=np.deg2rad(15.),
-                                r=np.deg2rad(15.),
-                                attitude=euler_to_quaternion([180., 15., 30.], degrees=True))}
+    _required_parameters = {'vehicle_parameters': aerosonde.constants,
+                            'aero_model': aerosonde.aero_model,
+                            'va_target': _va_target_default,
+                            'h_cost_ceil': _h_cost_ceil_default,
+                            'Q': _Q_default,
+                            'R': _R_default,
+                            'x0_max_perturb': _x0_max_perturb_default}
     _optional_parameters = {'x0_sample_seed': None}
 
     @property
@@ -86,8 +90,7 @@ class FixedWing(OptimalControlProblem):
 
         if 'va_target' in new_params:
             obj.trim_state, obj.trim_controls, dxdt = compute_trim(
-                obj.va_target, obj.vehicle_parameters,
-                aeroprop_fun=obj.aeroprop_fun)
+                obj.va_target, obj.vehicle_parameters, obj.aero_model)
 
             # Confirm that aircraft is in trim
             if not np.allclose(dxdt.to_array(), 0., atol=1e-02):
@@ -133,20 +136,17 @@ class FixedWing(OptimalControlProblem):
         """
         Generate initial conditions. Euler angles yaw, pitch, roll are sampled
         uniformly from a hypercube, then converted to quaternions, while other
-        states are sampled uniformly from a hypercube. The bounds of the
-        hypercube are defined by `self.parameters.initial_condition_lb` and
-        `self.parameters.initial_condition_ub`. Optionally, the initial condition
-        may be sampled with a specified distance from equilibrium.
+        states are sampled uniformly from a hypercube. Optionally, initial
+        conditions may be sampled with a specified distance from equilibrium.
 
         Parameters
         ----------
         n_samples : int, default=1
             Number of sample points to generate.
         distance : positive float, optional
-            Desired infinity norm of initial condition. Note that depending on how
-            `distance` is specified, samples may be outside the hypercube defined by
-            `self.parameters.initial_condition_lb` and
-            `self.parameters.initial_condition_ub`.
+            Desired infinity norm of initial condition. Note that depending on
+            how `distance` is specified, samples may be outside the hypercube
+            defined by `self.parameters.x0_max_perturb`.
 
         Returns
         -------
@@ -221,7 +221,7 @@ class FixedWing(OptimalControlProblem):
             # Chain rule for tanh
             h_err = x[0] / self.parameters.h_cost_ceil
             h_err = (1. - 2. * np.sinh(h_err) ** 2) / np.cosh(h_err) ** 4
-            h_err /=  self.parameters.h_cost_ceil ** 2
+            h_err /= self.parameters.h_cost_ceil ** 2
 
             if squeeze:
                 Q = self.parameters.Q_2_diag.copy()
@@ -253,7 +253,8 @@ class FixedWing(OptimalControlProblem):
         return Q, R
 
     def dynamics(self, x, u):
-        dxdt = dynamics_fun(VehicleState(array=x), Controls(array=u),
+        dxdt = dynamics_fun(VehicleState.from_array(x),
+                            Controls.from_array(u),
                             self.parameters.vehicle_parameters,
-                            aeroprop_fun=self.parameters.aeroprop_fun)
+                            self.parameters.aero_model)
         return dxdt.to_array().reshape(x.shape)

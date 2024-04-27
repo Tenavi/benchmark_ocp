@@ -9,6 +9,9 @@ class Container:
     def __init__(self, array):
         self._array = np.asarray(array).reshape(self.dim, -1)
 
+        if self._array.size == 0:
+            raise ValueError(f"{type(self)} cannot be set with empty arrays")
+
     @property
     def n_points(self):
         return self._array.shape[-1]
@@ -51,6 +54,35 @@ class Container:
             return np.squeeze(self._array).copy()
         return np.squeeze(self._array)
 
+    def __neg__(self):
+        return type(self).from_array(-self.to_array())
+
+    def __eq__(self, other):
+        return np.array_equal(self.to_array(), other.to_array())
+
+    def __add__(self, other):
+        return type(self).from_array(self.to_array() + other.to_array())
+
+    def __sub__(self, other):
+        return type(self).from_array(self.to_array() - other.to_array())
+
+    def __mul__(self, other):
+        return type(self).from_array(self.to_array() * other.to_array())
+
+    def __truediv__(self, other):
+        return type(self).from_array(self.to_array() / other.to_array())
+
+    def __pow__(self, exp):
+        return type(self).from_array(self.to_array() ** exp)
+
+    def __iadd__(self, other):
+        self._array += other.to_array()
+        return self
+
+    def __imul__(self, other):
+        self._array *= other.to_array()
+        return self
+
 
 class VehicleState(Container):
     """Container holding the vehicle state(s).
@@ -72,31 +104,15 @@ class VehicleState(Container):
 
     def __init__(self, pd=0., u=0., v=0., w=0., p=0., q=0., r=0.,
                  attitude=[0., 0., 0., 1.], array=None):
-        if array is not None:
-            super().__init__(array)
+        if array is None:
+            args = [pd, u, v, w, p, q, r] + list(attitude)
+            array = [np.reshape(arg, -1) for arg in args]
 
-            self._airspeed = None
-            self._course = None
-            self._rotation = None
-        else:
-            array = [np.reshape(arg, -1) for arg in [pd, u, v, w, p, q, r]]
-            array.append(np.reshape(attitude, (4, -1)))
+        super().__init__(array)
 
-            n_points = np.max([arg.shape[-1] for arg in array])
-
-            if n_points == 0:
-                raise ValueError("VehicleState cannot be set with empty arrays")
-
-            self._array = np.empty((self.dim, n_points))
-
-            self.pd = array[0]
-            self.u = array[1]
-            self.v = array[2]
-            self.w = array[3]
-            self.p = array[4]
-            self.q = array[5]
-            self.r = array[6]
-            self.attitude = array[7]
+        self._airspeed = None
+        self._course = None
+        self._rotation = None
 
     pd = property(lambda self: _generic_array_getter(self, 0),
                   lambda self, val: _generic_array_setter(self, val, 0))
@@ -282,23 +298,10 @@ class Controls(Container):
 
     def __init__(self, throttle=0., aileron=0., elevator=0., rudder=0.,
                  array=None):
-        if array is not None:
-            super().__init__(array)
-        else:
-            array = [np.reshape(arg, -1)
-                     for arg in [throttle, aileron, elevator, rudder]]
+        if array is None:
+            array = [throttle, aileron, elevator, rudder]
 
-            n_points = np.max([arg.shape[-1] for arg in array])
-
-            if n_points == 0:
-                raise ValueError("Controls cannot be set with empty arrays")
-
-            self._array = np.empty((self.dim, n_points))
-
-            self.throttle = array[0]
-            self.aileron = array[1]
-            self.elevator = array[2]
-            self.rudder = array[3]
+        super().__init__(array)
 
     throttle = property(lambda self: _generic_array_getter(self, 0),
                         lambda self, val: _generic_array_setter(self, val, 0))
@@ -314,7 +317,7 @@ class Controls(Container):
     elevator.__doc__ = "(n_points,) array. Elevator position [rad]."
 
     rudder = property(lambda self: _generic_array_getter(self, 3),
-                    lambda self, val: _generic_array_setter(self, val, 3))
+                      lambda self, val: _generic_array_setter(self, val, 3))
     rudder.__doc__ = "(n_points,) array. Rudder position [rad]."
 
     def saturate(self, lb, ub, inplace=False):
@@ -336,7 +339,7 @@ class Controls(Container):
             self.__init__(array=np.clip(self._array, lb._array, ub._array))
             return self
 
-        return Controls(array=np.clip(self._array, lb._array, ub._array))
+        return Controls.from_array(np.clip(self._array, lb._array, ub._array))
 
 
 def _generic_array_getter(obj, idx):
