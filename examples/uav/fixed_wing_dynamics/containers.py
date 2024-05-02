@@ -7,6 +7,16 @@ class Container:
     dim = None
 
     def __init__(self, array):
+        lengths = np.unique([np.size(arg) for arg in array])
+        if np.size(lengths) > 1:
+            if lengths[0] > 1 or np.size(lengths) > 2:
+                raise ValueError(f"Tried to set components of {type(self)} with"
+                                 f" arrays with shapes that cannot be "
+                                 f"broadcast to one another")
+            for i, arg in enumerate(array):
+                if arg.size == 1:
+                    array[i] = np.resize(arg, lengths[-1])
+
         self._array = np.asarray(array).reshape(self.dim, -1)
 
         if self._array.size == 0:
@@ -61,26 +71,72 @@ class Container:
         return np.array_equal(self.to_array(), other.to_array())
 
     def __add__(self, other):
-        return type(self).from_array(self.to_array() + other.to_array())
+        if isinstance(other, type(self)):
+            return self + other.to_array()
+        else:
+            return type(self).from_array(self.to_array() + other)
 
     def __sub__(self, other):
-        return type(self).from_array(self.to_array() - other.to_array())
+        if isinstance(other, type(self)):
+            return self - other.to_array()
+        else:
+            return type(self).from_array(self.to_array() - other)
 
     def __mul__(self, other):
-        return type(self).from_array(self.to_array() * other.to_array())
+        if isinstance(other, type(self)):
+            return self * other.to_array()
+        else:
+            return type(self).from_array(self.to_array() * other)
 
     def __truediv__(self, other):
-        return type(self).from_array(self.to_array() / other.to_array())
+        if isinstance(other, type(self)):
+            return self / other.to_array()
+        else:
+            return type(self).from_array(self.to_array() / other)
 
     def __pow__(self, exp):
-        return type(self).from_array(self.to_array() ** exp)
+        if isinstance(exp, type(self)):
+            return self ** exp.to_array()
+        else:
+            return type(self).from_array(self.to_array() ** exp)
+
+    def __radd__(self, other):
+        if isinstance(other, type(self)):
+            return other.to_array() + self
+        else:
+            return type(self).from_array(other + self.to_array())
+
+    def __rsub__(self, other):
+        if isinstance(other, type(self)):
+            return other.to_array() - self
+        else:
+            return type(self).from_array(other - self.to_array())
+
+    def __rmul__(self, other):
+        if isinstance(other, type(self)):
+            return other.to_array() * self
+        else:
+            return type(self).from_array(other * self.to_array())
 
     def __iadd__(self, other):
-        self._array += other.to_array()
+        if isinstance(other, type(self)):
+            self._array += other.to_array().reshape(self.dim, -1)
+        else:
+            self._array += other
         return self
 
     def __imul__(self, other):
-        self._array *= other.to_array()
+        if isinstance(other, type(self)):
+            self._array *= other.to_array().reshape(self.dim, -1)
+        else:
+            self._array *= other
+        return self
+
+    def __idiv__(self, other):
+        if isinstance(other, type(self)):
+            self._array /= other.to_array().reshape(self.dim, -1)
+        else:
+            self._array /= other
         return self
 
 
@@ -105,8 +161,8 @@ class VehicleState(Container):
     def __init__(self, pd=0., u=0., v=0., w=0., p=0., q=0., r=0.,
                  attitude=[0., 0., 0., 1.], array=None):
         if array is None:
-            args = [pd, u, v, w, p, q, r] + list(attitude)
-            array = [np.reshape(arg, -1) for arg in args]
+            array = [pd, u, v, w, p, q, r] + list(attitude)
+            array = [np.reshape(arg, -1) for arg in array]
 
         super().__init__(array)
 
@@ -136,15 +192,15 @@ class VehicleState(Container):
 
     p = property(lambda self: _generic_array_getter(self, 4),
                  lambda self, val: _generic_array_setter(self, val, 4))
-    p.__doc__ = "(n_points,) array. Roll rate about body-x axis [rad/s]."
+    p.__doc__ = "(n_points,) array. Angular rate about body-x axis [rad/s]."
 
     q = property(lambda self: _generic_array_getter(self, 5),
                  lambda self, val: _generic_array_setter(self, val, 5))
-    q.__doc__ = "(n_points,) array. Roll rate about body-y axis [rad/s]."
+    q.__doc__ = "(n_points,) array. Angular rate about body-y axis [rad/s]."
 
     r = property(lambda self: _generic_array_getter(self, 6),
                  lambda self, val: _generic_array_setter(self, val, 6))
-    r.__doc__ = "(n_points,) array. Roll rate about body-x axis [rad/s]."
+    r.__doc__ = "(n_points,) array. Angular rate about body-z axis [rad/s]."
 
     attitude = property(lambda self: np.squeeze(
                             _generic_array_getter(self, range(7, 11))),

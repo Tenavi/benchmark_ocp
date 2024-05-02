@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 
 from examples.common_utilities.dynamics import quaternion_to_euler
+
 from examples.uav.fixed_wing_dynamics import dynamics
+from examples.uav.fixed_wing_dynamics.containers import VehicleState
 from examples.uav.vehicle_models.aerosonde import constants, aero_model
 
 from .test_containers import random_states, random_controls
@@ -90,6 +92,36 @@ def test_dynamics_rates(n_points):
     d_omega_expect = constants.J_inv_body @ d_omega_expect
 
     np.testing.assert_allclose(dxdt.rates, d_omega_expect, atol=1e-14)
+
+
+@pytest.mark.parametrize('rot_axis', [0, 1, 2])
+@pytest.mark.parametrize('n_points', [1, 2])
+def test_dynamics_axis_rates(rot_axis, n_points):
+    """
+    Verify that when all Euler angles are zero, body angular rates equal Euler
+    angle rates, i.e. [p, q, r] =
+    """
+    dt = 1e-07
+    tol = 10. * dt
+
+    rates = np.squeeze(rng.normal(scale=np.pi / 180., size=(3, n_points)))
+
+    state = VehicleState(**dict(zip(('p', 'q', 'r'), rates)))
+
+    forces = rng.normal(size=(3, n_points))
+    moments = rng.normal(size=(3, n_points))
+
+    # Finite different approximation of Euler angle dynamics (not equivalent to
+    # converting dxdt.attitude to Euler angles!)
+    dxdt = dynamics.rigid_body_dynamics(state, forces, moments, constants)
+    state += dt * dxdt
+
+    d_attitude = quaternion_to_euler(state.attitude, degrees=False) / dt
+    # quaternion_to_euler returns angles in [yaw, pitch, roll] order, but we
+    # expect [roll, pitch, yaw] to correspond to [p, q, r]
+    d_attitude = d_attitude[::-1]
+
+    np.testing.assert_allclose(d_attitude, rates, atol=tol, rtol=tol)
 
 
 @pytest.mark.parametrize('n_points', [1, 2])

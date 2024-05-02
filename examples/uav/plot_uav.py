@@ -119,12 +119,14 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
         pos = get_positions(sim['t'], state_traj)
         pos[-1] = -state_traj.pd
         eul_angles = quaternion_to_euler(state_traj.attitude, degrees=True)
+        # Change yaw, pitch, roll to roll, pitch, yaw order
+        eul_angles = eul_angles[::-1]
         rates = np.rad2deg(state_traj.rates)
 
         for i in range(3):
             axes[i, 1].plot(sim['t'], pos[i], label=label)
             axes[i, 2].plot(sim['t'], state_traj.velocity[i], label=label)
-            axes[i, 3].plot(sim['t'], eul_angles[::-1][i], label=label)
+            axes[i, 3].plot(sim['t'], eul_angles[i], label=label)
             axes[i, 4].plot(sim['t'], rates[i], label=label)
 
         ax = axes[3, 1]
