@@ -56,7 +56,11 @@ if __name__ == '__main__':
         sim['x'][:, 0] = x0
 
         for k in tqdm(range(n_t)):
-            sim['u'][:, k] = lqr(sim['x'][:, k])
+            # Rescale altitude so LQR doesn't act badly for large altitude commands
+            x_lqr = np.copy(sim['x'][:, k])
+            x_lqr[0] = ocp.parameters.h_cost_ceil * ocp.scale_altitude(x_lqr[0])
+            # Compute LQR control
+            sim['u'][:, k] = lqr(x_lqr)
 
             if k < n_t - 1:
                 # Euler forward integration to save time

@@ -10,19 +10,18 @@ from examples.common_utilities.plotting import make_legend
 from examples.uav.fixed_wing_dynamics.containers import VehicleState
 
 
-_control_labels = [r'$\delta_t$', r'$\delta_a$ [$\circ$]',
-                   r'$\delta_e$ [$\circ$]', r'$\delta_r$ [$\circ$]']
+_control_labels = [r'$\delta_t$', r'$\delta_a$ [deg]',
+                   r'$\delta_e$ [deg]', r'$\delta_r$ [deg]']
 _control_scales = [1.] + [180. / np.pi] * 3
 _pos_labels = [r'$p_n$ [m]', r'$p_e$ [m]', r'$h - h_f$ [m]']
 _pos_labels_detail = [r'downrange $p_n$ [m]', r'crossrange $p_e$ [m]',
                       r'altitude $h - h_f$ [m]']
 _vel_labels = [r'$u$ [m/s]', r'$v$ [m/s]', r'$w$ [m/s]']
-_eul_labels = [r'$\phi$ [$\circ$]', r'$\theta$ [$\circ$]',
-               r'$\psi - \psi_f$ [$\circ$]']
-_pqr_labels = [r'$p$ [$\circ$/s]', r'$q$ [$\circ$/s]', r'$r$ [$\circ$/s]']
-_extra_labels = [r'$\chi - \chi_f$ [$\circ$]', r'$\alpha$ [$\circ$]',
-                 r'$\beta$ [$\circ$]', r'$\mathcal L$']
-_title_props = {'fontsize': 14, 'fontweight': 'extra bold'}
+_eul_labels = [r'$\phi$ [deg]', r'$\theta$ [deg]',
+               r'$\psi - \psi_f$ [deg]']
+_pqr_labels = [r'$p$ [deg/s]', r'$q$ [deg/s]', r'$r$ [deg/s]']
+_extra_labels = [r'$\chi - \chi_f$ [deg]', r'$\alpha$ [deg]',
+                 r'$\beta$ [deg]', r'$\mathcal L$']
 
 
 def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
@@ -144,15 +143,15 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
     for j in range(4):
         axes[3, 1 + j].set_ylabel(_extra_labels[j], fontsize=12)
 
-    axes[0, 0].set_title('Controls', **_title_props)
-    axes[0, 1].set_title('Positions', **_title_props)
-    axes[0, 2].set_title('Velocities', **_title_props)
-    axes[0, 3].set_title('Attitude', **_title_props)
-    axes[0, 4].set_title('Rates', **_title_props)
-    axes[3, 1].set_title('Course', **_title_props)
-    axes[3, 2].set_title('Angle of attack', **_title_props)
-    axes[3, 3].set_title('Sideslip', **_title_props)
-    axes[3, 4].set_title('Running cost', **_title_props)
+    axes[0, 0].set_title('Controls', fontsize=14)
+    axes[0, 1].set_title('Positions', fontsize=14)
+    axes[0, 2].set_title('Velocities', fontsize=14)
+    axes[0, 3].set_title('Attitude', fontsize=14)
+    axes[0, 4].set_title('Rates', fontsize=14)
+    axes[3, 1].set_title('Course', fontsize=14)
+    axes[3, 2].set_title('Angle of attack', fontsize=14)
+    axes[3, 3].set_title('Sideslip', fontsize=14)
+    axes[3, 4].set_title('Running cost', fontsize=14)
 
     if any([label is not None for label in sim_labels]):
         make_legend(axes[0, 0], fontsize=12, loc='lower right')
@@ -163,7 +162,7 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
 
     fig_3d = plt.figure(**fig_kwargs_3d)
     ax = fig_3d.add_subplot(projection='3d')
-    ax.set_title('Flight plath', **_title_props)
+    ax.set_title('Flight plath', fontsize=14)
 
     for state_traj, sim, label in zip(states, sims, sim_labels):
         pos = get_positions(sim['t'], state_traj)

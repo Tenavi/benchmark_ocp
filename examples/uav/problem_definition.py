@@ -82,6 +82,23 @@ class FixedWing(OptimalControlProblem):
         $dx/dt=0$."""
         return self.parameters.trim_controls.to_array()
 
+    def scale_altitude(self, h):
+        """
+        Nonlinear scaling of altitude for cost function computation.
+
+        Parameters
+        ----------
+        h : (n_points,) array
+            Unscaled altitude or down position.
+
+        Returns
+        -------
+        h_scaled : (n_points,) array
+            Altitude rescaled as
+            `h_scaled = tanh(h / self.parameters.h_cost_ceil)`
+        """
+        return np.tanh(h / self.parameters.h_cost_ceil)
+
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
         if 'vehicle_parameters' in new_params:
@@ -154,7 +171,6 @@ class FixedWing(OptimalControlProblem):
             Samples of the system state, where each column is a different
             sample. If `n_samples==1` then `x0` will be a 1d array.
         """
-
         # Sample from the hypercube
         x0 = self.parameters._x0_sampler(n_samples=n_samples,
                                          distance=distance)
@@ -174,7 +190,7 @@ class FixedWing(OptimalControlProblem):
             x, u, self.parameters.trim_state.to_array(),
             self.parameters.trim_controls.to_array())
 
-        x_err[0] = np.tanh(x_err[0] / self.parameters.h_cost_ceil)
+        x_err[0] = self.scale_altitude(x_err[0])
 
         L = (np.sum((self.parameters.Q / 2.) * x_err ** 2, axis=0)
              + np.sum((self.parameters.R / 2.) * u_err ** 2, axis=0))
