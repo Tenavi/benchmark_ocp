@@ -17,7 +17,7 @@ if __name__ == '__main__':
         long_description=long_description,
         long_description_content_type='text/markdown',
         author='Tenavi Nakamura-Zimmerer',
-        author_email='tenavi.nakamura-zimmerer@nasa.gov',
+        author_email='tenavi.nz@gmail.com',
         packages=['optimalcontrol'],
         python_requires='>=3.8',
         install_requires=requirements)

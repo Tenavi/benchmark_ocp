@@ -1,7 +1,5 @@
 import os
 
-import numpy as np
-
 
 # Directories where data, figures, and feedback controllers will be saved
 data_dir = os.path.join('examples', 'uav', 'data')
@@ -26,16 +24,14 @@ x0_distance = None
 # Integration time horizon guess for infinite horizon problems
 t_int = 30.
 
-# Maximum integration time allowed
-t_max = 180.
-
-# Keyword arguments for closed-loop simulation
-sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'ftol': 1e-05}
+# Timestep for Euler integration
+dt = 0.0025
 
 # Keyword arguments for open-loop data generation
-open_loop_kwargs = {}
+open_loop_kwargs = {'method': 'direct', 'max_n_segments': 5, 't1_tol': 1e-03,
+                    'integration_method': 'RK23', 'verbose': 1}
 
-random_seed = 123
+#random_seed = 123
 
 # Keyword arguments for the NN controller
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',

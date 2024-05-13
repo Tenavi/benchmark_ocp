@@ -15,7 +15,7 @@ from examples.uav.vehicle_models import aerosonde
 _va_target_default = 25.
 _h_cost_ceil_default = 50.
 _Q_default = VehicleState(pd=1.,
-                          u=_va_target_default ** -2,
+                          u=1.,
                           v=1.,
                           w=1.,
                           p=np.deg2rad(15.) ** -2,
