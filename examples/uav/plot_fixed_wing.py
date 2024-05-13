@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import CubicSpline
 
 from examples.common_utilities.dynamics import quaternion_to_euler
-from examples.common_utilities.plotting import make_legend
+from examples.common_utilities.plotting import make_legend, save_fig_dict
 
 from examples.uav.fixed_wing_dynamics.containers import VehicleState
 
@@ -14,8 +14,7 @@ _control_labels = [r'$\delta_t$', r'$\delta_a$ [deg]',
                    r'$\delta_e$ [deg]', r'$\delta_r$ [deg]']
 _control_scales = [1.] + [180. / np.pi] * 3
 _pos_labels = [r'$p_n$ [m]', r'$p_e$ [m]', r'$h - h_f$ [m]']
-_pos_labels_detail = [r'downrange $p_n$ [m]', r'crossrange $p_e$ [m]',
-                      r'altitude $h - h_f$ [m]']
+_pos_labels_detail = [r'downrange [m]', r'crossrange [m]', r'altitude [m]']
 _vel_labels = [r'$u$ [m/s]', r'$v$ [m/s]', r'$w$ [m/s]']
 _eul_labels = [r'$\phi$ [deg]', r'$\theta$ [deg]',
                r'$\psi - \psi_f$ [deg]']
@@ -24,14 +23,17 @@ _extra_labels = [r'$\chi - \chi_f$ [deg]', r'$\alpha$ [deg]',
                  r'$\beta$ [deg]', r'$\mathcal L$']
 
 
-def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
-                     fig_kwargs_ts={}, fig_kwargs_3d={}, save_dir=None):
+def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
+                    x_min=None, x_max=None, fig_kwargs_ts={}, fig_kwargs_3d={},
+                    save_dir=None):
     r"""
-    Plot states, controls, and running cost vs. time for a set of trajectories.
-    For the `BurgersPDE` problem, states are visualized as a heatmap.
+    Plot states, controls, and running cost vs. time for a set of trajectories,
+    as well as a 3d plot of the UAV's path.
 
     Parameters
     ----------
+    ocp : `FixedWing`
+        Instance of the `FixedWing` problem associated with the simulation(s).
     sims : dict or list of dicts
         One or more time series, with each dict containing
 
@@ -43,17 +45,21 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
                 Control inputs at times 't'.
             * 'L' : (n_points,) array, optional
                 Running cost at times 't'.
-    ocp : `FixedWing`
-        Instance of the `FixedWing` problem associated with the simulation(s).
     sim_labels : list of strings, optional
         Legend labels for each set of time series in `sims`.
+    t_max : float, optional
+        Optional upper limit for time axis for each time series plot.
     x_min : (15,) array, optional
-        Lower limits for each state plot. The limits are assumed to be in the
-        following order:
-            $p_n, p_e, p_d, u, v, w, \phi, \theta, \psi, p, q, r, \chi, \alpha, \beta$
+        Optional lower limits for each state time series plot. The limits are
+        assumed to be in the following order:
+            $p_n, p_e, h - h_f, u, v, w, \phi, \theta, \psi - \psi_f, p, q, r$,
+        and
+            $\chi - \chi_f, \alpha, \beta$
+        (course error, angle of attack, sideslip).
         Limits are assumed to be in [m] or [rad], depending on the state.
+        Individual limits can be set to `None` to use the default based on data.
     x_max : (15,) array, optional
-        Upper limits for each state plot.
+        Optional upper limits for each state time series plot.
     fig_kwargs_ts : dict, optional
         Keyword arguments to pass to the time series figure during creation. See
         `matplotlib.pyplot.figure`.
@@ -70,13 +76,12 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
         If `save_dir` is None, returns a list of two `Figure` instances with
         containing the simulation plots.
     """
-
     if isinstance(sims, dict):
         sims = [sims]
 
-    t_max = np.max([sim['t'][-1] for sim in sims])
-
     states = [VehicleState.from_array(sim['x']) for sim in sims]
+    positions = [_get_positions(sim['t'], state_traj)
+                 for sim, state_traj in zip(sims, states)]
 
     if sim_labels is None or isinstance(sim_labels, str):
         sim_labels = [sim_labels] * len(sims)
@@ -86,11 +91,41 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
 
-    fig_kwargs_ts = {'layout': 'constrained', 'figsize': (11, 4.8),
-                     **fig_kwargs_ts}
-    fig_kwargs_3d = {'layout': 'constrained', **fig_kwargs_3d}
+    figs = {'time_series': _plot_time_series(ocp, sims, states, positions,
+                                             sim_labels, t_max=t_max,
+                                             x_min=x_min, x_max=x_max,
+                                             fig_kwargs=fig_kwargs_ts),
+            'flight_path': _plot_flight_path(positions, sim_labels,
+                                             x_min=x_min, x_max=x_max,
+                                             fig_kwargs=fig_kwargs_3d)}
 
-    fig_ts, axes = plt.subplots(nrows=4, ncols=5, **fig_kwargs_ts)
+    if save_dir is None:
+        return figs.values()
+    else:
+        save_fig_dict(figs, save_dir, close_figs=True)
+
+
+def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
+                      x_min=None, x_max=None, fig_kwargs={}):
+    fig_kwargs = {'layout': 'constrained', 'figsize': (11, 4.8), **fig_kwargs}
+
+    fig, axes = plt.subplots(nrows=4, ncols=5, **fig_kwargs)
+
+    if t_max is None:
+        t_max = np.max([sim['t'][-1] for sim in sims])
+
+    if x_min is None:
+        x_min = np.full([4, 4], None)
+    else:
+        x_min = np.reshape(x_min, (3, 5), order='F')
+        x_min = np.vstack([x_min[:, :-1],
+                           np.concatenate([x_min[:, -1], [None]])])
+    if x_max is None:
+        x_max = np.full([4, 4], None)
+    else:
+        x_max = np.reshape(x_max, (3, 5), order='F')
+        x_max = np.vstack([x_max[:, :-1],
+                           np.concatenate([x_max[:, -1], [None]])])
 
     for i in range(4):
         for j in range(5):
@@ -112,10 +147,8 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
         ax.set_ylabel(_control_labels[i], fontsize=12)
 
     # Plot states
-    for state_traj, sim, label in zip(states, sims, sim_labels):
+    for sim, state_traj, pos, label in zip(sims, states, positions, sim_labels):
         t = sim['t']
-        pos = get_positions(sim['t'], state_traj)
-        pos[-1] = -state_traj.pd
         eul_angles = quaternion_to_euler(state_traj.attitude, degrees=True)
         # Change yaw, pitch, roll to roll, pitch, yaw order
         eul_angles = eul_angles[::-1]
@@ -133,6 +166,10 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
         axes[3, 4].plot(t, sim['L'], label=label)
 
     axes[3, 4].set_yscale('log')
+
+    for i in range(4):
+        for j in range(4):
+            axes[i, j + 1].set_ylim(x_min[i, j], x_max[i, j])
 
     for i in range(3):
         axes[i, 1].set_ylabel(_pos_labels[i], fontsize=12)
@@ -156,23 +193,35 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
     if any([label is not None for label in sim_labels]):
         make_legend(axes[0, 0], fontsize=12, loc='lower right')
 
-    if save_dir is not None:
-        plt.savefig(os.path.join(save_dir, f'time_series.pdf'))
-        plt.close()
+    return fig
 
-    fig_3d = plt.figure(**fig_kwargs_3d)
-    ax = fig_3d.add_subplot(projection='3d')
+
+def _plot_flight_path(positions, sim_labels, x_min=None, x_max=None,
+                      fig_kwargs={}):
+    fig_kwargs = {'layout': 'constrained', **fig_kwargs}
+    fig = plt.figure(**fig_kwargs)
+    ax = fig.add_subplot(projection='3d')
     ax.set_title('Flight plath', fontsize=14)
 
-    for state_traj, sim, label in zip(states, sims, sim_labels):
-        pos = get_positions(sim['t'], state_traj)
-        ax.plot(pos[1], pos[0], -state_traj.pd, label=label)
+    for pos, label in zip(positions, sim_labels):
+        ax.plot(pos[1], pos[0], pos[2], label=label)
 
-    xlim = ax.get_xlim()
-    ylim = ax.get_ylim()
-    xylim = [np.minimum(xlim[0], ylim[0]), np.maximum(xlim[1], ylim[1])]
-    ax.set_xlim(xylim)
-    ax.set_ylim(xylim)
+    if x_min is None or x_max is None:
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        zlim = ax.get_zlim()
+        x_center = np.mean(xlim)
+        y_center = np.mean(ylim)
+        axis_size = np.max([xlim[1] - xlim[0],
+                            ylim[1] - ylim[0],
+                            zlim[1] - zlim[0]]) / 2.
+        ax.set_xlim([x_center - axis_size, x_center + axis_size])
+        ax.set_ylim([y_center - axis_size, y_center + axis_size])
+        ax.set_zlim([-axis_size, axis_size])
+    else:
+        ax.set_xlim(x_min[1], x_max[1])
+        ax.set_ylim(x_min[0], x_max[0])
+        ax.set_zlim(x_min[2], x_max[2])
 
     ax.set_xlabel(_pos_labels_detail[1], fontsize=12)
     ax.set_ylabel(_pos_labels_detail[0], fontsize=12)
@@ -181,15 +230,13 @@ def plot_closed_loop(sims, ocp, sim_labels=None, x_min=None, x_max=None,
     if any([label is not None for label in sim_labels]):
         make_legend(ax, fontsize=12)
 
-    if save_dir is not None:
-        plt.savefig(os.path.join(save_dir, f'flight_path_3d.pdf'))
-        plt.close()
-
-    if save_dir is None:
-        return fig_ts, fig_3d
+    return fig
 
 
-def get_positions(t, states):
+def _get_positions(t, states):
     d_pos = states.body_to_inertial(states.velocity)
     pos_fun = CubicSpline(t, d_pos, axis=1).antiderivative()
-    return pos_fun(t)
+    pos = pos_fun(t)
+    # Convert pd to altitude, and add initial altitude to normalize
+    pos[-1] = -states.pd
+    return pos

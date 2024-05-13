@@ -2,7 +2,6 @@ import os
 import time
 
 import numpy as np
-from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 from optimalcontrol.controls import LinearQuadraticRegulator
@@ -11,7 +10,7 @@ from examples.common_utilities import data_utils
 
 from examples.uav.problem_definition import FixedWing
 from examples.uav import example_config as config
-from examples.uav.plot_uav import plot_closed_loop
+from examples.uav.plot_fixed_wing import plot_fixed_wing
 
 
 if __name__ == '__main__':
@@ -44,19 +43,19 @@ if __name__ == '__main__':
     # Warm start the optimal control solver by integrating the system with LQR
     t = np.arange(0., config.t_int + config.dt / 2., config.dt)
     n_t = t.shape[-1]
+    downsample_idx = np.arange(0, n_t + 1, 10)
 
     lqr_sims = []
 
     for x0 in x0_pool.T:
-        sim = {'t': t,
+        sim = {'t': t[downsample_idx],
                'x': np.empty((ocp.n_states, n_t)),
-               'u': np.empty((ocp.n_controls, n_t)),
-               'L': np.empty(n_t)}
+               'u': np.empty((ocp.n_controls, n_t))}
 
         sim['x'][:, 0] = x0
 
         for k in tqdm(range(n_t)):
-            # Rescale altitude so LQR doesn't act badly for large altitude commands
+            # Rescale altitude so LQR doesn't act badly for large commands
             x_lqr = np.copy(sim['x'][:, k])
             x_lqr[0] = ocp.parameters.h_cost_ceil * ocp.scale_altitude(x_lqr[0])
             # Compute LQR control
@@ -67,7 +66,11 @@ if __name__ == '__main__':
                 f = ocp.dynamics(sim['x'][:, k], sim['u'][:, k])
                 sim['x'][:, k + 1] = sim['x'][:, k] + config.dt * f
 
-        sim['v'] = ocp.total_cost(t, sim['x'], sim['u'])[::-1]
+        # Downsample states and controls
+        for arg in ['x', 'u']:
+            sim[arg] = sim[arg][:, downsample_idx]
+
+        sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
         sim['L'] = ocp.running_cost(sim['x'], sim['u'])
 
         lqr_sims.append(sim)
@@ -88,12 +91,9 @@ if __name__ == '__main__':
     # Plot the results
     print("Making plots...")
 
-    plot_closed_loop(data, ocp,
-                     save_dir=os.path.join(config.fig_dir, 'data'))
+    plot_fixed_wing(ocp, data, save_dir=os.path.join(config.fig_dir, 'data'))
 
     for i in range(len(lqr_sims)):
         fig_dir = os.path.join(config.fig_dir, f'lqr_sim_{i}')
-        plot_closed_loop([lqr_sims[i], data[i]], ocp,
-                         sim_labels=['LQR', 'optimal'], save_dir=fig_dir)
-
-    plt.show()
+        plot_fixed_wing(ocp, [lqr_sims[i], data[i]],
+                        sim_labels=['LQR', 'optimal'], save_dir=fig_dir)

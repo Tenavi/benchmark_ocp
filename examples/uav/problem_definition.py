@@ -32,7 +32,7 @@ _x0_max_perturb_default = VehicleState(pd=100.,
                                        q=np.deg2rad(15.),
                                        r=np.deg2rad(15.),
                                        attitude=euler_to_quaternion(
-                                           [180., 15., 30.], degrees=True))
+                                           [180., 90., 180.], degrees=True))
 
 
 class FixedWing(OptimalControlProblem):

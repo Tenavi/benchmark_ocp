@@ -14,7 +14,7 @@ _mpl_markers = ['o', 'x', 'd', '*', '+', 'v', '^', '<', '>', 's', 'p', 'h', '8',
                 'X', 'P', '.', '1', '2', '3', '4']
 
 
-def save_fig_dict(figures, save_dir):
+def save_fig_dict(figures, save_dir, close_figs=False):
     """
     Save each `matplotlib.figure.Figure` in a (possibly nested) dict of
     `Figure`s as a pdf. Called recursively for each level of a provided
@@ -30,6 +30,8 @@ def save_fig_dict(figures, save_dir):
         in `figures` will be saved as `f'save_dir/{key}.pdf'`, unless the value
         is itself a dict in which case we call
         `save_fig_dict(value, f'save_dir/{key}')`.
+    close_figs : bool, default=False
+        If `close_figs=True`, then closes figures after saving them.
     """
     if not isinstance(figures, dict):
         raise TypeError("figures must be a dict")
@@ -40,6 +42,8 @@ def save_fig_dict(figures, save_dir):
         if isinstance(fig, plt.Figure):
             plt.figure(fig)
             plt.savefig(os.path.join(save_dir, fig_name + '.pdf'))
+            if close_figs:
+                plt.close(fig)
         else:
             subdir = os.path.join(save_dir, fig_name)
             save_fig_dict(fig, subdir)

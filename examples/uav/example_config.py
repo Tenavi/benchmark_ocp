@@ -25,11 +25,10 @@ x0_distance = None
 t_int = 30.
 
 # Timestep for Euler integration
-dt = 0.0025
+dt = 0.003
 
 # Keyword arguments for open-loop data generation
-open_loop_kwargs = {'method': 'direct', 'max_n_segments': 5, 't1_tol': 1e-03,
-                    'integration_method': 'RK23', 'verbose': 1}
+open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5, 'verbose': 1}
 
 #random_seed = 123
 
