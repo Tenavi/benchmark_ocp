@@ -1,4 +1,6 @@
+import argparse as ap
 import os
+from pathlib import Path
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -6,7 +8,9 @@ from scipy.interpolate import CubicSpline
 
 from examples.common_utilities.dynamics import quaternion_to_euler
 from examples.common_utilities.plotting import make_legend, save_fig_dict
+from examples.common_utilities import data_utils
 
+from examples.uav.problem_definition import FixedWing
 from examples.uav.fixed_wing_dynamics.containers import VehicleState
 
 
@@ -43,8 +47,6 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
                 System states at times 't'.
             * 'u' : (n_controls, n_points) array
                 Control inputs at times 't'.
-            * 'L' : (n_points,) array, optional
-                Running cost at times 't'.
     sim_labels : list of strings, optional
         Legend labels for each set of time series in `sims`.
     t_max : float, optional
@@ -87,9 +89,6 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
         sim_labels = [sim_labels] * len(sims)
     elif len(sim_labels) != len(sims):
         raise ValueError("If provided, len(sim_labels) must equal len(sims)")
-
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
 
     figs = {'time_series': _plot_time_series(ocp, sims, states, positions,
                                              sim_labels, t_max=t_max,
@@ -163,7 +162,7 @@ def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
         axes[3, 1].plot(t, np.rad2deg(state_traj.course), label=label)
         axes[3, 2].plot(t, np.rad2deg(state_traj.airspeed[1]), label=label)
         axes[3, 3].plot(t, np.rad2deg(state_traj.airspeed[2]), label=label)
-        axes[3, 4].plot(t, sim['L'], label=label)
+        axes[3, 4].plot(t, ocp.running_cost(sim['x'], sim['u']), label=label)
 
     axes[3, 4].set_yscale('log')
 
@@ -240,3 +239,58 @@ def _get_positions(t, states):
     # Convert pd to altitude, and add initial altitude to normalize
     pos[-1] = -states.pd
     return pos
+
+
+if __name__ == '__main__':
+    from examples.uav import example_config as config
+
+    parser = ap.ArgumentParser()
+
+    parser.add_argument("-d", "--sim_data", type=str,
+                        help="Path to a .csv file with closed-loop simulations "
+                             "to plot and compare against open-loop solutions.")
+    parser.add_argument("-c", "--ctrl_name", type=str,
+                        help="Name of the controller used to generate the "
+                             "closed-loop simulations in sim_data. If not "
+                             "provided, the default uses the sim_data filename "
+                             "without the extension, stripping '_sims' from "
+                             "the end if included.")
+    parser.add_argument("-s", "--show_plots", action='store_true',
+                        help="If True, show plots.")
+    args = parser.parse_args()
+
+    ocp = FixedWing(**config.params)
+
+    # Load and plot the open-loop optimal dataset
+    data = data_utils.load_data(os.path.join(config.data_dir, 'data.csv'))
+
+    if args.show_plots:
+        plot_fixed_wing(ocp, data)
+        plt.show()
+    else:
+        plot_fixed_wing(ocp, data,
+                        save_dir=os.path.join(config.fig_dir, 'data'))
+
+    # Load and plot closed-loop simulations
+    if args.sim_data is not None:
+        sim_data = data_utils.load_data(args.sim_data)
+
+        # Get the default controller name from the data file name
+        if args.ctrl_name is not None:
+            ctrl_name = args.ctrl_name
+        else:
+            ctrl_name = Path(args.sim_data).stem.strip('_sims')
+
+        # Loop through each closed-loop trajectory, assuming this corresponds to
+        # the same open-loop optimal trajectory
+        for i, sim in enumerate(sim_data):
+            if args.show_plots:
+                plot_fixed_wing(ocp, [sim_data[i], data[i]],
+                                sim_labels=[ctrl_name, 'optimal'])
+                plt.show()
+            else:
+                plot_fixed_wing(ocp, [sim_data[i], data[i]],
+                                sim_labels=[ctrl_name, 'optimal'],
+                                save_dir=os.path.join(config.fig_dir,
+                                                      f'{ctrl_name}_sims',
+                                                      f'sim_{i}'))

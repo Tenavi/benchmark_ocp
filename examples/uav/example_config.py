@@ -13,10 +13,8 @@ for directory in [data_dir, fig_dir, controller_dir]:
 params = {}
 
 # Number of training and test trajectories
-# Note: slightly fewer training trajectories may be produced if the solver fails
-# to find open-loop solutions
-n_train = 1
-n_test = 1
+n_train = 50
+n_test = 100
 
 # Distance of initial condition samples from trim
 x0_distance = None
@@ -28,9 +26,9 @@ t_int = 30.
 dt = 0.003
 
 # Keyword arguments for open-loop data generation
-open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5, 'verbose': 1}
+open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5}
 
-#random_seed = 123
+random_seed = 123
 
 # Keyword arguments for the NN controller
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',

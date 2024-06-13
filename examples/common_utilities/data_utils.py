@@ -103,11 +103,7 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
         else:
             fail_time += end_time - start_time
 
-        data.append({'t': sol.t,
-                     'x': sol.x,
-                     'u': sol.u,
-                     'p': sol.p,
-                     'v': sol.v,
+        data.append({'t': sol.t, 'x': sol.x, 'u': sol.u, 'p': sol.p, 'v': sol.v,
                      'L': ocp.running_cost(sol.x, sol.u)})
 
         if verbose:
@@ -137,7 +133,7 @@ def generate_data(ocp, guesses, verbose=0, **kwargs):
     return data, status, messages
 
 
-def save_data(data, filepath):
+def save_data(data, filepath, overwrite=True):
     """
     Save a dataset of open-loop optimal control solutions or closed-loop
     simulations to a csv file. The data will be saved as a single csv columns
@@ -150,20 +146,31 @@ def save_data(data, filepath):
         Each element of `data_list` is a dict or `DataFrame` with keys/columns
 
             * 't' : Time values of each data point (row).
-            * 'x1', ..., 'xn' or 'x' : States $x_1(t)$, ..., $x_n(t)$.
-            * 'u1', ..., 'um' or 'u' : Controls $u_1(t)$, ..., $u_m(t)$.
-            * 'p1', ..., 'pn' or 'p' : Costates $p_1(t)$, ..., $p_n(t)$,
+            * 'x' or 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u' or 'u1', ..., 'um' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p' or 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$,
                 optional.
             * 'v' : Value function/cost-to-go $v(t)$, optional.
     filepath : path-like
         Where the csv file should be saved.
+    overwrite : bool, default=True
+        If True, overwrite the csv file at `filepath`, if it exists. If False,
+        append the data to the end of the existing csv.
     """
     t, x, u, p, v = utilities.stack_dataframes(*data)
     data = utilities.pack_dataframe(t, x, u, p, v)
+
+    if not overwrite:
+        try:
+            existing_data = pd.read_csv(filepath)
+            data = pd.concat([existing_data, data])
+        except FileNotFoundError:
+            pass
+
     data.to_csv(filepath, index=False)
 
 
-def load_data(filepath):
+def load_data(filepath, unpack=True):
     """
     Load a dataset of open-loop optimal control solutions or closed-loop
     simulations from a csv file. To break apart the dataset, assumes that the
@@ -178,13 +185,17 @@ def load_data(filepath):
     Returns
     -------
     data : list of DataFrames
-        Each element of `data` is a `DataFrame` with columns
+        Each element of `data` is a dict or `DataFrame` with keys/columns
 
             * 't' : Time values of each data point (row).
-            * 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
-            * 'u1', ..., 'um' : Controls $u_1(t)$, ..., $u_m(t)$.
-            * 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t).
+            * 'x' or 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u' or 'u1', ..., 'um' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p' or 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
             * 'v' : Value function/cost-to-go $v(t)$.
+    unpack : bool, default=True
+        If True (default), returns a list of dict which includes 2d arrays for
+        'x', 'u', and 'p'. If False, returns a list of `DataFrame`s with
+        individual columns for each dimension of 'x', 'u', 'p'.
     """
     dataframe = pd.read_csv(filepath)
     # Find where trajectories start
@@ -192,7 +203,13 @@ def load_data(filepath):
     # Assume trajectories end before the start of the next trajectory
     # Pandas includes the ends of index slices, so subract 1 from these
     t1_idx = np.concatenate((t0_idx[1:] - 1, [len(dataframe)]))
+
     data = []
     for i0, i1 in zip(t0_idx, t1_idx):
-        data.append(dataframe.loc[i0:i1].reset_index(drop=True))
+        traj_data = dataframe.loc[i0:i1].reset_index(drop=True)
+        if unpack:
+            traj_data = dict(zip(['t', 'x', 'u', 'p', 'v'],
+                                 utilities.unpack_dataframe(traj_data)))
+        data.append(traj_data)
+
     return data
