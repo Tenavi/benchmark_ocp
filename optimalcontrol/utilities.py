@@ -493,3 +493,85 @@ def stack_dataframes(*data_list):
         v = None
 
     return t, x, u, p, v
+
+
+def save_data(data, filepath, overwrite=True):
+    """
+    Save a dataset of open-loop optimal control solutions or closed-loop
+    simulations to a csv file. The data will be saved as a single csv columns
+    with all trajectories concatenated vertically. A dataset saved in this
+    format can be recovered by `load_data`.
+
+    Parameters
+    ----------
+    data : list of dicts or DataFrames
+        Each element of `data_list` is a dict or `DataFrame` with keys/columns
+
+            * 't' : Time values of each data point (row).
+            * 'x' or 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u' or 'u1', ..., 'um' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p' or 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$,
+                optional.
+            * 'v' : Value function/cost-to-go $v(t)$, optional.
+    filepath : path-like
+        Where the csv file should be saved.
+    overwrite : bool, default=True
+        If True, overwrite the csv file at `filepath`, if it exists. If False,
+        append the data to the end of the existing csv.
+    """
+    t, x, u, p, v = stack_dataframes(*data)
+    data = pack_dataframe(t, x, u, p, v)
+
+    if not overwrite:
+        try:
+            existing_data = pd.read_csv(filepath)
+            data = pd.concat([existing_data, data])
+        except FileNotFoundError:
+            pass
+
+    data.to_csv(filepath, index=False)
+
+
+def load_data(filepath, unpack=True):
+    """
+    Load a dataset of open-loop optimal control solutions or closed-loop
+    simulations from a csv file. To break apart the dataset, assumes that the
+    csv file contains vertically concatenated trajectories with initial time
+    `t==0`.
+
+    Parameters
+    ----------
+    filepath : path-like
+        Where the csv file should be saved.
+
+    Returns
+    -------
+    data : list of DataFrames
+        Each element of `data` is a dict or `DataFrame` with keys/columns
+
+            * 't' : Time values of each data point (row).
+            * 'x' or 'x1', ..., 'xn' : States $x_1(t)$, ..., $x_n(t)$.
+            * 'u' or 'u1', ..., 'um' : Controls $u_1(t)$, ..., $u_m(t)$.
+            * 'p' or 'p1', ..., 'pn' : Costates $p_1(t)$, ..., $p_n(t)$.
+            * 'v' : Value function/cost-to-go $v(t)$.
+    unpack : bool, default=True
+        If True (default), returns a list of dict which includes 2d arrays for
+        'x', 'u', and 'p'. If False, returns a list of `DataFrame`s with
+        individual columns for each dimension of 'x', 'u', 'p'.
+    """
+    dataframe = pd.read_csv(filepath)
+    # Find where trajectories start
+    t0_idx = np.where(dataframe['t'].to_numpy() == 0.)[0]
+    # Assume trajectories end before the start of the next trajectory
+    # Pandas includes the ends of index slices, so subract 1 from these
+    t1_idx = np.concatenate((t0_idx[1:] - 1, [len(dataframe)]))
+
+    data = []
+    for i0, i1 in zip(t0_idx, t1_idx):
+        traj_data = dataframe.loc[i0:i1].reset_index(drop=True)
+        if unpack:
+            traj_data = dict(zip(['t', 'x', 'u', 'p', 'v'],
+                                 unpack_dataframe(traj_data)))
+        data.append(traj_data)
+
+    return np.array(data, dtype=object)

@@ -2,16 +2,14 @@ import os
 import time
 
 import numpy as np
-from scipy.interpolate import make_interp_spline
 
 from optimalcontrol import simulate, utilities, analyze
-from optimalcontrol.controls import LinearQuadraticRegulator
-from optimalcontrol.open_loop import solve_infinite_horizon
+from optimalcontrol.controls import from_pickle
 
 from examples.common_utilities import supervised_learning, plotting
 
-from examples.burgers.problem_definition import BurgersPDE, plot_closed_loop
-from examples.burgers import example_config as config
+from examples.uav.problem_definition import FixedWing
+from examples.uav import example_config as config
 
 
 # Initialize the optimal control problem
@@ -20,54 +18,17 @@ if random_seed is None:
     random_seed = int(time.time())
 rng = np.random.default_rng(random_seed + 1)
 
-ocp = BurgersPDE(x0_sample_seed=random_seed, **config.params)
-xf = np.zeros(ocp.n_states)
-uf = np.zeros(ocp.n_controls)
+ocp = FixedWing(x0_sample_seed=random_seed, **config.params)
 
-# Create an LQR controller as a baseline
-# System matrices (vector field Jacobians)
-A, B = ocp.jac(xf, uf)
-# Cost matrices (1/2 Running cost Hessians)
-Q, R = ocp.running_cost_hess(xf, uf)
-lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
-                               u_lb=ocp.control_lb, u_ub=ocp.control_ub)
+lqr = from_pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
 
-# Generate some training and test data
+# Load the dataset and split into training and test data
+data = utilities.load_data(os.path.join(config.data_dir, 'data.csv'))
 
-# First sample initial conditions
-x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
-                                        distance=config.x0_distance)
-
-# Warm start the optimal control solver by integrating the system with LQR
-lqr_sims, status = simulate.monte_carlo_to_converge(
-    ocp, lqr, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
-lqr_sims = np.asarray(lqr_sims, dtype=object)
-
-for i, sim in enumerate(lqr_sims):
-    # If the simulation failed to converge to equilibrium, reset the guess to
-    # interpolate initial and final conditions
-    if status[i] != 0:
-        x0 = x0_pool[:, i:i+1]
-        x_interp = make_interp_spline([0., config.t_int],
-                                      np.hstack((x0, xf.reshape(-1, 1))),
-                                      k=1, axis=1)
-        sim['t'] = np.linspace(0., config.t_int, 100)
-        sim['x'] = x_interp(sim['t'])
-        sim['u'] = lqr(sim['x'])
-    # Use LQR to generate a guess for the costates
-    sim['p'] = 2. * lqr.P @ sim['x']
-
-# Solve open loop optimal control problems
-data, status, messages = supervised_learning.generate_data(
-    ocp, lqr_sims, **config.open_loop_kwargs)
-
-print("\n" + "+" * 80)
-
-# Reserve a subset of data for testing and use the rest for training
-data_idx = np.arange(x0_pool.shape[1])[status == 0]
+data_idx = np.arange(len(data))
 rng.shuffle(data_idx)
-train_idx = data_idx[config.n_test:]
-test_idx = data_idx[:config.n_test]
+train_idx = data_idx[:config.n_train]
+test_idx = data_idx[config.n_train:config.n_train + config.n_test]
 
 train_data = data[train_idx]
 test_data = data[test_idx]
@@ -76,7 +37,7 @@ test_data = data[test_idx]
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
-print("\nTraining neural network controller...")
+"""print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
     x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
     random_state=random_seed + 3, **config.nn_kwargs)
@@ -161,9 +122,21 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                          subtitle=ctrl_name + ', ' + data_name,
                          save_dir=fig_dir)
 
-# Save data, figures, and trained controllers
-utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
+# Save trained controller
+nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))"""
 
-lqr.pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
-nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
+"""print(f"Plotting {ctrl_name}-controlled simulations")
+
+# Loop through each closed-loop trajectory, assuming this corresponds to
+# the same open-loop optimal trajectory
+for i in tqdm(range(len(sim_data))):
+    if args.show_plots:
+        plot_fixed_wing(ocp, [sim_data[i], data[i]],
+                        sim_labels=[ctrl_name, 'optimal'])
+        plt.show()
+    else:
+        plot_fixed_wing(ocp, [sim_data[i], data[i]],
+                        sim_labels=[ctrl_name, 'optimal'],
+                        save_dir=os.path.join(config.fig_dir,
+                                              f'{ctrl_name}_sims',
+                                              f'sim_{i}'))"""

@@ -1,6 +1,6 @@
+import argparse as ap
 import os
 import time
-import argparse as ap
 
 import numpy as np
 from scipy.interpolate import make_interp_spline
@@ -10,7 +10,7 @@ from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.controls import LinearQuadraticRegulator
 from optimalcontrol.open_loop import solve_infinite_horizon
 
-from examples.common_utilities import data_utils, supervised_learning, plotting
+from examples.common_utilities import supervised_learning, plotting
 
 from examples.van_der_pol import VanDerPol
 from examples.van_der_pol import example_config as config
@@ -18,7 +18,7 @@ from examples.van_der_pol import example_config as config
 
 parser = ap.ArgumentParser()
 parser.add_argument('-s', '--show_plots', action='store_true',
-                    help="Show plots at runtime, in addition to saving")
+                    help="Show plots at runtime, in addition to saving.")
 args = parser.parse_args()
 
 # Initialize the optimal control problem
@@ -65,8 +65,8 @@ for i, sim in enumerate(lqr_sims):
     sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.parameters.xf)
 
 # Solve open loop optimal control problems
-data, status, messages = data_utils.generate_data(ocp, lqr_sims,
-                                                  **config.open_loop_kwargs)
+data, status, messages = supervised_learning.generate_data(
+    ocp, lqr_sims, **config.open_loop_kwargs)
 
 print("\n" + "+" * 80)
 
@@ -190,8 +190,8 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                   f'{data_name})')
 
 # Save data, figures, and trained controllers
-data_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-data_utils.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
+utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
+utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
 
 for data_name, figs_subset in figs.items():
     _fig_dir = os.path.join(config.fig_dir, data_name)

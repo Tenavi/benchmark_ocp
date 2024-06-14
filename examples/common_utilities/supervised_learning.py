@@ -7,7 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.preprocessing import RobustScaler, PolynomialFeatures
 
-from optimalcontrol import controls, utilities
+from optimalcontrol import controls, utilities, open_loop
 
 
 class SupervisedController(controls.Controller):
@@ -145,3 +145,130 @@ class PolynomialController(SupervisedController):
         regressor = Pipeline([('kernel', PolynomialFeatures(degree=degree)),
                               ('regressor', regressor)])
         return regressor.fit(x_scaled, u_scaled)
+
+
+def generate_data(ocp, guesses, verbose=0, **kwargs):
+    """
+    Given an existing open loop data set, resolve the open loop OCP using the
+    previously generated data as initial guesses. Used when refining solutions
+    with an indirect method or higher tolerances.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        An instance of an `OptimalControlProblem` subclass implementing
+        `bvp_dynamics` and `hamiltonian_minimizer` methods.
+    guesses : length n_problems list of dicts,
+        Initial guesses for each open-loop OCP. Each element of `guesses` should
+        be a dict or DataFrame with keys
+
+            * t : (n_points,) array
+                Time points.
+            * x : (`ocp.n_states`, n_points) array
+                Guess for system states at times `t`.
+            * u : (`ocp.n_controls`, n_points) array, optional
+                Guess for optimal controls at times `t`. Required if
+                `method=='direct'`.
+            * p : (`ocp.n_states`, n_points) array, optional
+                Guess for costates at times `t`. Required if
+                `method=='indirect'` (default).
+            * v : (n_points,) array, optional
+                Guess for value function at times `t`.
+    verbose : {0, 1, 2}, default=0
+        Level of algorithm's verbosity:
+
+            * 0 (default) : work silently.
+            * 1 : display a termination report.
+            * 2 : display progress during iterations.
+    **kwargs : dict
+        Keyword arguments to pass to the solver. For fixed final time problems,
+        see `optimalcontrol.open_loop.solve_fixed_time`. For infinite horizon
+        problem, see `optimalcontrol.open_loop.solve_infinite_horizon`.
+
+    Returns
+    -------
+    data : (n_problems,) object array of dicts
+        Solutions or attempted solutions of the open loop OCP based on
+        `guesses`. Each element is a dict with the same keys and values as
+        `guesses`. If `status[i]==0`, then `data[i]` is considered an acceptable
+        solution, otherwise `data[i]` contains the solver's best attempt at a
+        solution upon failure (which may simply be the original `guesses[i]`).
+    status : (n_problems,) integer array
+        `status[i]` contains an int describing if an acceptable solution based
+        on `guesses[i]` was found. In particular, if `status[i]==0` then
+        `data[i]` was deemed acceptable.
+    messages : (n_problems,) string array
+        `messages[i]` contains a human-readable message describing `status[i]`.
+    """
+    if np.isinf(ocp.final_time):
+        sol_fun = open_loop.solve_infinite_horizon
+    else:
+        sol_fun = open_loop.solve_fixed_time
+
+    if type(guesses) not in (list, np.ndarray):
+        guesses = [guesses]
+
+    data = []
+    status = np.zeros(len(guesses), dtype=int)
+    messages = []
+
+    n_succeed = 0
+
+    sol_time = 0.
+    fail_time = 0.
+
+    print("\nSolving open loop optimal control problems...")
+    w = str(len('attempted') + 2)
+    row = '{:^' + w + '}|{:^' + w + '}|{:^' + w + '}|{:^' + w + '}'
+    h1 = row.format('solved', 'attempted', 'desired', 'elapsed')
+    headers = ('\n' + h1, len(h1) * '-')
+
+    for header in headers:
+        print(header)
+
+    for i, guess in enumerate(guesses):
+        t, x, u, p, v = utilities.unpack_dataframe(guess)
+
+        start_time = time.time()
+
+        sol = sol_fun(ocp, t, x, u=u, p=p, v=v, verbose=verbose, **kwargs)
+
+        end_time = time.time()
+
+        status[i] = sol.status
+        messages.append(sol.message)
+
+        if status[i] == 0:
+            sol_time += end_time - start_time
+            n_succeed += 1
+        else:
+            fail_time += end_time - start_time
+
+        data.append({'t': sol.t, 'x': sol.x, 'u': sol.u, 'p': sol.p, 'v': sol.v,
+                     'L': ocp.running_cost(sol.x, sol.u)})
+
+        if verbose:
+            for header in headers:
+                print(header)
+
+        overwrite = not verbose and i + 1 < len(guesses)
+
+        total_time = sol_time + fail_time
+        total_time = ("{:" + str(int(w) - 6) + ".0f} s").format(total_time)
+        print(row.format(n_succeed, i + 1, len(guesses), total_time),
+              end='\r' if overwrite else None)
+
+    print("\nTotal solution time:")
+    print(f"    Successes: {sol_time:.1f} seconds")
+    print(f"    Failures : {fail_time:.1f} seconds")
+
+    if n_succeed < len(guesses):
+        print("\nFailed initial conditions:")
+        for i, stat in enumerate(status):
+            if stat != 0:
+                print(f"i={i:d} : status = {stat:d} : {messages[i]:s}")
+
+    data = np.asarray(data, dtype=object)
+    messages = np.asarray(messages, dtype=str)
+
+    return data, status, messages

@@ -6,8 +6,9 @@ import numpy as np
 from tqdm import tqdm
 
 from optimalcontrol.controls import LinearQuadraticRegulator
+from optimalcontrol.utilities import save_data
 
-from examples.common_utilities import data_utils
+from examples.common_utilities.supervised_learning import generate_data
 
 from examples.uav.problem_definition import FixedWing
 from examples.uav import example_config as config
@@ -15,12 +16,11 @@ from examples.uav import example_config as config
 
 if __name__ == '__main__':
     parser = ap.ArgumentParser()
-
-    parser.add_argument("n_traj", type=int,
+    parser.add_argument('n_traj', type=int,
                         help="Number of open loop optimal control problems to "
                              "solve. Note: slightly fewer trajectories may be "
                              "produced if the solver fails to find solutions.")
-    parser.add_argument("-o", "--overwrite_data", action='store_true',
+    parser.add_argument('-o', '--overwrite_data', action='store_true',
                         help="If False (default), append new data to data.csv "
                              "if it already exists. If True, overwrite any "
                              "existing data.")
@@ -91,15 +91,15 @@ if __name__ == '__main__':
     lqr_sims = np.array(lqr_sims, dtype=object)
 
     # Solve open loop optimal control problems
-    data, status, messages = data_utils.generate_data(ocp, lqr_sims,
-                                                      **config.open_loop_kwargs)
+    data, status, messages = generate_data(ocp, lqr_sims,
+                                           **config.open_loop_kwargs)
 
     # Save data and LQR controller
-    data_utils.save_data(lqr_sims[status == 0],
-                         os.path.join(config.data_dir, 'LQR_sims.csv'),
-                         overwrite=overwrite_data)
-    data_utils.save_data(data[status == 0],
-                         os.path.join(config.data_dir, 'data.csv'),
-                         overwrite=overwrite_data)
+    save_data(lqr_sims[status == 0],
+              os.path.join(config.data_dir, 'LQR_sims.csv'),
+              overwrite=overwrite_data)
+    save_data(data[status == 0],
+              os.path.join(config.data_dir, 'data.csv'),
+              overwrite=overwrite_data)
 
     lqr.pickle(os.path.join(config.controller_dir, 'lqr.pickle'))

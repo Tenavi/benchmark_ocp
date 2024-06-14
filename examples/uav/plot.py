@@ -5,11 +5,11 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.interpolate import CubicSpline
-from tqdm import tqdm
+
+from optimalcontrol.utilities import load_data
 
 from examples.common_utilities.dynamics import quaternion_to_euler
 from examples.common_utilities.plotting import make_legend, save_fig_dict
-from examples.common_utilities import data_utils
 
 from examples.uav.problem_definition import FixedWing
 from examples.uav.fixed_wing_dynamics.containers import VehicleState
@@ -29,7 +29,9 @@ _extra_labels = [r'$\chi - \chi_f$ [deg]', r'$\alpha$ [deg]',
 
 
 def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
-                    x_min=None, x_max=None, fig_kwargs_ts={}, fig_kwargs_3d={},
+                    x_min=None, x_max=None,
+                    fig_kwargs_ts={}, fig_kwargs_3d={},
+                    plot_kwargs_ts={}, plot_kwargs_3d={},
                     save_dir=None):
     r"""
     Plot states, controls, and running cost vs. time for a set of trajectories,
@@ -51,10 +53,10 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
     sim_labels : list of strings, optional
         Legend labels for each set of time series in `sims`.
     t_max : float, optional
-        Optional upper limit for time axis for each time series plot.
+        Upper limit for time axis for each time series plot.
     x_min : (15,) array, optional
-        Optional lower limits for each state time series plot. The limits are
-        assumed to be in the following order:
+        Lower limits for each state time series plot. The limits are assumed to
+        be in the following order:
             $p_n, p_e, h - h_f, u, v, w, \phi, \theta, \psi - \psi_f, p, q, r$,
         and
             $\chi - \chi_f, \alpha, \beta$
@@ -62,13 +64,18 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
         Limits are assumed to be in [m] or [rad], depending on the state.
         Individual limits can be set to `None` to use the default based on data.
     x_max : (15,) array, optional
-        Optional upper limits for each state time series plot.
+        Upper limits for each state time series plot.
     fig_kwargs_ts : dict, optional
         Keyword arguments to pass to the time series figure during creation. See
         `matplotlib.pyplot.figure`.
     fig_kwargs_3d : dict, optional
         Keyword arguments to pass to the 3d figure during creation. See
         `matplotlib.pyplot.figure`.
+    plot_kwargs_ts : dict, optional
+        Keyword arguments to pass when calling `pyplot.plot` in the time series
+        figure.
+    plot_kwargs_3d : dict, optional
+        Keyword arguments to pass when calling `pyplot.plot` in the 3d figure.
     save_dir : path_like, optional
         The directory where each figure should be saved. Figures will be saved
         as 'save_dir/time_series.pdf' and 'save_dir/3d.pdf'.
@@ -94,10 +101,12 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
     figs = {'time_series': _plot_time_series(ocp, sims, states, positions,
                                              sim_labels, t_max=t_max,
                                              x_min=x_min, x_max=x_max,
-                                             fig_kwargs=fig_kwargs_ts),
+                                             fig_kwargs=fig_kwargs_ts,
+                                             plot_kwargs=plot_kwargs_ts),
             'flight_path': _plot_flight_path(positions, sim_labels,
                                              x_min=x_min, x_max=x_max,
-                                             fig_kwargs=fig_kwargs_3d)}
+                                             fig_kwargs=fig_kwargs_3d,
+                                             plot_kwargs=plot_kwargs_3d)}
 
     if save_dir is None:
         return figs.values()
@@ -106,7 +115,7 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
 
 
 def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
-                      x_min=None, x_max=None, fig_kwargs={}):
+                      x_min=None, x_max=None, fig_kwargs={}, plot_kwargs={}):
     fig_kwargs = {'layout': 'constrained', 'figsize': (11, 4.8), **fig_kwargs}
 
     fig, axes = plt.subplots(nrows=4, ncols=5, **fig_kwargs)
@@ -139,7 +148,8 @@ def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
         ax = axes[i, 0]
 
         for sim, label in zip(sims, sim_labels):
-            ax.plot(sim['t'], sim['u'][i] * _control_scales[i], label=label)
+            ax.plot(sim['t'], sim['u'][i] * _control_scales[i], label=label,
+                    **plot_kwargs)
 
         ax.set_ylim(ocp.control_lb[i] * _control_scales[i] - .01,
                     ocp.control_ub[i] * _control_scales[i] + .01)
@@ -155,15 +165,20 @@ def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
         rates = np.rad2deg(state_traj.rates)
 
         for i in range(3):
-            axes[i, 1].plot(t, pos[i], label=label)
-            axes[i, 2].plot(t, state_traj.velocity[i], label=label)
-            axes[i, 3].plot(t, eul_angles[i], label=label)
-            axes[i, 4].plot(t, rates[i], label=label)
+            axes[i, 1].plot(t, pos[i], label=label, **plot_kwargs)
+            axes[i, 2].plot(t, state_traj.velocity[i], label=label,
+                            **plot_kwargs)
+            axes[i, 3].plot(t, eul_angles[i], label=label, **plot_kwargs)
+            axes[i, 4].plot(t, rates[i], label=label, **plot_kwargs)
 
-        axes[3, 1].plot(t, np.rad2deg(state_traj.course), label=label)
-        axes[3, 2].plot(t, np.rad2deg(state_traj.airspeed[1]), label=label)
-        axes[3, 3].plot(t, np.rad2deg(state_traj.airspeed[2]), label=label)
-        axes[3, 4].plot(t, ocp.running_cost(sim['x'], sim['u']), label=label)
+        axes[3, 1].plot(t, np.rad2deg(state_traj.course), label=label,
+                        **plot_kwargs)
+        axes[3, 2].plot(t, np.rad2deg(state_traj.airspeed[1]), label=label,
+                        **plot_kwargs)
+        axes[3, 3].plot(t, np.rad2deg(state_traj.airspeed[2]), label=label,
+                        **plot_kwargs)
+        axes[3, 4].plot(t, ocp.running_cost(sim['x'], sim['u']), label=label,
+                        **plot_kwargs)
 
     axes[3, 4].set_yscale('log')
 
@@ -197,14 +212,13 @@ def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
 
 
 def _plot_flight_path(positions, sim_labels, x_min=None, x_max=None,
-                      fig_kwargs={}):
+                      fig_kwargs={}, plot_kwargs={}):
     fig_kwargs = {'layout': 'constrained', **fig_kwargs}
     fig = plt.figure(**fig_kwargs)
     ax = fig.add_subplot(projection='3d')
-    ax.set_title('Flight plath', fontsize=14)
 
     for pos, label in zip(positions, sim_labels):
-        ax.plot(pos[1], pos[0], pos[2], label=label)
+        ax.plot(pos[1], pos[0], pos[2], label=label, **plot_kwargs)
 
     if x_min is None or x_max is None:
         xlim = ax.get_xlim()
@@ -243,54 +257,25 @@ if __name__ == '__main__':
     from examples.uav import example_config as config
 
     parser = ap.ArgumentParser()
-
-    parser.add_argument("-d", "--sim_data", type=str,
-                        help="Path to a .csv file with closed-loop simulations "
-                             "to plot and compare against open-loop solutions.")
-    parser.add_argument("-c", "--ctrl_name", type=str,
-                        help="Name of the controller used to generate the "
-                             "closed-loop simulations in sim_data. If not "
-                             "provided, the default uses the sim_data filename "
-                             "without the extension, stripping '_sims' from "
-                             "the end if included.")
-    parser.add_argument("-s", "--show_plots", action='store_true',
-                        help="If True, show plots.")
+    parser.add_argument('data', type=str,
+                        help="Path to a .csv file with trajectories to plot.")
+    parser.add_argument('-s', '--show_plots', action='store_true',
+                        help="Show plots instead of saving to file.")
     args = parser.parse_args()
 
     ocp = FixedWing(**config.params)
 
     # Load and plot the open-loop optimal dataset
-    data = data_utils.load_data(os.path.join(config.data_dir, 'data.csv'))
+    data = load_data(args.data)
+
+    plot_kwargs = {'color': 'black', 'alpha': 0.1}
 
     if args.show_plots:
-        plot_fixed_wing(ocp, data)
+        plot_fixed_wing(ocp, data,
+                        plot_kwargs_ts=plot_kwargs, plot_kwargs_3d=plot_kwargs)
         plt.show()
     else:
         plot_fixed_wing(ocp, data,
-                        save_dir=os.path.join(config.fig_dir, 'data'))
-
-    # Load and plot closed-loop simulations
-    if args.sim_data is not None:
-        sim_data = data_utils.load_data(args.sim_data)
-
-        # Get the default controller name from the data file name
-        if args.ctrl_name is not None:
-            ctrl_name = args.ctrl_name
-        else:
-            ctrl_name = Path(args.sim_data).stem.strip('_sims')
-
-        print(f"Plotting {ctrl_name}-controlled simulations")
-
-        # Loop through each closed-loop trajectory, assuming this corresponds to
-        # the same open-loop optimal trajectory
-        for i in tqdm(range(len(sim_data))):
-            if args.show_plots:
-                plot_fixed_wing(ocp, [sim_data[i], data[i]],
-                                sim_labels=[ctrl_name, 'optimal'])
-                plt.show()
-            else:
-                plot_fixed_wing(ocp, [sim_data[i], data[i]],
-                                sim_labels=[ctrl_name, 'optimal'],
-                                save_dir=os.path.join(config.fig_dir,
-                                                      f'{ctrl_name}_sims',
-                                                      f'sim_{i}'))
+                        plot_kwargs_ts=plot_kwargs, plot_kwargs_3d=plot_kwargs,
+                        save_dir=os.path.join(config.fig_dir,
+                                              Path(args.data).stem))

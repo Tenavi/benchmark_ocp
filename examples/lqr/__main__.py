@@ -10,10 +10,11 @@ from importlib.machinery import SourceFileLoader
 from optimalcontrol import controls, simulate, utilities, analyze
 from optimalcontrol.problem.linear_quadratic import LinearQuadraticProblem
 
-from examples.common_utilities import data_utils, supervised_learning, plotting
+from examples.common_utilities import supervised_learning, plotting
 
 parser = ap.ArgumentParser()
-parser.add_argument('-c', '--config_path', default='examples/lqr/double_int/config.py',
+parser.add_argument('-c', '--config_path',
+                    default='examples/lqr/double_int/config.py',
                     help="The path of config file")
 args = parser.parse_args()
 
@@ -103,8 +104,8 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                 title=f'Closed-loop trajectories and controls ({ctrl_name}, 'f'{data_name})')
 
 # Save data, figures, and trained NN
-data_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-data_utils.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
+utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
+utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
 
 for data_name, figs_subset in figs.items():
     _fig_dir = os.path.join(config.fig_dir, data_name)

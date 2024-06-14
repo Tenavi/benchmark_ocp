@@ -10,9 +10,10 @@ from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.controls import LinearQuadraticRegulator
 from optimalcontrol.open_loop import solve_infinite_horizon
 
-from examples.common_utilities import data_utils, supervised_learning, plotting
+from examples.common_utilities import supervised_learning, plotting
 from examples.common_utilities.dynamics import (euler_to_quaternion,
                                                 quaternion_to_euler)
+
 from examples.attitude_control import AttitudeControl
 from examples.attitude_control import example_config as config
 
@@ -72,8 +73,8 @@ for i, sim in enumerate(lqr_sims):
     sim['p'] = 2. * lqr.P @ (sim['x'] - xf)
 
 # Solve open loop optimal control problems
-data, status, messages = data_utils.generate_data(ocp, lqr_sims,
-                                                  **config.open_loop_kwargs)
+data, status, messages = supervised_learning.generate_data(
+    ocp, lqr_sims, **config.open_loop_kwargs)
 
 print("\n" + "+" * 80)
 
@@ -217,8 +218,8 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
             subtitle=ctrl_name + ', ' + data_name)
 
 # Save data, figures, and trained controllers
-data_utils.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-data_utils.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
+utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
+utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
 
 for data_name, figs_subset in figs.items():
     _fig_dir = os.path.join(config.fig_dir, data_name)
