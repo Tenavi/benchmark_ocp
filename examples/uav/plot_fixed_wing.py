@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.interpolate import CubicSpline
+from tqdm import tqdm
 
 from examples.common_utilities.dynamics import quaternion_to_euler
 from examples.common_utilities.plotting import make_legend, save_fig_dict
@@ -208,15 +209,11 @@ def _plot_flight_path(positions, sim_labels, x_min=None, x_max=None,
     if x_min is None or x_max is None:
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        zlim = ax.get_zlim()
         x_center = np.mean(xlim)
         y_center = np.mean(ylim)
-        axis_size = np.max([xlim[1] - xlim[0],
-                            ylim[1] - ylim[0],
-                            zlim[1] - zlim[0]]) / 2.
+        axis_size = np.max([xlim[1] - xlim[0], ylim[1] - ylim[0]]) / 2.
         ax.set_xlim([x_center - axis_size, x_center + axis_size])
         ax.set_ylim([y_center - axis_size, y_center + axis_size])
-        ax.set_zlim([-axis_size, axis_size])
     else:
         ax.set_xlim(x_min[1], x_max[1])
         ax.set_ylim(x_min[0], x_max[0])
@@ -236,7 +233,8 @@ def _get_positions(t, states):
     d_pos = states.body_to_inertial(states.velocity)
     pos_fun = CubicSpline(t, d_pos, axis=1).antiderivative()
     pos = pos_fun(t)
-    # Convert pd to altitude, and add initial altitude to normalize
+    # Use negative down position as altitude, since this normalizes the initial
+    # altitude as non-zero (final altitude is zero if successful)
     pos[-1] = -states.pd
     return pos
 
@@ -281,9 +279,11 @@ if __name__ == '__main__':
         else:
             ctrl_name = Path(args.sim_data).stem.strip('_sims')
 
+        print(f"Plotting {ctrl_name}-controlled simulations")
+
         # Loop through each closed-loop trajectory, assuming this corresponds to
         # the same open-loop optimal trajectory
-        for i, sim in enumerate(sim_data):
+        for i in tqdm(range(len(sim_data))):
             if args.show_plots:
                 plot_fixed_wing(ocp, [sim_data[i], data[i]],
                                 sim_labels=[ctrl_name, 'optimal'])
