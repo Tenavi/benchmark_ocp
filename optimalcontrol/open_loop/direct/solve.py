@@ -63,8 +63,7 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
                            n_nodes=32, n_nodes_init=None,
                            tol=1e-06, max_iter=500,
                            t1_tol=1e-06, interp_tol=1e-03, max_n_segments=10,
-                           integration_method='RK45', atol=1e-08, rtol=1e-04,
-                           reshape_order='F', verbose=0):
+                           ivp_options={}, reshape_order='F', verbose=0):
     """
     Compute the open-loop optimal solution of a finite horizon approximation of
     an infinite horizon optimal control problem for a single initial condition.
@@ -152,15 +151,19 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
     max_n_segments : int, default=10
         The maximum number of Bellman segments to connect to form the complete
         solution.
-    integration_method : string or `OdeSolver`, default='RK45'
-        The solver to use for integration in the a2B algorithm. See
-        `scipy.integrate.solve_ivp` for options.
-    atol : float or array_like, default=1e-08
-        Absolute tolerance for integration in the a2B algorithm. See
-        `scipy.integrate.solve_ivp`.
-    rtol : float or array_like, default=1e-04
-        Relative tolerance for integration in the a2B algorithm. See
-        `scipy.integrate.solve_ivp`.
+    ivp_options : dict, optional
+        Options to pass to the initial value problem integrator in the a2B
+        algorithm. See `scipy.integrate.solve_ivp` for options. Additional
+        'method' options are available; these are:
+
+            * 'Euler': Explicit Euler method with fixed timestep, 'dt'. This is
+                a first order method.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, 'dt'.
+                This is a second order method.
+            * 'RK4': Classic fourth order Runge-Kutta method with fixed
+                timestep, 'dt'.
+        These explicit 'method's all require specification of 'dt', which is a
+        positive float defining the size of the time discretization.
     reshape_order : {'C', 'F'}, default='F'
         Use C (row-major) or Fortran (column-major) ordering for the NLP
         decision variables. This setting can slightly affect performance.
@@ -234,8 +237,8 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
 
         ode_sol = solve_ivp(f, [0., sols[-1].t[-1]], sols[-1].x[:, 0],
                             events=events, args=(sols[-1],),
-                            exact_event_times=True, method=integration_method,
-                            atol=atol, rtol=rtol, vectorized=True)
+                            exact_event_times=True, vectorized=True,
+                            **ivp_options)
 
         # Integration failed
         if ode_sol.status == -1:

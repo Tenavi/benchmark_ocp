@@ -21,5 +21,5 @@ performance and stability testing of feedback control laws.
     multiple initial conditions.
 """
 
-from .simulate import (integrate_fixed_time, integrate_to_converge,
-                       monte_carlo_fixed_time, monte_carlo_to_converge)
+from .simulate import (integrate, integrate_to_converge,
+                       monte_carlo, monte_carlo_to_converge)

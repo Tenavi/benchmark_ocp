@@ -1,58 +1,11 @@
-import warnings
-
 import numpy as np
 import pytest
-from scipy.interpolate import make_interp_spline
-from scipy.integrate import solve_ivp as scipy_solve_ivp
 
-from optimalcontrol.simulate import integrate_fixed_time, integrate_to_converge
-from optimalcontrol.simulate._ivp import solve_ivp
+from optimalcontrol.simulate import integrate, integrate_to_converge
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator, ConstantControl
 
-from ._utilities import make_LQ_params
-
-
-@pytest.mark.parametrize('method', ['RK45', 'BDF'])
-@pytest.mark.parametrize('eps', [1e-04, 1e-03, 1e-02])
-def test_solve_ivp_events(method, eps):
-    t1 = 2.
-    t_eval = np.linspace(0., t1, 2001)
-
-    x0 = np.random.default_rng(123).normal(size=(1,))
-
-    c = 0.1
-
-    def f(t, x):
-        return c * x
-
-    # Solution with slightly perturbed parameters
-    ref_sol = make_interp_spline(t_eval, x0 * np.exp((c + eps) * t_eval),
-                                 k=1, axis=-1)
-
-    # Want integration to stop when square error is greater than eps ** 2
-    def integration_event(t, x):
-        return (ref_sol(t).T - x) ** 2 - eps ** 2
-
-    # The event condition starts negative, integration should stop when this
-    # becomes positive
-    integration_event.direction = 1
-    integration_event.terminal = True
-
-    kwargs = {'t_eval': t_eval, 'method': method, 'events': integration_event}
-    args = (f, [0., t1], x0)
-
-    with warnings.catch_warnings():
-        # Silence warning about 1d array to scalar conversion
-        warnings.filterwarnings('ignore', category=DeprecationWarning)
-        ref_ode_sol = scipy_solve_ivp(*args, **kwargs)
-
-    ode_sol = solve_ivp(*args, exact_event_times=True, **kwargs)
-
-    np.testing.assert_array_equal(ode_sol.t, ref_ode_sol.t)
-    np.testing.assert_array_equal(ode_sol.y, ref_ode_sol.y)
-
-    assert not np.any(integration_event(ode_sol.t, ode_sol.y) > 0.)
+from tests._utilities import make_LQ_params
 
 
 @pytest.mark.parametrize('method', ['RK45', 'BDF'])
@@ -79,8 +32,8 @@ def test_integrate_closed_loop_lqr(method, u_ub):
 
     x0 = ocp.sample_initial_conditions(n_samples=1, distance=1/2)
 
-    t, x, status = integrate_fixed_time(ocp, lqr, x0, t_span, t_eval=t_eval,
-                                        method=method, atol=1e-12, rtol=1e-06)
+    t, x, status = integrate(ocp, lqr, x0, t_span, t_eval=t_eval,
+                             method=method, atol=1e-12, rtol=1e-06)
     u = lqr(x)
     cost = ocp.running_cost(x, u)
 
@@ -124,7 +77,7 @@ def test_integrate_closed_loop_bound_events(x_ub, x_lb, x0):
                                  x_lb=x_lb, x_ub=x_ub)
     ctrl = ConstantControl(0.)
 
-    t, x, status = integrate_fixed_time(ocp, ctrl, x0, t_span, t_eval=t_eval)
+    t, x, status = integrate(ocp, ctrl, x0, t_span, t_eval=t_eval)
 
     assert t[-1] > t_span[0]
 

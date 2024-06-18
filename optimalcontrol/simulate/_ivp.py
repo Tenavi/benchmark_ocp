@@ -1,15 +1,16 @@
 import warnings
 
 import numpy as np
-
 from scipy.integrate._ivp.ivp import (METHODS, MESSAGES, OdeResult, OdeSolution,
                                       prepare_events, find_active_events,
                                       handle_events)
 
+from ._fixed_stepsize_integrators import METHODS as FIXEDSTEP_METHODS
 
-def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
-              events=None, exact_event_times=False, vectorized=False, args=None,
-              **options):
+
+def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
+              dense_output=False, events=None, exact_event_times=False,
+              vectorized=False, args=None, **options):
     """Solve an initial value problem for a system of ODEs.
 
     Modification of `scipy.integrate.solve_ivp` to check events only after each
@@ -79,8 +80,20 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
             * 'LSODA': Adams/BDF method with automatic stiffness detection and
               switching [7]_, [8]_. This is a wrapper of the Fortran solver from
               ODEPACK.
+            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
+              a first order method. Linear interpolation is used for dense
+              output.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
+              This is a second order method. A quadratic hermite polynomial is
+              used for dense output.
+            * 'RK4': Classic fourth order Runge-Kutta method with fixed
+              timestep, `dt`. A cubic Hermite polynomial is used for dense
+              output.
         You can also pass an arbitrary class derived from `OdeSolver` which
         implements the solver.
+    dt : float
+        For the explicit methods, 'Euler', 'Midpoint', and 'RK4', the absolute
+        step-size to use for time discretization.
     t_eval : array_like, optional
         Times at which to store the computed solution, must be sorted and lie
         within `t_span`. If None (default), use points selected by the solver.
@@ -173,8 +186,8 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
         illustration).  These parameters can be also used with ``jac=None`` to
         reduce the number of Jacobian elements estimated by finite differences.
     min_step : float, optional
-        The minimum allowed step size for 'LSODA' method.
-        By default `min_step` is zero.
+        The minimum allowed step size for 'LSODA' method. By default
+        `min_step` is zero.
 
     Returns
     -------
@@ -246,6 +259,9 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
 
     if method in METHODS:
         method = METHODS[method]
+    elif method in FIXEDSTEP_METHODS:
+        method = FIXEDSTEP_METHODS[method]
+        options = {'dt': dt, **options}
 
     with warnings.catch_warnings():
         # Silence warning about unused options

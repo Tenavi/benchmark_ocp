@@ -108,7 +108,7 @@ def plot_closed_loop_3d(sims, open_loop_sols, z='u',
     ----------
     sims : length n_sims list of dicts
         Closed loop simulations output by
-        `optimalcontrol.simulate.monte_carlo_fixed_time` or
+        `optimalcontrol.simulate.monte_carlo` or
         `optimalcontrol.simulate.monte_carlo_to_converge`. Each element of
         `sims` should be a dict with keys
 
@@ -196,7 +196,7 @@ def plot_closed_loop(sims, t_max=None, x_index=None, u_index=None,
     ----------
     sims : length n_sims list of dicts
         Closed loop simulations output by
-        `optimalcontrol.simulate.monte_carlo_fixed_time` or
+        `optimalcontrol.simulate.monte_carlo` or
         `optimalcontrol.simulate.monte_carlo_to_converge`. Each element of
         `sims` should be a dict with keys
 

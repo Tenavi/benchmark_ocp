@@ -83,11 +83,9 @@ class Controller:
             default 'uniform_average'.
 
                 * 'raw_values' : Returns a full set of scores for each control.
-
                 * 'uniform_average' :
                     Scores of all control dimensions are averaged with uniform
                     weight.
-
                 * 'variance_weighted' :
                     Scores of all control dimensions are averaged, weighted by
                     the variances of each individual control.
