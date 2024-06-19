@@ -10,7 +10,7 @@ from tests._utilities import make_LQ_params
 
 @pytest.mark.parametrize('method', ['RK45', 'BDF'])
 @pytest.mark.parametrize('u_ub', (None, 0.5))
-def test_integrate_closed_loop_lqr(method, u_ub):
+def test_integrate_lqr(method, u_ub):
     """
     Basic test of an LQR-controlled linear system integrated over a fixed time
     horizon. Since the closed-loop system should be stable, checks that the
@@ -59,7 +59,7 @@ def test_integrate_closed_loop_lqr(method, u_ub):
 @pytest.mark.parametrize('x_lb', (None, [-np.inf, -np.inf],
                                   [-0.25, -np.inf], [-0.25, -0.75]))
 @pytest.mark.parametrize('x0', ([0., 0.5], [0., -0.5]))
-def test_integrate_closed_loop_bound_events(x_ub, x_lb, x0):
+def test_integrate_bound_events(x_ub, x_lb, x0):
     n_states = 2
     n_controls = 1
 

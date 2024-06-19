@@ -2,10 +2,34 @@ import warnings
 
 import numpy as np
 from scipy.integrate._ivp.ivp import (METHODS, MESSAGES, OdeResult, OdeSolution,
-                                      prepare_events, find_active_events,
-                                      handle_events)
+                                      find_active_events, handle_events)
 
 from ._fixed_stepsize_integrators import METHODS as FIXEDSTEP_METHODS
+
+
+def prepare_events(events):
+    """Standardize event functions and extract attributes.
+
+    Taken from `scipy` version 1.13 to allow backwards compatibility."""
+    if callable(events):
+        events = (events,)
+
+    max_events = np.empty(len(events))
+    direction = np.empty(len(events))
+    for i, event in enumerate(events):
+        terminal = getattr(event, 'terminal', None)
+        direction[i] = getattr(event, 'direction', 0)
+
+        message = ('The `terminal` attribute of each event '
+                   'must be a boolean or positive integer.')
+        if terminal is None or terminal == 0:
+            max_events[i] = np.inf
+        elif int(terminal) == terminal and terminal > 0:
+            max_events[i] = terminal
+        else:
+            raise ValueError(message)
+
+    return events, max_events, direction
 
 
 def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
@@ -283,9 +307,9 @@ def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
 
     interpolants = []
 
-    events, is_terminal, event_dir = prepare_events(events)
-
     if events is not None:
+        events, max_events, event_dir = prepare_events(events)
+        event_count = np.zeros(len(events))
         if args is not None:
             # Wrap user functions in lambdas to hide the additional parameters.
             # The original event function is passed as a keyword argument to the
@@ -329,13 +353,16 @@ def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
                 if sol is None:
                     sol = solver.dense_output()
 
+                event_count[active_events] += 1
+
                 if exact_event_times:
                     with warnings.catch_warnings():
                         # Silence warning about 1d array to scalar conversion
                         warnings.filterwarnings('ignore',
                                                 category=DeprecationWarning)
                         root_indices, roots, terminate = handle_events(
-                            sol, events, active_events, is_terminal, t_old, t)
+                            sol, events, active_events, event_count, max_events,
+                            t_old, t)
 
                     for e, te in zip(root_indices, roots):
                         t_events[e].append(te)
@@ -350,7 +377,8 @@ def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
                         t_events[e].append(t)
                         y_events[e].append(y)
 
-                    status = int(np.any(is_terminal[active_events]))
+                    status = int(np.any(event_count[active_events]
+                                        >= max_events[active_events]))
 
             g = g_new
 
