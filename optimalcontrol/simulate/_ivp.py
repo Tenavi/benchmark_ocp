@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 from scipy.integrate._ivp.ivp import (METHODS, MESSAGES, OdeResult, OdeSolution,
-                                      find_active_events, handle_events)
+                                      find_active_events, solve_event_equation)
 
 from ._fixed_stepsize_integrators import METHODS as FIXEDSTEP_METHODS
 
@@ -30,6 +30,62 @@ def prepare_events(events):
             raise ValueError(message)
 
     return events, max_events, direction
+
+
+def handle_events(sol, events, active_events, event_count, max_events,
+                  t_old, t):
+    """Helper function to handle events.
+
+    Taken from `scipy` version 1.13 to allow backwards compatibility.
+
+    Parameters
+    ----------
+    sol : DenseOutput
+        Function ``sol(t)`` which evaluates an ODE solution between `t_old`
+        and  `t`.
+    events : list of callables, length n_events
+        Event functions with signatures ``event(t, y)``.
+    active_events : ndarray
+        Indices of events which occurred.
+    event_count : ndarray
+        Current number of occurrences for each event.
+    max_events : ndarray, shape (n_events,)
+        Number of occurrences allowed for each event before integration
+        termination is issued.
+    t_old, t : float
+        Previous and new values of time.
+
+    Returns
+    -------
+    root_indices : ndarray
+        Indices of events which take zero between `t_old` and `t` and before
+        a possible termination.
+    roots : ndarray
+        Values of t at which events occurred.
+    terminate : bool
+        Whether a terminal event occurred.
+    """
+    roots = [solve_event_equation(events[event_index], sol, t_old, t)
+             for event_index in active_events]
+
+    roots = np.asarray(roots)
+
+    if np.any(event_count[active_events] >= max_events[active_events]):
+        if t > t_old:
+            order = np.argsort(roots)
+        else:
+            order = np.argsort(-roots)
+        active_events = active_events[order]
+        roots = roots[order]
+        t = np.nonzero(event_count[active_events]
+                       >= max_events[active_events])[0][0]
+        active_events = active_events[:t + 1]
+        roots = roots[:t + 1]
+        terminate = True
+    else:
+        terminate = False
+
+    return active_events, roots, terminate
 
 
 def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
