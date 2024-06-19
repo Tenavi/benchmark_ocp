@@ -5,8 +5,8 @@ from ._ivp import solve_ivp
 from ..utilities import closed_loop_jacobian
 
 
-def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
-                         method='RK45', atol=1e-06, rtol=1e-03):
+def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
+              **options):
     """
     Integrate continuous-time system dynamics with a given feedback controller
     over a fixed time horizon for one initial condition.
@@ -28,11 +28,18 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
         Times at which to store the computed solution, must be sorted and lie
         within `t_span`. If `None` (default), use points selected by the solver.
     method : string or `OdeSolver`, default='RK45'
-        See `scipy.integrate.solve_ivp`.
-    atol : float or array_like, default=1e-06
-        See `scipy.integrate.solve_ivp`.
-    rtol : float or array_like, default=1e-03
-        See `scipy.integrate.solve_ivp`.
+        See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
+        available; these are:
+
+            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
+                a first order method.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
+                This is a second order method.
+            * 'RK4': Classic fourth order Runge-Kutta method.
+    **options : keyword arguments
+        See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
+        argument, which is a positive float defining the size of the time
+        discretization.
 
     Returns
     -------
@@ -59,13 +66,13 @@ def integrate_fixed_time(ocp, controller, x0, t_span, t_eval=None,
 
     ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=integration_events,
                         t_eval=t_eval, vectorized=True, method=method,
-                        rtol=rtol, atol=atol)
+                        **options)
 
     return ode_sol.t, ode_sol.y, ode_sol.status
 
 
 def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
-                          method='RK45', atol=1e-06, rtol=1e-03):
+                          method='RK45', **options):
     """
     Integrate continuous time system dynamics with a given feedback controller
     until a steady state is reached or a specified time horizon is exceeded.
@@ -99,11 +106,18 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
         and ignores `norm` so that the convergence criteria becomes
         `all(f(x,u) <= ftol)`.
     method : string or `OdeSolver`, default='RK45'
-        See `scipy.integrate.solve_ivp`.
-    atol : float or array_like, default=1e-06
-        See `scipy.integrate.solve_ivp`.
-    rtol : float or array_like, default=1e-03
-        See `scipy.integrate.solve_ivp`.
+        See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
+        available; these are:
+
+            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
+                a first order method.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
+                This is a second order method.
+            * 'RK4': Classic fourth order Runge-Kutta method.
+    **options : keyword arguments
+        See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
+        argument, which is a positive float defining the size of the time
+        discretization.
 
     Returns
     -------
@@ -145,9 +159,9 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     # Solves over an extended time interval if needed to make ||f(x,u)|| -> 0
     while True:
         # Simulate the closed-loop system
-        t_new, x_new, status = integrate_fixed_time(
+        t_new, x_new, status = integrate(
             ocp, controller, x[:, -1], (t[-1], t[-1] + t_int),
-            method=method, atol=atol, rtol=rtol)
+            method=method, **options)
 
         # Add new points to existing saved points. The first index of new points
         # duplicates the last index of existing points.
@@ -174,10 +188,10 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     return t, x, status
 
 
-def monte_carlo_fixed_time(ocp, controller, x0, t_span, t_eval=None,
-                           method='RK45', atol=1e-06, rtol=1e-03):
+def monte_carlo(ocp, controller, x0, t_span, t_eval=None, method='RK45',
+                **options):
     """
-    Wraps `integrate_fixed_time` to integrate continuous time system dynamics
+    Wraps `integrate` to integrate continuous time system dynamics
     with a given feedback controller over a fixed time horizon for multiple
     initial conditions.
 
@@ -198,11 +212,18 @@ def monte_carlo_fixed_time(ocp, controller, x0, t_span, t_eval=None,
         Times at which to store the computed solution, must be sorted and lie
         within `t_span`. If `None` (default), use points selected by the solver.
     method : string or `OdeSolver`, default='RK45'
-        See `scipy.integrate.solve_ivp`.
-    atol : float or array_like, default=1e-06
-        See `scipy.integrate.solve_ivp`.
-    rtol : float or array_like, default=1e-03
-        See `scipy.integrate.solve_ivp`.
+        See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
+        available; these are:
+
+            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
+                a first order method.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
+                This is a second order method.
+            * 'RK4': Classic fourth order Runge-Kutta method.
+    **options : keyword arguments
+        See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
+        argument, which is a positive float defining the size of the time
+        discretization.
 
     Returns
     -------
@@ -223,12 +244,12 @@ def monte_carlo_fixed_time(ocp, controller, x0, t_span, t_eval=None,
             *  0: The solver successfully reached the end of `t_span`.
             *  1: A termination event occurred.
     """
-    return _monte_carlo(ocp, controller, x0, integrate_fixed_time, t_span,
-                        t_eval=t_eval, method=method, atol=atol, rtol=rtol)
+    return _monte_carlo(ocp, controller, x0, integrate, t_span,
+                        t_eval=t_eval, method=method, **options)
 
 
 def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
-                            ftol=1e-03, method='RK45', atol=1e-06, rtol=1e-03):
+                            ftol=1e-03, method='RK45', **options):
     """
     Wraps `integrate_to_converge` to integrate continuous-time system dynamics
     with a given feedback controller until a steady state is reached or a
@@ -260,11 +281,18 @@ def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
         and ignores `norm` so that the convergence criteria becomes
         `all(f(x,u) <= ftol)`.
     method : string or `OdeSolver`, default='RK45'
-        See `scipy.integrate.solve_ivp`.
-    atol : float or array_like, default=1e-06
-        See `scipy.integrate.solve_ivp`.
-    rtol : float or array_like, default=1e-03
-        See `scipy.integrate.solve_ivp`.
+        See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
+        available; these are:
+
+            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
+                a first order method.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
+                This is a second order method.
+            * 'RK4': Classic fourth order Runge-Kutta method.
+    **options : keyword arguments
+        See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
+        argument, which is a positive float defining the size of the time
+        discretization.
 
     Returns
     -------
@@ -287,8 +315,7 @@ def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
             *  2: `sims[i]['t'][-1]` exceeded `t_max`.
     """
     return _monte_carlo(ocp, controller, x0, integrate_to_converge, t_int,
-                        t_max, norm=norm, ftol=ftol, method=method, atol=atol,
-                        rtol=rtol)
+                        t_max, norm=norm, ftol=ftol, method=method, **options)
 
 
 def _monte_carlo(ocp, controller, x0_pool, fun, *args, **kwargs):
