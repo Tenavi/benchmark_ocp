@@ -196,8 +196,7 @@ def _minimize_slsqp(fun, x0, args=(), jac=None, bounds=None, constraints=(),
     if not disp:
         iprint = 0
 
-    # Transform x0 into an array.
-    x = np.asfarray(x0).flatten()
+    x = np.asarray(x0).flatten()
 
     # SLSQP is sent 'old-style' bounds, 'new-style' bounds are required by
     # ScalarFunction
