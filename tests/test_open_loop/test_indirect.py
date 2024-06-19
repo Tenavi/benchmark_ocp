@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from optimalcontrol.open_loop import indirect
-from optimalcontrol.simulate import integrate_fixed_time
+from optimalcontrol.simulate import integrate
 from optimalcontrol.problem import LinearQuadraticProblem
 from optimalcontrol.controls import LinearQuadraticRegulator
 
@@ -36,7 +36,7 @@ def get_lqr_sol(ocp, lqr, x0, t1, t_eval=None):
     else:
         t_span = [t_eval[0], t_eval[-1]]
 
-    t, x, _ = integrate_fixed_time(ocp, lqr, x0, t_span, t_eval=t_eval)
+    t, x, _ = integrate(ocp, lqr, x0, t_span, t_eval=t_eval)
     p = 2. * lqr.P @ (x - lqr.xf)
     u = lqr(x)
 

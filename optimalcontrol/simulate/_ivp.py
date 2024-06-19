@@ -1,15 +1,96 @@
 import warnings
 
 import numpy as np
-
 from scipy.integrate._ivp.ivp import (METHODS, MESSAGES, OdeResult, OdeSolution,
-                                      prepare_events, find_active_events,
-                                      handle_events)
+                                      find_active_events, solve_event_equation)
+
+from ._fixed_stepsize_integrators import METHODS as FIXEDSTEP_METHODS
 
 
-def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
-              events=None, exact_event_times=False, vectorized=False, args=None,
-              **options):
+def prepare_events(events):
+    """Standardize event functions and extract attributes.
+
+    Taken from `scipy` version 1.13 to allow backwards compatibility."""
+    if callable(events):
+        events = (events,)
+
+    max_events = np.empty(len(events))
+    direction = np.empty(len(events))
+    for i, event in enumerate(events):
+        terminal = getattr(event, 'terminal', None)
+        direction[i] = getattr(event, 'direction', 0)
+
+        message = ('The `terminal` attribute of each event '
+                   'must be a boolean or positive integer.')
+        if terminal is None or terminal == 0:
+            max_events[i] = np.inf
+        elif int(terminal) == terminal and terminal > 0:
+            max_events[i] = terminal
+        else:
+            raise ValueError(message)
+
+    return events, max_events, direction
+
+
+def handle_events(sol, events, active_events, event_count, max_events,
+                  t_old, t):
+    """Helper function to handle events.
+
+    Taken from `scipy` version 1.13 to allow backwards compatibility.
+
+    Parameters
+    ----------
+    sol : DenseOutput
+        Function ``sol(t)`` which evaluates an ODE solution between `t_old`
+        and  `t`.
+    events : list of callables, length n_events
+        Event functions with signatures ``event(t, y)``.
+    active_events : ndarray
+        Indices of events which occurred.
+    event_count : ndarray
+        Current number of occurrences for each event.
+    max_events : ndarray, shape (n_events,)
+        Number of occurrences allowed for each event before integration
+        termination is issued.
+    t_old, t : float
+        Previous and new values of time.
+
+    Returns
+    -------
+    root_indices : ndarray
+        Indices of events which take zero between `t_old` and `t` and before
+        a possible termination.
+    roots : ndarray
+        Values of t at which events occurred.
+    terminate : bool
+        Whether a terminal event occurred.
+    """
+    roots = [solve_event_equation(events[event_index], sol, t_old, t)
+             for event_index in active_events]
+
+    roots = np.asarray(roots)
+
+    if np.any(event_count[active_events] >= max_events[active_events]):
+        if t > t_old:
+            order = np.argsort(roots)
+        else:
+            order = np.argsort(-roots)
+        active_events = active_events[order]
+        roots = roots[order]
+        t = np.nonzero(event_count[active_events]
+                       >= max_events[active_events])[0][0]
+        active_events = active_events[:t + 1]
+        roots = roots[:t + 1]
+        terminate = True
+    else:
+        terminate = False
+
+    return active_events, roots, terminate
+
+
+def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
+              dense_output=False, events=None, exact_event_times=False,
+              vectorized=False, args=None, **options):
     """Solve an initial value problem for a system of ODEs.
 
     Modification of `scipy.integrate.solve_ivp` to check events only after each
@@ -79,8 +160,20 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
             * 'LSODA': Adams/BDF method with automatic stiffness detection and
               switching [7]_, [8]_. This is a wrapper of the Fortran solver from
               ODEPACK.
+            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
+              a first order method. Linear interpolation is used for dense
+              output.
+            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
+              This is a second order method. A quadratic hermite polynomial is
+              used for dense output.
+            * 'RK4': Classic fourth order Runge-Kutta method with fixed
+              timestep, `dt`. A cubic Hermite polynomial is used for dense
+              output.
         You can also pass an arbitrary class derived from `OdeSolver` which
         implements the solver.
+    dt : float
+        For the explicit methods, 'Euler', 'Midpoint', and 'RK4', the absolute
+        step-size to use for time discretization.
     t_eval : array_like, optional
         Times at which to store the computed solution, must be sorted and lie
         within `t_span`. If None (default), use points selected by the solver.
@@ -173,8 +266,8 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
         illustration).  These parameters can be also used with ``jac=None`` to
         reduce the number of Jacobian elements estimated by finite differences.
     min_step : float, optional
-        The minimum allowed step size for 'LSODA' method.
-        By default `min_step` is zero.
+        The minimum allowed step size for 'LSODA' method. By default
+        `min_step` is zero.
 
     Returns
     -------
@@ -246,6 +339,9 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
 
     if method in METHODS:
         method = METHODS[method]
+    elif method in FIXEDSTEP_METHODS:
+        method = FIXEDSTEP_METHODS[method]
+        options = {'dt': dt, **options}
 
     with warnings.catch_warnings():
         # Silence warning about unused options
@@ -267,9 +363,9 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
 
     interpolants = []
 
-    events, is_terminal, event_dir = prepare_events(events)
-
     if events is not None:
+        events, max_events, event_dir = prepare_events(events)
+        event_count = np.zeros(len(events))
         if args is not None:
             # Wrap user functions in lambdas to hide the additional parameters.
             # The original event function is passed as a keyword argument to the
@@ -313,13 +409,16 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
                 if sol is None:
                     sol = solver.dense_output()
 
+                event_count[active_events] += 1
+
                 if exact_event_times:
                     with warnings.catch_warnings():
                         # Silence warning about 1d array to scalar conversion
                         warnings.filterwarnings('ignore',
                                                 category=DeprecationWarning)
                         root_indices, roots, terminate = handle_events(
-                            sol, events, active_events, is_terminal, t_old, t)
+                            sol, events, active_events, event_count, max_events,
+                            t_old, t)
 
                     for e, te in zip(root_indices, roots):
                         t_events[e].append(te)
@@ -334,7 +433,8 @@ def solve_ivp(fun, t_span, y0, method='RK45', t_eval=None, dense_output=False,
                         t_events[e].append(t)
                         y_events[e].append(y)
 
-                    status = int(np.any(is_terminal[active_events]))
+                    status = int(np.any(event_count[active_events]
+                                        >= max_events[active_events]))
 
             g = g_new
 
