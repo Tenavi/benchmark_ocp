@@ -94,8 +94,10 @@ def test_find_equilibrium_inside_limit_cycle(mu, norm, ftol, t_int):
     # Initial guess
     x0 = ocp.sample_initial_conditions(distance=0.5)
 
-    x = analyze.find_equilibrium(ocp, controller, x0, t_int, 10 * t_int,
-                                 norm=norm, ftol=ftol)
+    x, status = analyze.find_equilibrium(ocp, controller, x0, t_int,
+                                         10. * t_int, norm=norm, ftol=ftol)
+
+    assert np.sum(status == 0) == 1
 
     f = ocp.dynamics(x, controller(x))
 
@@ -116,7 +118,7 @@ def test_find_equilibrium_fails_outside_limit_cycle(mu, t_int):
 
     with pytest.warns(RuntimeWarning, match="No equilibrium was found"):
         x, status = analyze.find_equilibrium(ocp, controller, x0, t_int,
-                                             10 * t_int)
+                                             10. * t_int)
 
     # Integration should fail or reach the end of the integration horizon
     assert np.all(status != 0)
@@ -143,7 +145,11 @@ def test_find_multiple_equilibria(x0):
     # equilibrium, x0 + pi
     x_guess = x0 + np.pi * 0.49
 
-    x = analyze.find_equilibrium(ocp, controller, x_guess, 10., 100., ftol=ftol)
+    x, status = analyze.find_equilibrium(ocp, controller, x_guess, 10., 100.,
+                                         ftol=ftol)
+
+    assert np.sum(status == 0) == 1
+    assert np.sum(status) == 3
 
     # Since x_guess was closer to x0 than any other equilibrium, the result
     # should be equal to x0

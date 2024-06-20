@@ -46,47 +46,6 @@ def test_Euler(n_states, dt):
                                    atol=1e-12, rtol=1e-06)
         dxdt = approx_derivative(ode_sol, t0, method='cs').flatten()
         np.testing.assert_allclose(dxdt, f0, atol=1e-12, rtol=1e-06)
-        
-        
-@pytest.mark.parametrize('n_states', [1, 2])
-@pytest.mark.parametrize('dt', [1e-01, 1e-02])
-def test_Midpoint(n_states, dt):
-    t0 = rng.normal()
-
-    x0 = rng.normal(size=(n_states,))
-
-    def f(t, x):
-        return np.cos(t) * x
-
-    for tf in (t0 + rng.uniform(0., 1.), t0 + dt / 2.):
-        solver = _fixed_stepsize_integrators.Midpoint(f, t0, x0, tf, dt=dt)
-        solver.step()
-
-        # Compare solver output with expected
-        h = np.minimum(tf - t0, dt)
-        t1 = t0 + h / 2.
-        f0 = f(t0, x0)
-        k1 = x0 + h / 2. * f0
-        f1 = f(t1, k1)
-        xf_expect = x0 + h * f1
-
-        assert solver.t == t0 + h
-        np.testing.assert_allclose(solver.y, xf_expect)
-
-        # Dense output should satisfy the constraints
-        #   x(t0) = x0
-        #   x(t0 + h) = xf
-        #   dx/dt(t0) = f(t0, x0)
-        #   dx/dt(t1) = f(t1, k1)
-        ode_sol = solver.dense_output()
-
-        np.testing.assert_allclose(ode_sol(t0), x0)
-        np.testing.assert_allclose(ode_sol(solver.t), solver.y,
-                                   atol=1e-12, rtol=1e-06)
-        dxdt = approx_derivative(ode_sol, t0, method='cs').flatten()
-        np.testing.assert_allclose(dxdt, f0, atol=1e-12, rtol=1e-06)
-        dxdt = approx_derivative(ode_sol, t1, method='cs').flatten()
-        np.testing.assert_allclose(dxdt, f1, atol=1e-12, rtol=1e-06)
 
 
 @pytest.mark.parametrize('n_states', [1, 2])
@@ -132,7 +91,7 @@ def test_RK4(n_states, dt):
                                    atol=1e-12, rtol=1e-06)
 
 
-@pytest.mark.parametrize('method', ['Euler', 'Midpoint', 'RK4'])
+@pytest.mark.parametrize('method', ['Euler', 'RK4'])
 @pytest.mark.parametrize('dt', [1e-01, 1e-02])
 def test_solve_ivp_fixed_stepsize(method, dt):
     t0 = rng.normal()

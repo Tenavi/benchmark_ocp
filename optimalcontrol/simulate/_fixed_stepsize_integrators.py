@@ -95,43 +95,6 @@ class Euler(FixedStepSolver):
                   [0.]])
 
 
-class Midpoint(FixedStepSolver):
-    """Explicit midpoint method with fixed timestep.
-
-    This is a second order method. A quadratic Hermite polynomial is used for
-    dense output.
-
-    Parameters
-    ----------
-    fun : callable
-        Right-hand side of the system. The calling signature is `fun(t, y)`.
-        Here `t` is a scalar, and there are two options for the ndarray `y`:
-        It can either have shape (n,); then `fun` must return array_like with
-        shape (n,). Alternatively it can have shape (n, k); then `fun`
-        must return an array_like with shape (n, k), i.e., each column
-        corresponds to a single column in `y`. The choice between the two
-        options is determined by `vectorized` argument (see below).
-    t0 : float
-        Initial time.
-    y0 : array_like, shape (n,)
-        Initial state.
-    t_bound : float
-        Boundary time - the integration won't continue beyond it. It also
-        determines the direction of the integration.
-    dt : float
-        Absolute time step size. Must be positive.
-    vectorized : bool, optional
-        Whether `fun` is implemented in a vectorized fashion. Default is False.
-    """
-    C = np.array([0., 1/2])
-    A = np.array([[0., 0.],
-                  [1/2, 0.]])
-    B = np.array([0., 1.])
-    P = np.array([[1., -1.],
-                  [0., 1.],
-                  [0., 0.]])
-
-
 class RK4(FixedStepSolver):
     """Explicit fourth order Runge-Kutta method with fixed timestep.
 
@@ -182,4 +145,4 @@ class RK4(FixedStepSolver):
         return RkDenseOutput(self.t_old, self.t, self.y_old, Q)
 
 
-METHODS = {'Euler': Euler, 'Midpoint': Midpoint, 'RK4': RK4}
+METHODS = {'Euler': Euler, 'RK4': RK4}

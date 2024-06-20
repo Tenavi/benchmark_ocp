@@ -86,11 +86,12 @@ print("\n" + "+" * 80)
 for controller in (lqr, nn_control):
     print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
 
-    x = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
-                                 config.t_max, **config.sim_kwargs)
-    print("Equilibrium point:")
-    print(x.reshape(-1, 1))
-    analyze.linear_stability(ocp, controller, x)
+    x, status = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
+                                         config.t_max, **config.sim_kwargs)
+    if np.any(status == 0):
+        print("Equilibrium point:")
+        print(x.reshape(-1, 1))
+        analyze.linear_stability(ocp, controller, x)
 
 print("\n" + "+" * 80)
 

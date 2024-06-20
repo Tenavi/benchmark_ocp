@@ -163,16 +163,13 @@ def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
             * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
               a first order method. Linear interpolation is used for dense
               output.
-            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
-              This is a second order method. A quadratic hermite polynomial is
-              used for dense output.
             * 'RK4': Classic fourth order Runge-Kutta method with fixed
               timestep, `dt`. A cubic Hermite polynomial is used for dense
               output.
         You can also pass an arbitrary class derived from `OdeSolver` which
         implements the solver.
     dt : float
-        For the explicit methods, 'Euler', 'Midpoint', and 'RK4', the absolute
+        For the explicit methods, 'Euler' and 'RK4', the absolute
         step-size to use for time discretization.
     t_eval : array_like, optional
         Times at which to store the computed solution, must be sorted and lie
@@ -406,12 +403,12 @@ def solve_ivp(fun, t_span, y0, method='RK45', dt=None, t_eval=None,
 
             # This part is changed from the standard scipy.integrate.solve_ivp
             if active_events.size > 0:
-                if sol is None:
-                    sol = solver.dense_output()
-
                 event_count[active_events] += 1
 
                 if exact_event_times:
+                    if sol is None:
+                        sol = solver.dense_output()
+
                     with warnings.catch_warnings():
                         # Silence warning about 1d array to scalar conversion
                         warnings.filterwarnings('ignore',

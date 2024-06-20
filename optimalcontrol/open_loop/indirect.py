@@ -202,7 +202,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
 
         if ocp_sol.t[-1] >= t1_max:
             ocp_sol.status = 4
-            ocp_sol.message = f"Maximum time horizon {t1_max} exceeded."
+            ocp_sol.message = f"Maximum time horizon {t1_max:.2g} exceeded."
             return ocp_sol
 
         # If encountered numerical error (hard to recover from), try changing
@@ -222,7 +222,7 @@ def solve_infinite_horizon(ocp, t, x, p, u=None, v=None, max_nodes=1000,
         v = np.concatenate([ocp_sol.v, ocp_sol.v[-1:]])
 
         if verbose:
-            print(f"Increasing time horizon to {t[-1]}")
+            print(f"Increasing time horizon to {t[-1]:.2g}")
 
 
 def _make_pontryagin_boundary(x0):

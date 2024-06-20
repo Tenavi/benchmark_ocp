@@ -59,18 +59,21 @@ nn_control = supervised_learning.NeuralNetworkController(
 
 print(f"\nLinear stability analysis for {type(nn_control).__name__:s}:")
 
-x = analyze.find_equilibrium(ocp, nn_control, config.lqr_param_dict['xf'],
-                             config.t_int, config.t_max, **config.sim_kwargs)
-print("Equilibrium point:")
-print(x.reshape(-1, 1))
-analyze.linear_stability(ocp, nn_control, x)
+x, status = analyze.find_equilibrium(ocp, nn_control,
+                                     config.lqr_param_dict['xf'],
+                                     config.t_int, config.t_max,
+                                     **config.sim_kwargs)
+if np.any(status == 0):
+    print("Equilibrium point:")
+    print(x.reshape(-1, 1))
+    analyze.linear_stability(ocp, nn_control, x)
 
 print("\n" + "+" * 80)
 
 train_r2 = r2_score(u_train.T, nn_control(x_train).T)
 test_r2 = r2_score(u_test.T, nn_control(x_test).T)
 print(f"\n{type(nn_control).__name__:s} R2 score: {train_r2:.4f} (train) "
-          f"{test_r2:.4f} (test)")
+      f"{test_r2:.4f} (test)")
 
 print("\n" + "+" * 80 + "\n")
 

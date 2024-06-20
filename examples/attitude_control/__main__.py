@@ -112,9 +112,9 @@ print("\n" + "+" * 80)
 for controller in (lqr, poly_control, nn_control):
     print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
 
-    x = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
-                                 config.t_max, **config.sim_kwargs)
-    if isinstance(x, np.ndarray):
+    x, status = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
+                                         config.t_max, **config.sim_kwargs)
+    if np.any(status == 0):
         print("Equilibrium point:")
         print(x.reshape(-1, 1))
         analyze.linear_stability(ocp, controller, x, zero_tol=1e-06)

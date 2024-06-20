@@ -13,7 +13,7 @@ def test_trim_cruise(va):
     trim_state, trim_controls, dxdt = trim.compute_trim(va, constants,
                                                         aero_model)
 
-    # Confirm that aircraft is in trim
+    # Confirm that aircraft is (nearly) in trim
     np.testing.assert_allclose(dxdt.to_array(), 0., atol=tol)
 
     # Confirm that desired airspeed is achieved

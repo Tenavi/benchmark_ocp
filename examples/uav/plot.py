@@ -89,6 +89,8 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
     if isinstance(sims, dict):
         sims = [sims]
 
+    print(f"Plotting {len(sims)} UAV trajectories...")
+
     states = [VehicleState.from_array(sim['x']) for sim in sims]
     positions = [_get_positions(sim['t'], state_traj)
                  for sim, state_traj in zip(sims, states)]
@@ -196,8 +198,8 @@ def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
         axes[3, 1 + j].set_ylabel(_extra_labels[j], fontsize=12)
 
     axes[0, 0].set_title('Controls', fontsize=14)
-    axes[0, 1].set_title('Positions', fontsize=14)
-    axes[0, 2].set_title('Velocities', fontsize=14)
+    axes[0, 1].set_title('Position', fontsize=14)
+    axes[0, 2].set_title('Velocity', fontsize=14)
     axes[0, 3].set_title('Attitude', fontsize=14)
     axes[0, 4].set_title('Rates', fontsize=14)
     axes[3, 1].set_title('Course', fontsize=14)

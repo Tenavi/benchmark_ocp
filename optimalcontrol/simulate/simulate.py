@@ -33,8 +33,6 @@ def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
 
             * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
                 a first order method.
-            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
-                This is a second order method.
             * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
@@ -111,8 +109,6 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
 
             * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
                 a first order method.
-            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
-                This is a second order method.
             * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
@@ -217,8 +213,6 @@ def monte_carlo(ocp, controller, x0, t_span, t_eval=None, method='RK45',
 
             * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
                 a first order method.
-            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
-                This is a second order method.
             * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
@@ -286,8 +280,6 @@ def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
 
             * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
                 a first order method.
-            * 'Midpoint': Explicit Midpoint method with fixed timestep, `dt`.
-                This is a second order method.
             * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`

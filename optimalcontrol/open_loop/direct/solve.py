@@ -251,20 +251,22 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
         if ode_sol.status == 0 or ode_sol.t_events[0].size >= 1:
             break
 
+        # Sometimes when the ODE solution fails too early we run into problems,
+        # so make sure we advance time at least a little
+        t1 = np.maximum(ode_sol.t[-1], sols[-1].t[1])
+
         if len(sols) >= max_n_segments:
+            if len(t_break) >= 1:
+                t1 += t_break[-1]
             sols[-1].status = 4
-            sols[-1].message = (f"Reached maximum number of Bellman "
-                                f"segments ({max_n_segments})")
+            sols[-1].message = (f"Reached maximum number of Bellman segments "
+                                f"({max_n_segments}) at time t = {t1:.2g}")
             if verbose:
                 print("Terminating optimization: " + sols[-1].message)
             break
 
         # Otherwise, the interpolation error is greater than the tolerance, so
         # solve a new OCP
-        # Sometimes when the ODE solution fails too early we run into problems,
-        # so make sure we advance time at least a little
-        t1 = np.maximum(ode_sol.t[-1], sols[-1].t[1])
-
         if len(t_break) >= 1:
             t_break.append(t1 + t_break[-1])
         else:
@@ -275,8 +277,9 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
 
         if verbose:
             L1 = ocp.running_cost(x[:, 0], u[:, 0])
-            print(f"Starting new Bellman segment at t{k + 1} = {t_break[-1]}")
-            print(f"Running cost L(t{k + 1}) = {L1}")
+            print(f"Starting new Bellman segment at t{k + 1} = "
+                  f"{t_break[-1]:.2g}")
+            print(f"Running cost L(t{k + 1}) = {L1:.2g}")
 
     if len(sols) == 1:
         return sols[0]

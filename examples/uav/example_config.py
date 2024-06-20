@@ -13,7 +13,7 @@ for directory in [data_dir, fig_dir, controller_dir]:
 params = {}
 
 # Number of training and test trajectories
-n_train = 100
+n_train = 300
 n_test = 100
 
 # Distance of initial condition samples from trim
@@ -22,14 +22,21 @@ x0_distance = None
 # Integration time horizon guess for infinite horizon problems
 t_int = 30.
 
-# Timestep for Euler integration
-dt = 0.003
+# Maximum time horizon allowed for closed-loop integration
+t_max = 120.
+
+# Temporal resolution for saving closed loop simulation data
+dt_save = 0.1
+
+# Keyword arguments for closed-loop simulation
+sim_kwargs = {'method': 'RK23'}
 
 # Keyword arguments for open-loop data generation
-open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5}
-
-random_seed = 123
+open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5,
+                    'ivp_options': sim_kwargs}
 
 # Keyword arguments for the NN controller
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',
-             'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-04}
+             'solver': 'lbfgs', 'max_iter': 10000, 'tol': 1e-04}
+
+random_seed = None

@@ -18,9 +18,9 @@ _Q_default = VehicleState(pd=1.,
                           u=1.,
                           v=1.,
                           w=1.,
-                          p=np.deg2rad(15.) ** -2,
-                          q=np.deg2rad(15.) ** -2,
-                          r=np.deg2rad(15.) ** -2,
+                          p=np.deg2rad(30.) ** -2,
+                          q=np.deg2rad(30.) ** -2,
+                          r=np.deg2rad(30.) ** -2,
                           attitude=[1., 1., 1., 0.]).to_array()
 _R_default = ((aerosonde.constants.max_controls
               - aerosonde.constants.min_controls) ** -2).to_array()
@@ -82,25 +82,12 @@ class FixedWing(OptimalControlProblem):
         $dx/dt=0$."""
         return self.parameters.trim_controls.to_array()
 
-    def scale_altitude(self, h):
-        """
-        Nonlinear scaling of altitude for cost function computation.
-
-        Parameters
-        ----------
-        h : (n_points,) array
-            Unscaled altitude or down position.
-
-        Returns
-        -------
-        h_scaled : (n_points,) array
-            Altitude rescaled as
-            `h_scaled = tanh(h / self.parameters.h_cost_ceil)`
-        """
-        return np.tanh(h / self.parameters.h_cost_ceil)
-
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
+        if 'h_cost_ceil' in new_params:
+            if obj.h_cost_ceil < 1.:
+                raise ValueError("h_cost_ceil must be >= 1")
+
         if 'vehicle_parameters' in new_params:
             obj.u_lb = obj.vehicle_parameters.min_controls.to_array(copy=True)
             obj.u_ub = obj.vehicle_parameters.max_controls.to_array(copy=True)
@@ -121,15 +108,18 @@ class FixedWing(OptimalControlProblem):
                 setattr(obj, var, var_val.reshape(-1, 1))
 
         if 'x0_max_perturb' in new_params:
-            obj.x_lb = VehicleState(pd=-2. * np.abs(obj.x0_max_perturb.pd),
+            min_quat = np.array([-1., -1., -1., 0.]) - 1e-03
+            max_quat = np.array([1., 1., 1., 1.]) + 1e-03
+
+            obj.x_lb = VehicleState(pd=-3. * np.abs(obj.x0_max_perturb.pd),
                                     u=-np.inf, v=-np.inf, w=-np.inf,
                                     p=-np.inf, q=-np.inf, r=-np.inf,
-                                    attitude=[-1., -1., -1., 0.])
+                                    attitude=min_quat)
 
-            obj.x_ub = VehicleState(pd=2. * np.abs(obj.x0_max_perturb.pd),
+            obj.x_ub = VehicleState(pd=3. * np.abs(obj.x0_max_perturb.pd),
                                     u=np.inf, v=np.inf, w=np.inf,
                                     p=np.inf, q=np.inf, r=np.inf,
-                                    attitude=[1., 1., 1., 1.])
+                                    attitude=max_quat)
 
         if any([not hasattr(obj, '_x0_sampler'),
                 'x0_sample_seed' in new_params,
@@ -190,7 +180,7 @@ class FixedWing(OptimalControlProblem):
             x, u, self.parameters.trim_state.to_array(),
             self.parameters.trim_controls.to_array())
 
-        x_err[0] = self.scale_altitude(x_err[0])
+        x_err[0] = scale_altitude(x_err[0], self.parameters.h_cost_ceil)
 
         L = (np.sum((self.parameters.Q / 2.) * x_err ** 2, axis=0)
              + np.sum((self.parameters.R / 2.) * u_err ** 2, axis=0))
@@ -274,3 +264,23 @@ class FixedWing(OptimalControlProblem):
                             self.parameters.vehicle_parameters,
                             self.parameters.aero_model)
         return dxdt.to_array().reshape(x.shape)
+
+
+def scale_altitude(h, h_scale):
+    """
+    Nonlinear scaling of altitude for cost function computation.
+
+    Parameters
+    ----------
+    h : (n_points,) array
+        Unscaled altitude or down position.
+    h_scale : float
+        Reference scale altitude.
+
+    Returns
+    -------
+    h_scaled : (n_points,) array
+        Altitude rescaled as
+        `h_scaled = tanh(h / h_scale)`
+    """
+    return np.tanh(h / h_scale)

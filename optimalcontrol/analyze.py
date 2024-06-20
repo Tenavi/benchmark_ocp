@@ -45,7 +45,7 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08):
         max_eig = eigs[i]
 
     print(f"Largest non-zero Jacobian eigenvalue = "
-          f"{max_eig.real:1.2e} + j{np.abs(max_eig.imag):1.2e}")
+          f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
 
     return jac, eigs, max_eig
 
@@ -83,11 +83,18 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
 
     Returns
     -------
-    x : (`ocp.n_states`,) array
-        Closed-loop equilibrium.
-    f : (`ocp.n_states`,) array
-        Vector field evaluated at `x, controller(x)`. If root-finding was
-        successful should have `f` approximately zero.
+    x : (`ocp.n_states`,) array or (`ocp.n_states, 2`) array
+        Closed-loop equilibrium, or, if no equilibrium was found, the states
+        found by integrating forward and backward in time.
+    status : (2,) int array
+        Reason for integration termination:
+
+            * -1: Integration step failed.
+            *  0: The system reached a steady state as determined by `ftol`.
+            *  1: A termination event occurred.
+            *  2: `t[-1]` exceeded `t_max`.
+            *  3: Both forward and backward integration converged to equilibria,
+                but this equilibrium was further from `x0`.
     """
     t_int, t_max = np.abs(t_int), np.abs(t_max)
 
@@ -97,7 +104,7 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
     status = np.empty((2,), dtype=int)
 
     # Forward and backwards integration
-    for i, sign in enumerate([1, -1]):
+    for i, sign in enumerate([1., -1.]):
         t_sol, x_sol, status[i] = integrate_to_converge(ocp, controller, x0,
                                                         t_int * sign,
                                                         t_max * sign, **kwargs)
@@ -108,8 +115,12 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
     if np.all(status == 0):
         dists = ocp.distances(x, x0)
         status[np.argmax(dists)] = 3
-    elif np.all(status != 0):
-        warnings.warn("No equilibrium was found", RuntimeWarning)
+    # If neither converged, warn the user and return all states
+    elif not np.any(status == 0):
+        dxdt = ocp.dynamics(x, controller(x))
+        dxdt = np.abs(dxdt).max(axis=0).min()
+        warnings.warn(f"No equilibrium was found, max(|dxdt|) = {dxdt:.4g}",
+                      RuntimeWarning)
         return x, status
 
-    return x[:, status == 0].reshape(-1)
+    return x[:, status == 0].reshape(-1), status

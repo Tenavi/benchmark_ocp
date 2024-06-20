@@ -1,12 +1,12 @@
 # benchmark_ocp
 
-*This software is being developed independently of NASA. It is not endorsed or supported by NASA or the US government.*
-
 ##### Authors
-* Tenavi Nakamura-Zimmerer (tenavi.nz@gmail.com, tenavi.nakamura-zimmerer@nasa.gov)
+* Tenavi Nakamura-Zimmerer (tenavi.nz@gmail.com)
 * Jiequn Han (jhan@flatironinstitute.org)
 * Qi Gong (qgong@ucsc.edu)
 * Wei Kang (wkang@nps.edu)
+
+*This software is being developed independently of NASA. It is not endorsed or supported by NASA or the US government.*
 
 The `optimalcontrol` package is a framework for describing optimal control problems (OCPs) in python.
 

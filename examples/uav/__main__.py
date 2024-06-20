@@ -3,8 +3,9 @@ import time
 
 import numpy as np
 
-from optimalcontrol import simulate, utilities, analyze
+from optimalcontrol import utilities, analyze
 from optimalcontrol.controls import from_pickle
+from optimalcontrol.simulate import monte_carlo
 
 from examples.common_utilities import supervised_learning, plotting
 
@@ -16,9 +17,9 @@ from examples.uav import example_config as config
 random_seed = getattr(config, 'random_seed', None)
 if random_seed is None:
     random_seed = int(time.time())
-rng = np.random.default_rng(random_seed + 1)
+rng = np.random.default_rng(random_seed)
 
-ocp = FixedWing(x0_sample_seed=random_seed, **config.params)
+ocp = FixedWing(**config.params)
 
 lqr = from_pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
 
@@ -37,21 +38,22 @@ test_data = data[test_idx]
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
-"""print("\nTraining neural network controller...")
+print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
     x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-    random_state=random_seed + 3, **config.nn_kwargs)
+    random_state=random_seed + 1, **config.nn_kwargs)
 
 print("\n" + "+" * 80)
 
 for controller in (lqr, nn_control):
     print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
 
-    x = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
-                                 config.t_max, **config.sim_kwargs)
-    print("Equilibrium point:")
-    print(x.reshape(-1, 1))
-    analyze.linear_stability(ocp, controller, x)
+    x, status = analyze.find_equilibrium(ocp, controller, lqr.xf, config.t_int,
+                                         config.t_max, **config.sim_kwargs)
+    if np.any(status == 0):
+        print("Equilibrium point:")
+        print(x.reshape(-1, 1))
+        analyze.linear_stability(ocp, controller, x)
 
 print("\n" + "+" * 80)
 
@@ -63,39 +65,21 @@ for controller in (lqr, nn_control):
 
 print("\n" + "+" * 80 + "\n")
 
-# Evaluate performance of the learned controllers in closed-loop simulation
-nn_sims, _ = simulate.monte_carlo_to_converge(
-    ocp, nn_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
+# Evaluate performance of the learned controller in closed-loop simulation
+x0_pool = np.hstack([sol['x'][:, :1] for sol in data])
+t_eval = np.arange(0., config.t_int + config.dt_save / 2., config.dt_save)
 
-for sims in (lqr_sims, nn_sims):
-    for sim in sims:
-        sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
-        sim['L'] = ocp.running_cost(sim['x'], sim['u'])
+nn_sims, status = monte_carlo(ocp, nn_control, x0_pool, [0., config.t_int],
+                              t_eval=t_eval, **config.sim_kwargs)
 
-# If the closed-loop cost is lower than the optimal cost, we may have found
-# a better local minimum
-for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
-    for i, sol in enumerate(dataset):
-        sim = nn_sims[idx[i]]
+lqr_sims = utilities.load_data(os.path.join(config.data_dir, 'LQR_sims.csv'))
 
-        if sol['v'][0] > sim['v'][0]:
-            # Try to resolve the OCP if the initial guess looks better
-            new_sol = solve_infinite_horizon(
-                ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
-                p=2. * lqr.P @ sim['x'],
-                **config.open_loop_kwargs)
-            cost_change = 1. - new_sol.v[0] / sol['v'][0]
-            if cost_change < 0.:
-                print(f"Found a better solution for OCP #{idx[i]:d} using "
-                      f"warm start with {type(nn_control).__name__:s}.")
-                print(f"    Cost improvement = {-100 * cost_change:.2f}%")
-                new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
-                for key in sol.keys():
-                    sol[key] = getattr(new_sol, key)
+# Save simulation data and trained controller
+utilities.save_data(nn_sims, os.path.join(config.data_dir, 'NN_sims.csv'))
 
-        sol['L'] = ocp.running_cost(sol['x'], sol['u'])
+nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
 
-# Plot the results
+"""# Plot the results
 print("Making plots...")
 
 figs = {'training': dict(), 'test': dict()}
@@ -120,10 +104,7 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
         fig_dir = os.path.join(config.fig_dir, data_name, fig_name)
         plot_closed_loop(sims[data_idx], data[data_idx], t_max=config.t_int,
                          subtitle=ctrl_name + ', ' + data_name,
-                         save_dir=fig_dir)
-
-# Save trained controller
-nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))"""
+                         save_dir=fig_dir)"""
 
 """print(f"Plotting {ctrl_name}-controlled simulations")
 
