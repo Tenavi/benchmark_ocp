@@ -102,15 +102,22 @@ except TypeError:
         x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
         **config.poly_kwargs)
 
+print("\nTraining K-neighbors-LQR...")
+k_nn_control = supervised_learning.SimpleQRnet(
+    lqr, supervised_learning.KNeighborsController, x_train, u_train,
+    **config.k_nn_kwargs)
+
 print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
     x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
     random_state=random_seed + 3, **config.nn_kwargs)
 
+controllers = (lqr, poly_control, k_nn_control, nn_control)
+
 print("\n" + "+" * 80)
 
-for controller in (lqr, poly_control, nn_control):
-    print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
+for controller in controllers:
+    print(f"\nLinear stability analysis for {controller}:")
 
     x, status = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
                                          config.t_max, **config.sim_kwargs)
@@ -121,26 +128,28 @@ for controller in (lqr, poly_control, nn_control):
 
 print("\n" + "+" * 80)
 
-for controller in (lqr, poly_control, nn_control):
+for controller in controllers:
     train_r2 = controller.r2_score(x_train, u_train)
     test_r2 = controller.r2_score(x_test, u_test)
-    print(f"\n{type(controller).__name__:s} R2 score: {train_r2:.4f} (train) "
+    print(f"\n{controller} R2 score: {train_r2:.4f} (train),"
           f"{test_r2:.4f} (test)")
 
 print("\n" + "+" * 80 + "\n")
 
 # Evaluate performance of the learned controllers in closed-loop simulation
-poly_sims, _ = simulate.monte_carlo_to_converge(
-    ocp, poly_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
-nn_sims, _ = simulate.monte_carlo_to_converge(
-    ocp, nn_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
+all_sims = {'LQR': lqr_sims}
 
-for sims in (lqr_sims, poly_sims, nn_sims):
+for controller in controllers[1:]:
+    all_sims[str(controller)], _ = simulate.monte_carlo_to_converge(
+        ocp, controller, x0_pool, config.t_int, config.t_max,
+        **config.sim_kwargs)
+
+for sims in all_sims.values():
     for sim in sims:
         sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
         sim['L'] = ocp.running_cost(sim['x'], sim['u'])
 
-for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
+for name, sims in list(all_sims.items())[1:]:
     # If the closed-loop cost is lower than the optimal cost, we may have found
     # a better local minimum
     for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
@@ -156,7 +165,7 @@ for controller, sims in zip((poly_control, nn_control), (poly_sims, nn_sims)):
                 cost_change = 1. - new_sol.v[0] / sol['v'][0]
                 if cost_change < 0.:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
-                          f"warm start with {type(controller).__name__:s}.")
+                          f"warm start with {name}.")
                     print(f"    Cost improvement = {-100 * cost_change:.2f}%")
                     new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
                     for key in sol.keys():
@@ -173,18 +182,13 @@ u_labels = tuple(fr'$u_{i}$ ($N \cdot m$)' for i in range(1, 4))
 figs = {'training': dict(), 'test': dict()}
 
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
-    lqr_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
-                 for sim in lqr_sims[data_idx]]
-    poly_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
-                  for sim in poly_sims[data_idx]]
-    nn_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
-                for sim in nn_sims[data_idx]]
+    costs = {name: [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
+                    for sim in sims[data_idx]]
+             for name, sims in all_sims.items()}
 
     figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in data[data_idx]],
-        controller_costs={'LQR': lqr_costs,
-                          f'{type(poly_control).__name__:s}': poly_costs,
-                          f'{type(nn_control).__name__:s}': nn_costs},
+        controller_costs=costs,
         title=f'Closed-loop cost evaluation ({data_name})')
 
     data_copy = data[data_idx].copy()
@@ -197,12 +201,9 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
 
     figs[data_name]['data'] = plotting.plot_closed_loop(
         data_copy, t_max=2 * config.t_int, x_labels=x_labels, u_labels=u_labels,
-        subtitle='optimal, ' + data_name)
+        subtitle=f'optimal, {data_name}')
 
-    for controller, sims in zip((lqr, poly_control, nn_control),
-                                (lqr_sims, poly_sims, nn_sims)):
-        ctrl_name = f'{type(controller).__name__:s}'
-
+    for name, sims in all_sims.items():
         for sim in sims[data_idx]:
             q, w = sim['x'][:4], np.rad2deg(sim['x'][4:])
             if config.plot_euler:
@@ -210,12 +211,12 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
             else:
                 sim['x'] = np.vstack((q, w))
 
-        fig_name = 'closed_loop_' + ctrl_name
+        fig_name = f'closed_loop_{name}'
         figs[data_name][fig_name] = plotting.plot_closed_loop(
             sims[data_idx], t_max=2 * config.t_int,
             #x_index=[3, 4], u_index=[0],
             x_labels=x_labels, u_labels=u_labels,
-            subtitle=ctrl_name + ', ' + data_name)
+            subtitle=f'{name}, {data_name}')
 
 # Save data, figures, and trained controllers
 utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
@@ -228,9 +229,9 @@ for data_name, figs_subset in figs.items():
         plt.figure(fig)
         plt.savefig(os.path.join(_fig_dir, fig_name + '.pdf'))
 
-lqr.pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
-poly_control.pickle(os.path.join(config.controller_dir, 'poly_control.pickle'))
-nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
+for controller in controllers:
+    controller.pickle(os.path.join(config.controller_dir,
+                                   f'{controller}.pickle'))
 
 if args.show_plots:
     plt.show()

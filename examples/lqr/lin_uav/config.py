@@ -4,9 +4,10 @@ import os
 import numpy as np
 
 # Directories where data, figures, and feedback controllers will be saved
-data_dir = os.path.join('examples', 'lqr', 'lin_uav', 'data')
-fig_dir = os.path.join('examples', 'lqr', 'lin_uav', 'figures')
-controller_dir = os.path.join('examples', 'lqr', 'lin_uav', 'controllers')
+main_dir = os.path.join('examples', 'lqr', 'lin_uav')
+data_dir = os.path.join(main_dir, 'data')
+fig_dir = os.path.join(main_dir, 'figures')
+controller_dir = os.path.join(main_dir, 'controllers')
 
 for directory in [data_dir, fig_dir, controller_dir]:
     os.makedirs(directory, exist_ok=True)
@@ -56,6 +57,6 @@ sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'BDF'}
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {}
 
-# Keyword arguments for the SVR controller
+# Keyword arguments for the NN controller
 controller_kwargs = {'hidden_layer_sizes': (32, 32), 'activation': 'tanh',
                      'solver': 'lbfgs', 'max_iter': 10000, 'tol': 1e-03}

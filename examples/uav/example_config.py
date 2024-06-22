@@ -35,8 +35,12 @@ sim_kwargs = {'method': 'RK23'}
 open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5,
                     'ivp_options': sim_kwargs}
 
-# Keyword arguments for the NN controller
+# Keyword arguments for the K-nearest neighbors and NN controllers
+k_nn_kwargs = {'weights': 'distance', 'n_neighbors': 100}
+
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',
-             'solver': 'lbfgs', 'max_iter': 10000, 'tol': 1e-04}
+             'solver': 'adam', 'batch_size': 128, 'learning_rate': 'adaptive',
+             'max_iter': 5000, 'tol': 1e-06, 'n_iter_no_change': 100, 'verbose': True}
+             #'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-04, 'verbose': True}
 
 random_seed = None

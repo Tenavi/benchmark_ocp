@@ -19,6 +19,9 @@ class Controller:
     def __init__(self, *args, **kwargs):
         pass
 
+    def __str__(self):
+        return type(self).__name__
+
     def __call__(self, x):
         """
         Evaluates the feedback control, `u(x)`, for each sample state in `x`.

@@ -1,10 +1,11 @@
 import time
 
 import numpy as np
-from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model as sk_linear_models
-from sklearn.pipeline import Pipeline
 from sklearn.multioutput import MultiOutputRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler, PolynomialFeatures
 
 from optimalcontrol import controls, utilities, open_loop
@@ -12,11 +13,13 @@ from optimalcontrol import controls, utilities, open_loop
 
 class SupervisedController(controls.Controller):
     """
-    A simple example of how one might implement a controller trained by
-    supervised learning. To do this, we generate a dataset of state-control
-    pairs (`x_data`, `u_data`), and optionally for time-dependent problems,
-    associated time values `t_data`, and train a regression model of the mapping
-    from `x_data` (and `t_data`) to `u_data`.
+    Template class for how one might implement a controller trained by
+    supervised learning.
+
+    To do this, we generate a dataset of state-control pairs
+    (`x_data`, `u_data`), and optionally for time-dependent problems, associated
+    time values `t_data`, and train a regression model of the mapping from
+    `x_data` (and `t_data`) to `u_data`.
     """
     def __init__(self, x_data, u_data, t_data=None, u_lb=None, u_ub=None,
                  **options):
@@ -111,26 +114,46 @@ class SupervisedController(controls.Controller):
 class NeuralNetworkController(SupervisedController):
     """
     A simple example of how one might implement a neural network control law
-    trained by supervised learning. To do this, we generate a dataset of
-    state-control pairs (`x_data`, `u_data`), and optionally for time-dependent
-    problems, associated time values `t_data`, and the neural network learns the
-    mapping from `x_data` (and `t_data`) to `u_data`. The neural network is
-    implemented with `sklearn.neural_network.MLPRegressor`.
+    trained by supervised learning.
+
+    To do this, we generate a dataset of state-control pairs
+    (`x_data`, `u_data`), and optionally for time-dependent problems, associated
+    time values `t_data`, and the neural network learns the mapping from
+    `x_data` (and `t_data`) to `u_data`. The neural network is implemented with
+    `sklearn.neural_network.MLPRegressor`.
     """
     def _fit_regressor(self, x_scaled, u_scaled, **options):
         nn = MLPRegressor(**options)
         return nn.fit(x_scaled, u_scaled)
 
 
+class KNeighborsController(SupervisedController):
+    """
+    A simple example of how one might implement a K-nearest neighbors (KNN)
+    control law trained by supervised learning.
+
+    To do this, we generate a dataset of state-control pairs
+    (`x_data`, `u_data`), and optionally for time-dependent problems, associated
+    time values `t_data`, and the KNN regressor learns the mapping from `x_data`
+    (and `t_data`) to `u_data`. KNN regression implemented with
+    `sklearn.neighbors.KNeighborsRegressor`.
+    """
+    def _fit_regressor(self, x_scaled, u_scaled, **options):
+        knn = KNeighborsRegressor(**options)
+        return knn.fit(x_scaled, u_scaled)
+
+
 class PolynomialController(SupervisedController):
     """
     A simple example of how one might implement a polynomial control law trained
-    by supervised learning. To do this, we generate a dataset of state-control
-    pairs (`x_data`, `u_data`), and optionally for time-dependent problems,
-    associated time values `t_data`, and the polynomial regressor learns the
-    mapping from `x_data` (and `t_data`) to `u_data`. The polynomial is
-    implemented with `sklearn.preprocessing.PolynomialFeatures` and a choice of
-    model from `sklearn.linear_model`, controlled by the `linear_model` keyword
+    by supervised learning.
+
+    To do this, we generate a dataset of state-control pairs
+    (`x_data`, `u_data`), and optionally for time-dependent problems, associated
+    time values `t_data`, and the polynomial regressor learns the mapping from
+    `x_data` (and `t_data`) to `u_data`. The polynomial is implemented with
+    `sklearn.preprocessing.PolynomialFeatures` and a choice of model from
+    `sklearn.linear_model`, controlled by the `linear_model` keyword
     (default='Ridge'). Note that if `n_controls > 1` and a cross alidation-based
     `linear_model` is used, this is not natively supported in `sklearn` so the
     regressor will be wrapped with `sklearn.multioutput.MultiOutputRegressor`.
@@ -145,6 +168,85 @@ class PolynomialController(SupervisedController):
         regressor = Pipeline([('kernel', PolynomialFeatures(degree=degree)),
                               ('regressor', regressor)])
         return regressor.fit(x_scaled, u_scaled)
+
+
+class SimpleQRnet(controls.Controller):
+    """
+    Example of the basic u-QRnet method from ref. [1], which combines a
+    regression model (such as a NN) with an LQR controller.
+
+    The regressor is trained using supervised learning. To do this, we generate
+    a dataset of state-control pairs (`x_data`, `u_data`), and train a
+    regression model of the mapping from `x_data` to `u_data - u_lqr`, where
+    `u_lqr` is the output of an LQR controller for the linearized problem. In
+    the closed-loop, the control is given by `u_model + u_lqr - u_model(xf)`,
+    where `u_model` is the regression output and `xf = lqr.xf` is the
+    linearization point.
+
+    Note that this basic method promotes but does not guarantee local stability,
+    unlike the more advanced methods in ref. [2]. Furthermore, in this
+    simplified implementation, the `u_model(xf)` term is not included during
+    training, it is only added afterward. This should not make a large impact,
+    but including this term in training should slightly improve accuracy.
+
+    ##### References
+
+    1. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, *Neural Network Optimal
+        Feedback Control with Enhanced Closed Loop Stability*, in American
+        Control Conference, 2022, pp. 2373-2378.
+        https://doi.org/10.23919/ACC53348.2022.9867619
+    2. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, *Neural Network Optimal
+        Feedback Control with Guaranteed Local Stability*, IEEE Open Journal of
+        Control Systems, 1 (2022), pp. 210-222.
+        https://doi.org/10.1109/OJCSYS.2022.3205863
+    """
+    def __init__(self, lqr, controller_class, x_data, u_data, **options):
+        """
+        Parameters
+        ----------
+        lqr : `LinearQuadraticRegulator`
+            Instance of `LinearQuadraticRegulator` for the linearized optimal
+            control problem.
+        controller_class : reference to `SupervisedController` subclass
+            Reference to a subclass of `SupervisedController` which is used to
+            model the nonlinear parts of the optimal control.
+        x_data : (n_states, n_data) array
+            A set of system states (obtained by solving a set of open-loop
+            optimal control problems).
+        u_data : (n_controls, n_data) array
+            The optimal feedback controls evaluated at the states `x_data`.
+        **options : dict, default=`{'u_lb': lqr.u_lb, 'u_ub': lqr.u_ub}`
+            Keyword arguments to pass to `controller_class`.
+        """
+        kwargs = {'u_lb': lqr.u_lb, 'u_ub': lqr.u_ub, **options}
+
+        self._wrapped_controller = controller_class(
+            x_data, u_data - lqr(x_data), **kwargs)
+
+        self._lqr = lqr
+
+        self.xf = lqr.xf
+        self.u_lb = lqr.u_lb
+        self.u_ub = lqr.u_ub
+
+        self._wrapped_uf = self._wrapped_controller(lqr.xf)
+
+    def __str__(self):
+        return f"{str(self._wrapped_controller).strip('Controller')}+LQR"
+
+    def __call__(self, x):
+        u_lqr = self._lqr(x)
+
+        u_model = self._wrapped_controller(x)
+
+        u = u_model + u_lqr
+
+        if u.ndim < 2:
+            u -= self._wrapped_uf.reshape(-1)
+        else:
+            u -= self._wrapped_uf
+
+        return utilities.saturate(u, self.u_lb, self.u_ub)
 
 
 def generate_data(ocp, guesses, verbose=0, **kwargs):

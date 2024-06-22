@@ -33,28 +33,28 @@ Then to install the `optimalcontrol` package (in developer mode), run
 This package and the examples have been developed and tested with the following software
 dependencies:
     
-    numpy>=1.17
-    scipy>=1.8
-    pytest
+    numpy>=1.21
+    pandas>=1.3
+    scipy>=1.10
+    tqdm
     jupyter
     matplotlib
-    pandas
     scikit-learn>=1.0
-    tqdm
 
 ---
 
 ## Test
 
-From the root directory, run
+Install `pytest`. From the root directory, run
 
     pytest tests -s -v
+    pytest examples -s -v
 
 ---
 
 ## Generate documentation
 
-Install `pdoc` and run
+Install `pdoc`. From the root directory, run
 
     pdoc optimalcontrol --d numpy --math -t docs/.template/ -o docs/optimalcontrol
     pdoc examples --d numpy --math -t docs/.template/ -o docs/examples

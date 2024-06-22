@@ -57,7 +57,7 @@ nn_control = supervised_learning.NeuralNetworkController(
     x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
     random_state=random_seed + 2, **config.controller_kwargs)
 
-print(f"\nLinear stability analysis for {type(nn_control).__name__:s}:")
+print(f"\nLinear stability analysis for {nn_control}:")
 
 x, status = analyze.find_equilibrium(ocp, nn_control,
                                      config.lqr_param_dict['xf'],
@@ -72,8 +72,7 @@ print("\n" + "+" * 80)
 
 train_r2 = r2_score(u_train.T, nn_control(x_train).T)
 test_r2 = r2_score(u_test.T, nn_control(x_test).T)
-print(f"\n{type(nn_control).__name__:s} R2 score: {train_r2:.4f} (train) "
-      f"{test_r2:.4f} (test)")
+print(f"\n{nn_control} R2 score: {train_r2:.4f} (train), {test_r2:.4f} (test)")
 
 print("\n" + "+" * 80 + "\n")
 
@@ -93,18 +92,18 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
                 for sim in nn_sims[data_idx]]
     figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in lqr_data[data_idx]],
-        controller_costs={f'{type(nn_control).__name__:s}': nn_costs},
+        controller_costs={f'{nn_control}': nn_costs},
         title=f'Closed-loop cost evaluation ({data_name})')
     for controller, sims in zip((lqr, nn_control), (lqr_sims, nn_sims)):
-        ctrl_name = f'{type(controller).__name__:s}'
-        figs[data_name]['closed_loop_' + ctrl_name] = plotting.plot_closed_loop(
+        figs[data_name][f'closed_loop_{controller}'] = plotting.plot_closed_loop(
             sims[data_idx], t_max=config.t_int,
-            subtitle=ctrl_name + ', ' + data_name)
+            subtitle=f'{controller}, {data_name}')
 
         if config.lqr_param_dict['xf'].shape[0] <= 4:
-            figs[data_name]['closed_loop_3d' + ctrl_name] = plotting.plot_closed_loop_3d(
-                sims[data_idx], lqr_data[data_idx], controller_name=ctrl_name,
-                title=f'Closed-loop trajectories and controls ({ctrl_name}, 'f'{data_name})')
+            figs[data_name][f'closed_loop_3d_{controller}'] = plotting.plot_closed_loop_3d(
+                sims[data_idx], lqr_data[data_idx], controller_name=controller,
+                title=f'Closed-loop trajectories and controls ({controller}, '
+                      f'{data_name})')
 
 # Save data, figures, and trained NN
 utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))

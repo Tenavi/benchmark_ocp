@@ -81,10 +81,17 @@ nn_control = supervised_learning.NeuralNetworkController(
     x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
     random_state=random_seed + 3, **config.nn_kwargs)
 
+print("\nTraining u-QRnet controller...")
+qrnet = supervised_learning.SimpleQRnet(
+    lqr, supervised_learning.NeuralNetworkController, x_train, u_train,
+    random_state=random_seed + 3, **config.nn_kwargs)
+
+controllers = (lqr, nn_control, qrnet)
+
 print("\n" + "+" * 80)
 
-for controller in (lqr, nn_control):
-    print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
+for controller in controllers:
+    print(f"\nLinear stability analysis for {controller}:")
 
     x, status = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
                                          config.t_max, **config.sim_kwargs)
@@ -95,45 +102,50 @@ for controller in (lqr, nn_control):
 
 print("\n" + "+" * 80)
 
-for controller in (lqr, nn_control):
+for controller in controllers:
     train_r2 = controller.r2_score(x_train, u_train)
     test_r2 = controller.r2_score(x_test, u_test)
-    print(f"\n{type(controller).__name__:s} R2 score: {train_r2:.4f} (train) "
+    print(f"\n{controller} R2 score: {train_r2:.4f} (train),"
           f"{test_r2:.4f} (test)")
 
 print("\n" + "+" * 80 + "\n")
 
 # Evaluate performance of the learned controllers in closed-loop simulation
-nn_sims, _ = simulate.monte_carlo_to_converge(
-    ocp, nn_control, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
+all_sims = {'LQR': lqr_sims}
 
-for sims in (lqr_sims, nn_sims):
+for controller in controllers[1:]:
+    all_sims[str(controller)], _ = simulate.monte_carlo_to_converge(
+        ocp, controller, x0_pool, config.t_int, config.t_max,
+        **config.sim_kwargs)
+
+for sims in all_sims.values():
     for sim in sims:
         sim['v'] = ocp.total_cost(sim['t'], sim['x'], sim['u'])[::-1]
         sim['L'] = ocp.running_cost(sim['x'], sim['u'])
 
 # If the closed-loop cost is lower than the optimal cost, we may have found
 # a better local minimum
-for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
-    for i, sol in enumerate(dataset):
-        sim = nn_sims[idx[i]]
+for name, sims in list(all_sims.items())[1:]:
+    for dataset, idx in zip((train_data, test_data), (train_idx, test_idx)):
+        for i, sol in enumerate(dataset):
+            sim = sims[idx[i]]
 
-        if sol['v'][0] > sim['v'][0]:
-            # Try to resolve the OCP if the initial guess looks better
-            new_sol = solve_infinite_horizon(
-                ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
-                p=2. * lqr.P @ sim['x'],
-                **config.open_loop_kwargs)
-            cost_change = 1. - new_sol.v[0] / sol['v'][0]
-            if cost_change < 0.:
-                print(f"Found a better solution for OCP #{idx[i]:d} using "
-                      f"warm start with {type(nn_control).__name__:s}.")
-                print(f"    Cost improvement = {-100 * cost_change:.2f}%")
-                new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
-                for key in sol.keys():
-                    sol[key] = getattr(new_sol, key)
+            if sol['v'][0] > sim['v'][0]:
+                # Try to resolve the OCP if the initial guess looks better
+                new_sol = solve_infinite_horizon(
+                    ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
+                    p=2. * lqr.P @ sim['x'],
+                    **config.open_loop_kwargs)
+                cost_change = 1. - new_sol.v[0] / sol['v'][0]
+                if cost_change < 0.:
+                    print(f"Found a better solution for OCP #{idx[i]:d} using "
+                          f"warm start with {name}.")
+                    print(f"    Cost improvement = {-100 * cost_change:.2f}%")
+                    new_sol.L = ocp.running_cost(new_sol.x, new_sol.u)
+                    for key in sol.keys():
+                        sol[key] = getattr(new_sol, key)
 
-        sol['L'] = ocp.running_cost(sol['x'], sol['u'])
+            sol['L'] = ocp.running_cost(sol['x'], sol['u'])
 
 # Plot the results
 print("Making plots...")
@@ -141,30 +153,27 @@ print("Making plots...")
 figs = {'training': dict(), 'test': dict()}
 
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
-    lqr_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
-                 for sim in lqr_sims[data_idx]]
-    nn_costs = [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
-                for sim in nn_sims[data_idx]]
+    costs = {name: [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
+                    for sim in sims[data_idx]]
+             for name, sims in all_sims.items()}
 
     figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in data[data_idx]],
-        controller_costs={'LQR': lqr_costs,
-                          f'{type(nn_control).__name__:s}': nn_costs},
+        controller_costs=costs,
         title=f'Closed-loop cost evaluation ({data_name})')
 
     plotting.save_fig_dict(figs, config.fig_dir)
 
-    for controller, sims in zip((lqr, nn_control), (lqr_sims, nn_sims)):
-        ctrl_name = f'{type(controller).__name__:s}'
-        fig_name = 'closed_loop_' + ctrl_name
+    for name, sims in all_sims.items():
+        fig_name = f'closed_loop_{name}'
         fig_dir = os.path.join(config.fig_dir, data_name, fig_name)
         plot_closed_loop(sims[data_idx], data[data_idx], t_max=config.t_int,
-                         subtitle=ctrl_name + ', ' + data_name,
-                         save_dir=fig_dir)
+                         subtitle=f'{name}, {data_name}', save_dir=fig_dir)
 
 # Save data, figures, and trained controllers
 utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
 utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
 
-lqr.pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
-nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
+for controller in controllers:
+    controller.pickle(os.path.join(config.controller_dir,
+                                   f'{controller}.pickle'))

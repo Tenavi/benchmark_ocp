@@ -62,11 +62,13 @@ def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
 
     integration_events = _make_state_bound_events(ocp)
 
-    ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=integration_events,
-                        t_eval=t_eval, vectorized=True, method=method,
-                        **options)
-
-    return ode_sol.t, ode_sol.y, ode_sol.status
+    try:
+        ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=integration_events,
+                            t_eval=t_eval, vectorized=True, method=method,
+                            **options)
+        return ode_sol.t, ode_sol.y, ode_sol.status
+    except ValueError:
+        return np.asarray(t_span[:1]), np.reshape(x0, (-1, 1)), -1
 
 
 def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
@@ -318,7 +320,7 @@ def _monte_carlo(ocp, controller, x0_pool, fun, *args, **kwargs):
     status = np.zeros(n_sims, dtype=int)
 
     print(f"Simulating closed-loop system for {n_sims:d} initial conditions "
-          f"({type(controller).__name__:s})...")
+          f"({controller})...")
     for i in tqdm(range(n_sims)):
         t, x, status[i] = fun(ocp, controller, x0_pool[i], *args, **kwargs)
         sims.append({'t': t, 'x': x, 'u': controller(x)})

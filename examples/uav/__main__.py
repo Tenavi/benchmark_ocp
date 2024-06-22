@@ -38,15 +38,25 @@ test_data = data[test_idx]
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
+print("\nTraining K-neighbors-LQR...")
+k_nn_control = supervised_learning.SimpleQRnet(
+    lqr, supervised_learning.KNeighborsController, x_train, u_train,
+    **config.k_nn_kwargs)
+#k_nn_control = supervised_learning.KNeighborsController(
+#    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
+#    **config.k_nn_kwargs)
+
 print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
     x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
     random_state=random_seed + 1, **config.nn_kwargs)
 
+controllers = (lqr, k_nn_control, nn_control)
+
 print("\n" + "+" * 80)
 
-for controller in (lqr, nn_control):
-    print(f"\nLinear stability analysis for {type(controller).__name__:s}:")
+for controller in controllers:
+    print(f"\nLinear stability analysis for {controller}:")
 
     x, status = analyze.find_equilibrium(ocp, controller, lqr.xf, config.t_int,
                                          config.t_max, **config.sim_kwargs)
@@ -57,10 +67,10 @@ for controller in (lqr, nn_control):
 
 print("\n" + "+" * 80)
 
-for controller in (lqr, nn_control):
+for controller in controllers:
     train_r2 = controller.r2_score(x_train, u_train)
     test_r2 = controller.r2_score(x_test, u_test)
-    print(f"\n{type(controller).__name__:s} R2 score: {train_r2:.4f} (train) "
+    print(f"\n{controller} R2 score: {train_r2:.4f} (train), "
           f"{test_r2:.4f} (test)")
 
 print("\n" + "+" * 80 + "\n")
@@ -69,15 +79,23 @@ print("\n" + "+" * 80 + "\n")
 x0_pool = np.hstack([sol['x'][:, :1] for sol in data])
 t_eval = np.arange(0., config.t_int + config.dt_save / 2., config.dt_save)
 
-nn_sims, status = monte_carlo(ocp, nn_control, x0_pool, [0., config.t_int],
-                              t_eval=t_eval, **config.sim_kwargs)
+all_sims = {'LQR': utilities.load_data(os.path.join(config.data_dir,
+                                                    'LQR_sims.csv'))}
 
-lqr_sims = utilities.load_data(os.path.join(config.data_dir, 'LQR_sims.csv'))
+for controller in controllers[1:]:
+    all_sims[str(controller)], _ = monte_carlo(ocp, controller, x0_pool,
+                                               [0., config.t_int],
+                                               t_eval=t_eval,
+                                               **config.sim_kwargs)
 
-# Save simulation data and trained controller
-utilities.save_data(nn_sims, os.path.join(config.data_dir, 'NN_sims.csv'))
+    # Save simulation data
+    utilities.save_data(all_sims[str(controller)],
+                        os.path.join(config.data_dir, f'{controller}_sims.csv'))
 
-nn_control.pickle(os.path.join(config.controller_dir, 'nn_control.pickle'))
+# Save trained controllers
+for controller in controllers[1:]:
+    controller.pickle(os.path.join(config.controller_dir,
+                                   f'{controller}.pickle'))
 
 """# Plot the results
 print("Making plots...")

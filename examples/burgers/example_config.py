@@ -2,9 +2,10 @@ import os
 
 
 # Directories where data, figures, and feedback controllers will be saved
-data_dir = os.path.join('examples', 'burgers', 'data')
-fig_dir = os.path.join('examples', 'burgers', 'figures')
-controller_dir = os.path.join('examples', 'burgers', 'controllers')
+main_dir = os.path.join('examples', 'burgers')
+data_dir = os.path.join(main_dir, 'data')
+fig_dir = os.path.join(main_dir, 'figures')
+controller_dir = os.path.join(main_dir, 'controllers')
 
 for directory in [data_dir, fig_dir, controller_dir]:
     os.makedirs(directory, exist_ok=True)
@@ -29,7 +30,7 @@ t_int = 20.
 t_max = 120.
 
 # Keyword arguments for closed-loop simulation
-sim_kwargs = {'method': 'LSODA'}
+sim_kwargs = {'method': 'BDF'}
 
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {'tol': 1e-04, 'max_nodes': 2000}
