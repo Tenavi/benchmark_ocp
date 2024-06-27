@@ -168,7 +168,7 @@ class VehicleState(Container):
 
         self._airspeed = None
         self._course = None
-        self._rotation = None
+        self._rot_mat = None
 
     pd = property(lambda self: _generic_array_getter(self, 0),
                   lambda self, val: _generic_array_setter(self, val, 0))
@@ -206,7 +206,7 @@ class VehicleState(Container):
                             _generic_array_getter(self, range(7, 11))),
                         lambda self, val: _generic_array_setter(
                             self, np.reshape(val, (4, -1)), range(7, 11),
-                            '_course', '_rotation'))
+                            '_course', '_rot_mat'))
     attitude.__doc__ = ("(4,) or (4, n_points,) array. Quaternion of vehicle "
                         "attitude relative to the inertial frame. The vector "
                         "components are indices `attitude[:3]` and the scalar "
@@ -272,12 +272,13 @@ class VehicleState(Container):
         return self._course
 
     @property
-    def rotation(self):
-        """Get a `scipy.spatial.transform.Rotation` class instance representing
+    def rotation_matrix(self):
+        """Get an array containing the rotation matrix or matrices representing
         the vehicle's attitude."""
-        if not isinstance(self._rotation, Rotation):
-            self._rotation = Rotation(self.attitude.T, copy=False)
-        return self._rotation
+        if self._rot_mat is None:
+            rotation = Rotation(self.attitude.reshape(4, -1).T, copy=False)
+            self._rot_mat = np.moveaxis(rotation.as_matrix(), 0, -1)
+        return self._rot_mat
 
     def inertial_to_body(self, vec_inertial):
         """
@@ -297,10 +298,7 @@ class VehicleState(Container):
         shape = vec_inertial.shape
         vec_inertial = vec_inertial.reshape(3, -1)
 
-        # The scipy Rotation class treats rotation as expressing a rotated
-        # inertial vector in the inertial frame, rather than in the body frame.
-        # Thus, we implement the transformation using inverse=True.
-        vec_body = self.rotation.apply(vec_inertial.T, inverse=True).T
+        vec_body = np.einsum('ijb,ib->jb', self.rotation_matrix, vec_inertial)
 
         # Make the output shape the same as the input, if it didn't increase in
         # size due to multiple rotations.
@@ -326,10 +324,7 @@ class VehicleState(Container):
         shape = vec_body.shape
         vec_body = vec_body.reshape(3, -1)
 
-        # The scipy Rotation class treats rotation as expressing a rotated
-        # inertial vector in the inertial frame, rather than in the body frame.
-        # Thus, we implement the inverse transformation using inverse=False.
-        vec_inertial = self.rotation.apply(vec_body.T).T
+        vec_inertial = np.einsum('ijb,jb->ib', self.rotation_matrix, vec_body)
 
         # Make the output shape the same as the input, if it didn't increase in
         # size due to multiple rotations.

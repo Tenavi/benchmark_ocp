@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.spatial.transform import Rotation
 import pytest
 
 from examples.common_utilities.dynamics import (euler_to_quaternion,
@@ -379,31 +378,34 @@ def test_rotation_shape(fun):
 def test_rotation_update(n_points):
     container = random_states(n_points)
 
-    # Initialize _rotation attribute
-    assert container._rotation is None
-    assert isinstance(container.rotation, Rotation)
-    assert container.rotation is container._rotation
+    # Initialize _rot_mat attribute
+    assert container._rot_mat is None
+    assert isinstance(container.rotation_matrix, np.ndarray)
+    assert container.rotation_matrix is container._rot_mat
 
     # Update attitude
     yaw, pitch, roll = random_attitude(n_points)
     quat = euler_to_quaternion([yaw, pitch, roll])
     container.attitude = quat
 
-    # Check that attitude has been updated and _rotation has been reset
+    # Check that attitude has been updated and _rot_mat has been reset
     np.testing.assert_array_equal(container.attitude, np.squeeze(quat))
-    assert container._rotation is None
+    assert container._rot_mat is None
 
     # Make random vectors and rotate to body frame
     vec = np.random.default_rng().normal(size=(3, n_points))
     vec_rot = container.inertial_to_body(vec)
 
+    _rot_mat = container._rot_mat
+    assert isinstance(container.rotation_matrix, np.ndarray)
+    assert container.rotation_matrix is _rot_mat
+
     # Rotate back to inertial frame and check that we recover the initial vector
     vec_rot = container.body_to_inertial(vec_rot)
     np.testing.assert_allclose(vec_rot, vec, atol=1e-14)
 
-    assert isinstance(container.rotation, Rotation)
-    assert container.rotation is container._rotation
-
+    # Check that rotating again has not caused us to update _rot_mat
+    assert container.rotation_matrix is _rot_mat
 
 @pytest.mark.parametrize('n_points', [1, 2])
 @pytest.mark.parametrize('update_attr', ['u', 'v', 'w', 'attitude'])
