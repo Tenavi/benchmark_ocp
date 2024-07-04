@@ -1,8 +1,7 @@
 import numpy as np
 from scipy import optimize
 
-from examples.common_utilities.dynamics import euler_to_quaternion
-from .dynamics import dynamics
+from .dynamics import dynamics, jacobians
 from .containers import VehicleState, Controls
 
 
@@ -24,9 +23,10 @@ def _split_opt_variable(xu, va_star):
     controls = Controls.from_array(xu[1:])
 
     pitch = xu[0]
-    zero = np.zeros_like(pitch)
-    angles = np.stack([zero, pitch, zero], axis=0)
-    quaternion = euler_to_quaternion(angles)
+    half_pitch = pitch / 2.
+    quaternion = np.zeros((4,) + pitch.shape[1:])
+    quaternion[1] = np.sin(half_pitch)
+    quaternion[3] = np.cos(half_pitch)
 
     # Velocity in body x and z directions
     u = va_star * np.cos(pitch)
@@ -48,7 +48,6 @@ def _make_bounds(parameters):
     -------
 
     """
-
     lb = np.empty((_n_free,))
     ub = np.empty((_n_free,))
 
@@ -76,13 +75,20 @@ def _trim_obj_fun(states, controls, parameters, aero_model):
 
     Returns
     -------
-    obj : (1,) array
+    dxdt_norm : (1,) array
         Discrepancy between the vector field evaluated at the current trim state
         and controls, and the desired vector field.
+    grad : (
     """
     dxdt = dynamics(states, controls, parameters, aero_model)
+    dfdx, dfdu = jacobians(states, controls, parameters, aero_model)
 
-    return np.sum(dxdt.to_array() ** 2, axis=0)
+    dxdt_norm = 0.5 * np.sum(dxdt.to_array() ** 2, axis=0)
+
+    grad_x = np.einsum('i...,ij...->j...', dxdt.to_array(), dfdx)
+    grad_u = np.einsum('i...,ij...->j...', dxdt.to_array(), dfdu)
+
+    return dxdt_norm, grad_x, grad_u
 
 
 def compute_trim(va_star, parameters, aero_model, **minimize_opts):
@@ -104,16 +110,29 @@ def compute_trim(va_star, parameters, aero_model, **minimize_opts):
         Trim controls.
     dxdt
     """
-
     bounds = _make_bounds(parameters)
 
     xu_guess = (bounds.ub + bounds.lb) / 2.
 
     def cost_fun_wrapper(xu):
         states, controls = _split_opt_variable(xu, va_star)
-        return _trim_obj_fun(states, controls, parameters, aero_model)
+        dxdt_norm, grad_x, grad_u = _trim_obj_fun(states, controls,
+                                                  parameters, aero_model)
+
+        # Chain rule for derivatives of state to derivatives of pitch
+        d_u_d_pitch = -states.w
+        d_w_d_pitch = states.u
+        d_q1_d_pitch = -0.5 * states.attitude[3]
+        d_q3_d_pitch = 0.5 * states.attitude[1]
+
+        grad_pitch = (grad_x[1] * d_u_d_pitch + grad_x[3] * d_w_d_pitch
+                      + grad_x[8] * d_q1_d_pitch + grad_x[10] * d_q3_d_pitch)
+        grad = np.concatenate([grad_pitch, grad_u], axis=0)
+
+        return dxdt_norm, grad
 
     opt_res = optimize.minimize(fun=cost_fun_wrapper,
+                                jac=True,
                                 x0=xu_guess,
                                 bounds=bounds,
                                 **minimize_opts)

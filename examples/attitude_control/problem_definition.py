@@ -136,8 +136,8 @@ class AttitudeControl(OptimalControlProblem):
     def sample_initial_conditions(self, n_samples=1, attitude_distance=None,
                                   rate_distance=None):
         """
-        Generate initial conditions. Euler angles yaw, pitch, roll are sampled
-        uniformly from a hypercube defined by
+        Generate initial conditions. Euler angles (roll, pitch, and yaw) are
+        sampled uniformly from a hypercube defined by
         `self.parameters.initial_max_attitude`, then converted to quaternions.
         Angular rates are sampled uniformly from a hypercube defined by
         `self.parameters.initial_max_rate`. Optionally, one or both of these

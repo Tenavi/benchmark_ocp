@@ -12,7 +12,6 @@ eos = 0.9  # Oswald's Efficiency Factor [dimensionless between 0 and 1]
 
 # Some derived quantities
 AR = b ** 2 / S
-mg = mass * g0
 rhoS = 0.5 * rho * S
 
 alpha_stall = np.deg2rad(20.)  # stall angle of attack [deg]

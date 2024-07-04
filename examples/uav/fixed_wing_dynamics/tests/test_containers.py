@@ -205,11 +205,13 @@ def test_VehicleState_update(n_points):
 
     assert_attr_update_equal(container, state_dict2)
 
-    state_dict2['attitude'] = new_attitude
+    container.attitude = new_attitude
 
-    container.attitude = state_dict2['attitude']
-    np.testing.assert_array_equal(container.attitude, state_array2[7:])
-    np.testing.assert_array_equal(container.to_array()[7:], state_array2[7:])
+    normalized_attitude = new_attitude / np.linalg.norm(new_attitude,
+                                                        axis=0, keepdims=True)
+
+    state_dict2['attitude'] = normalized_attitude
+    state_array2[-4:] = normalized_attitude
 
     assert_container_equal(container, state_array2, state_dict2)
 
@@ -386,10 +388,11 @@ def test_rotation_update(n_points):
     # Update attitude
     yaw, pitch, roll = random_attitude(n_points)
     quat = euler_to_quaternion([yaw, pitch, roll])
+    norm_quat = quat / np.linalg.norm(quat, axis=0, keepdims=True)
     container.attitude = quat
 
     # Check that attitude has been updated and _rot_mat has been reset
-    np.testing.assert_array_equal(container.attitude, np.squeeze(quat))
+    np.testing.assert_array_equal(container.attitude, np.squeeze(norm_quat))
     assert container._rot_mat is None
 
     # Make random vectors and rotate to body frame

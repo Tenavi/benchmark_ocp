@@ -9,6 +9,7 @@ from examples.common_utilities.dynamics import (euler_to_quaternion,
 from .fixed_wing_dynamics.containers import VehicleState, Controls
 from .fixed_wing_dynamics.trim import compute_trim
 from .fixed_wing_dynamics.dynamics import dynamics as dynamics_fun
+from .fixed_wing_dynamics.dynamics import jacobians as jac_fun
 from examples.uav.vehicle_models import aerosonde
 
 
@@ -264,6 +265,35 @@ class FixedWing(OptimalControlProblem):
                             self.parameters.vehicle_parameters,
                             self.parameters.aero_model)
         return dxdt.to_array().reshape(x.shape)
+
+    def jac(self, x, u, return_dfdx=True, return_dfdu=True, f0=None):
+        tensor_out = np.ndim(x) >= 2 or np.ndim(u) >= 2
+
+        out_args = jac_fun(VehicleState.from_array(x), Controls.from_array(u),
+                           self.parameters.vehicle_parameters,
+                           self.parameters.aero_model,
+                           return_dfdx=return_dfdx, return_dfdu=return_dfdu)
+
+        if isinstance(out_args, tuple):
+            dfdx, dfdu = out_args
+        elif return_dfdx:
+            dfdx = out_args
+        else:
+            dfdu = out_args
+
+        if tensor_out:
+            if return_dfdx and dfdx.ndim < 3:
+                dfdx = dfdx.reshape(dfdx.shape[:2] + (-1,))
+            if return_dfdu and dfdu.ndim < 3:
+                dfdu = dfdu.reshape(dfdu.shape[:2] + (-1,))
+
+        if return_dfdx and not return_dfdu:
+            return dfdx
+
+        if return_dfdu and not return_dfdx:
+            return dfdu
+
+        return dfdx, dfdu
 
 
 def scale_altitude(h, h_scale):

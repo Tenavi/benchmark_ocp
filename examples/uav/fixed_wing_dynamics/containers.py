@@ -204,9 +204,8 @@ class VehicleState(Container):
 
     attitude = property(lambda self: np.squeeze(
                             _generic_array_getter(self, range(7, 11))),
-                        lambda self, val: _generic_array_setter(
-                            self, np.reshape(val, (4, -1)), range(7, 11),
-                            '_course', '_rot_mat'))
+                        lambda self, val: _quat_setter(self, val, range(7, 11),
+                                                       '_course', '_rot_mat'))
     attitude.__doc__ = ("(4,) or (4, n_points,) array. Quaternion of vehicle "
                         "attitude relative to the inertial frame. The vector "
                         "components are indices `attitude[:3]` and the scalar "
@@ -276,7 +275,8 @@ class VehicleState(Container):
         """Get an array containing the rotation matrix or matrices representing
         the vehicle's attitude."""
         if self._rot_mat is None:
-            rotation = Rotation(self.attitude.reshape(4, -1).T, copy=False)
+            rotation = Rotation(self.attitude.reshape(4, -1).T,
+                                normalize=False, copy=False)
             self._rot_mat = np.moveaxis(rotation.as_matrix(), 0, -1)
         return self._rot_mat
 
@@ -401,3 +401,9 @@ def _generic_array_setter(obj, val, idx, *reset_attrs):
     obj._array[idx] = val
     for attr_name in reset_attrs:
         setattr(obj, attr_name, None)
+
+
+def _quat_setter(obj, quat, idx, *reset_attrs):
+    quat = np.reshape(quat, (4, -1))
+    quat_norm = np.linalg.norm(quat, axis=0, keepdims=True)
+    _generic_array_setter(obj, quat / quat_norm, idx, *reset_attrs)
