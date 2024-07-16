@@ -38,8 +38,8 @@ def test_locally_stable():
     u_trim = ocp.trim_controls
 
     # Find actual trim state and control by integration
-    xf, status = analyze.find_equilibrium(ocp, lqr, x_trim, config.t_int,
-                                          config.t_max)
+    xf, status = analyze.find_equilibrium(ocp, lqr, x_trim,
+                                          config.t_int, config.t_max)
 
     assert np.sum(status == 0) == 1
 
@@ -48,12 +48,12 @@ def test_locally_stable():
     np.testing.assert_allclose(lqr(xf), u_trim, atol=1e-03, rtol=1e-05)
 
     # LQR should be linearly stable at trim
-    _, eigs, max_eig = analyze.linear_stability(ocp, lqr, xf, zero_tol=1e-06)
+    _, _, max_eig = analyze.linear_stability(ocp, lqr, xf, zero_tol=1e-06)
 
     # Verify that a small perturbation from trim returns to trim
     x0 = ocp.sample_initial_conditions(distance=0.01).reshape(-1, 1)
 
-    t, x, status = integrate(ocp, lqr, x0, [0., config.t_int / 2.],
+    t, x, status = integrate(ocp, lqr, x0, [0., config.t_int],
                              **config.sim_kwargs)
 
     assert status == 0

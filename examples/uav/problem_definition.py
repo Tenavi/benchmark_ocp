@@ -19,9 +19,9 @@ _Q_default = VehicleState(pd=1.,
                           u=1.,
                           v=1.,
                           w=1.,
-                          p=np.deg2rad(30.) ** -2,
-                          q=np.deg2rad(30.) ** -2,
-                          r=np.deg2rad(30.) ** -2,
+                          p=np.deg2rad(15.) ** -2,
+                          q=np.deg2rad(15.) ** -2,
+                          r=np.deg2rad(15.) ** -2,
                           attitude=[1., 1., 1., 0.]).to_array()
 _R_default = ((aerosonde.constants.max_controls
               - aerosonde.constants.min_controls) ** -2).to_array()
