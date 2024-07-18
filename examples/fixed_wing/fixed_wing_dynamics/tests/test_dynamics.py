@@ -27,11 +27,11 @@ def test_dynamics_position(n_points):
 
     dxdt = dynamics.rigid_body_dynamics(states, forces, moments, constants)
 
-    d_pd_expect = (-np.sin(pitch) * states.u
+    d_h_expect = -(-np.sin(pitch) * states.u
                    + np.sin(roll) * np.cos(pitch) * states.v
                    + np.cos(roll) * np.cos(pitch) * states.w)
 
-    np.testing.assert_allclose(dxdt.pd, d_pd_expect, atol=1e-14)
+    np.testing.assert_allclose(dxdt.h, d_h_expect, atol=1e-14)
 
 
 @pytest.mark.parametrize('n_points', [1, 2])

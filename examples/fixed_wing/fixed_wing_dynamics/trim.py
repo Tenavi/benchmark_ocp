@@ -113,9 +113,7 @@ def compute_trim(va_trim, parameters, aero_model, **minimize_opts):
     Returns
     -------
     trim_states : VehicleState
-        Trim state. pn, pe, pd are not set.
     trim_controls : Controls
-        Trim controls.
     dxdt
     """
     bounds = _make_bounds(parameters)

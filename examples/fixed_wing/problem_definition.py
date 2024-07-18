@@ -15,7 +15,7 @@ from .vehicle_models import aerosonde
 
 _va_target_default = 25.
 _h_cost_ceil_default = 50.
-_Q_default = VehicleState(pd=1.,
+_Q_default = VehicleState(h=1.,
                           u=1.,
                           v=1.,
                           w=1.,
@@ -25,7 +25,7 @@ _Q_default = VehicleState(pd=1.,
                           attitude=[1., 1., 1., 0.]).to_array()
 _R_default = ((aerosonde.constants.max_controls
               - aerosonde.constants.min_controls) ** -2).to_array()
-_x0_max_perturb_default = VehicleState(pd=100.,
+_x0_max_perturb_default = VehicleState(h=100.,
                                        u=5.,
                                        v=5.,
                                        w=5.,
@@ -60,15 +60,13 @@ class FixedWing(OptimalControlProblem):
 
     @property
     def state_lb(self):
-        """(`n_states`,) array. Lower bounds on `pd` (upper bound on altitude)
-        and quaternion states, specifying that the scalar quaternion must be
-        positive."""
+        """(`n_states`,) array. Lower bounds on `h` (altitude) and quaternion
+        states, specifying that the scalar quaternion must be positive."""
         return self.parameters.x_lb.to_array()
 
     @property
     def state_ub(self):
-        """(`n_states`,) array. Upper bound on `pd`, translating to a lower
-        bound on altitude."""
+        """(`n_states`,) array. Upper bound on `h` (altitude)."""
         return self.parameters.x_ub.to_array()
 
     @property
@@ -112,12 +110,12 @@ class FixedWing(OptimalControlProblem):
             min_quat = np.array([-1., -1., -1., 0.]) - 1e-03
             max_quat = np.array([1., 1., 1., 1.]) + 1e-03
 
-            obj.x_lb = VehicleState(pd=-3. * np.abs(obj.x0_max_perturb.pd),
+            obj.x_lb = VehicleState(h=-3. * np.abs(obj.x0_max_perturb.h),
                                     u=-np.inf, v=-np.inf, w=-np.inf,
                                     p=-np.inf, q=-np.inf, r=-np.inf,
                                     attitude=min_quat)
 
-            obj.x_ub = VehicleState(pd=3. * np.abs(obj.x0_max_perturb.pd),
+            obj.x_ub = VehicleState(h=3. * np.abs(obj.x0_max_perturb.h),
                                     u=np.inf, v=np.inf, w=np.inf,
                                     p=np.inf, q=np.inf, r=np.inf,
                                     attitude=max_quat)

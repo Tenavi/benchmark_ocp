@@ -146,7 +146,7 @@ class VehicleState(Container):
     When initializing or representing the `VehicleState` with an array,
     the following order is expected:
     ```
-    array[0] = pd
+    array[0] = h
     array[1] = u
     array[2] = v
     array[3] = w
@@ -158,10 +158,10 @@ class VehicleState(Container):
     """
     dim = 11
 
-    def __init__(self, pd=0., u=0., v=0., w=0., p=0., q=0., r=0.,
+    def __init__(self, h=0., u=0., v=0., w=0., p=0., q=0., r=0.,
                  attitude=[0., 0., 0., 1.], array=None):
         if array is None:
-            array = [pd, u, v, w, p, q, r] + list(attitude)
+            array = [h, u, v, w, p, q, r] + list(attitude)
             array = [np.reshape(arg, -1) for arg in array]
 
         super().__init__(array)
@@ -170,10 +170,9 @@ class VehicleState(Container):
         self._course = None
         self._rot_mat = None
 
-    pd = property(lambda self: _generic_array_getter(self, 0),
-                  lambda self, val: _generic_array_setter(self, val, 0))
-    pd.__doc__ = ("(n_points,) array. Inertial down position (negative "
-                  "altitude) [m].")
+    h = property(lambda self: _generic_array_getter(self, 0),
+                 lambda self, val: _generic_array_setter(self, val, 0))
+    h.__doc__ = ("(n_points,) array. Altitude [m].")
 
     u = property(lambda self: _generic_array_getter(self, 1),
                  lambda self, val: _generic_array_setter(

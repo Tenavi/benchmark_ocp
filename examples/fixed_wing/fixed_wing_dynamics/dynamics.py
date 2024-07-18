@@ -132,8 +132,8 @@ def rigid_body_dynamics(states, forces, moments, parameters):
     forces = np.reshape(forces, vb.shape)
     moments = np.reshape(moments, omega.shape)
 
-    # Inertial position (Beard (B.1))
-    d_pos = states.body_to_inertial(vb)
+    # Altitude (Beard (B.1))
+    d_h = - np.einsum('j...,j...->...', states.rotation_matrix[2], vb)
 
     # Inertial velocity (Beard (3.7))
     gravity = np.squeeze(states.rotation_matrix[2]) * parameters.g0
@@ -149,7 +149,7 @@ def rigid_body_dynamics(states, forces, moments, parameters):
     d_quat[:-1] = 0.5 * (quat[-1:] * omega - np.cross(omega, quat[:-1], axis=0))
     d_quat[-1] = - 0.5 * np.einsum('i...,i...->...', omega, quat[:-1])
 
-    return VehicleState(pd=d_pos[2], u=d_vb[0], v=d_vb[1], w=d_vb[2],
+    return VehicleState(h=d_h, u=d_vb[0], v=d_vb[1], w=d_vb[2],
                         p=d_omega[0], q=d_omega[1], r=d_omega[2],
                         attitude=d_quat)
 
@@ -205,9 +205,9 @@ def rigid_body_jac(states, forces_jac, moments_jac, parameters):
 
     # Altitude dynamics
     #   w.r.t. velocity
-    dfdx[0, 1:4] = np.squeeze(states.rotation_matrix[2])
+    dfdx[0, 1:4] = -np.squeeze(states.rotation_matrix[2])
     #   w.r.t. quaternion attitude
-    dfdx[0, -4:] = np.einsum('ji...,j...->i...', d_R_d_quat, vb)
+    dfdx[0, -4:] = -np.einsum('ji...,j...->i...', d_R_d_quat, vb)
 
     # Velocity dynamics
     #   from forces

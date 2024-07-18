@@ -249,9 +249,9 @@ def _get_positions(t, states):
     d_pos = states.body_to_inertial(states.velocity)
     pos_fun = CubicSpline(t, d_pos, axis=1).antiderivative()
     pos = pos_fun(t)
-    # Use negative down position as altitude, since this normalizes the initial
-    # altitude as non-zero (final altitude is zero if successful)
-    pos[-1] = -states.pd
+    # Use altitude directly, since the initial altitude is non-zero (final
+    # altitude is zero if successful)
+    pos[-1] = states.h
     return pos
 
 

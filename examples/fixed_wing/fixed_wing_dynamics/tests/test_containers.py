@@ -65,7 +65,7 @@ def _random_state_array(n_points, seed=None):
 
     state_array = np.vstack([rng.normal(size=(7, n_points)), attitude])
 
-    state_dict = dict(pd=state_array[0],
+    state_dict = dict(h=state_array[0],
                       u=state_array[1],
                       v=state_array[2],
                       w=state_array[3],
@@ -409,6 +409,7 @@ def test_rotation_update(n_points):
 
     # Check that rotating again has not caused us to update _rot_mat
     assert container.rotation_matrix is _rot_mat
+
 
 @pytest.mark.parametrize('n_points', [1, 2])
 @pytest.mark.parametrize('update_attr', ['u', 'v', 'w', 'attitude'])
