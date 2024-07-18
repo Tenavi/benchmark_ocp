@@ -4,8 +4,8 @@ import numpy as np
 
 from examples.common_utilities.dynamics import quaternion_to_euler
 
-from examples.uav.fixed_wing_dynamics import trim
-from examples.uav.vehicle_models.aerosonde import constants, aero_model
+from examples.fixed_wing.fixed_wing_dynamics import trim
+from examples.fixed_wing.vehicle_models.aerosonde import constants, aero_model
 
 
 @pytest.mark.parametrize('va', np.arange(18., 33., 2.))

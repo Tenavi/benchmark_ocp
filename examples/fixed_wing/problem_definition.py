@@ -10,7 +10,7 @@ from .fixed_wing_dynamics.containers import VehicleState, Controls
 from .fixed_wing_dynamics.trim import compute_trim
 from .fixed_wing_dynamics.dynamics import dynamics as dynamics_fun
 from .fixed_wing_dynamics.dynamics import jacobians as jac_fun
-from examples.uav.vehicle_models import aerosonde
+from .vehicle_models import aerosonde
 
 
 _va_target_default = 25.

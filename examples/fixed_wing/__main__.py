@@ -9,8 +9,8 @@ from optimalcontrol.simulate import monte_carlo
 
 from examples.common_utilities import supervised_learning, plotting
 
-from examples.uav.problem_definition import FixedWing
-from examples.uav import example_config as config
+from examples.fixed_wing.problem_definition import FixedWing
+from examples.fixed_wing import example_config as config
 
 
 # Initialize the optimal control problem

@@ -8,9 +8,9 @@ from optimalcontrol.utilities import save_data
 
 from examples.common_utilities.supervised_learning import generate_data
 
-from examples.uav.problem_definition import FixedWing
-from examples.uav.controllers import FixedWingLQR
-from examples.uav import example_config as config
+from examples.fixed_wing.problem_definition import FixedWing
+from examples.fixed_wing.controllers import FixedWingLQR
+from examples.fixed_wing import example_config as config
 
 
 if __name__ == '__main__':

@@ -37,6 +37,7 @@ dependencies:
     pandas>=1.3
     scipy>=1.10
     tqdm
+    pytest
     jupyter
     matplotlib
     scikit-learn>=1.0
@@ -45,7 +46,7 @@ dependencies:
 
 ## Test
 
-Install `pytest`. From the root directory, run
+From the root directory, run
 
     pytest tests -s -v
     pytest examples -s -v
@@ -54,7 +55,11 @@ Install `pytest`. From the root directory, run
 
 ## Generate documentation
 
-Install `pdoc`. From the root directory, run
+Install `pdoc` using the command
+
+    pip install pdoc
+
+Then from the root directory, run
 
     pdoc optimalcontrol --d numpy --math -t docs/.template/ -o docs/optimalcontrol
     pdoc examples --d numpy --math -t docs/.template/ -o docs/examples

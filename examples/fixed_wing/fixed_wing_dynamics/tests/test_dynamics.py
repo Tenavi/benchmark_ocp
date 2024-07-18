@@ -6,9 +6,9 @@ from optimalcontrol.utilities import approx_derivative
 from examples.common_utilities.dynamics import (euler_to_quaternion,
                                                 quaternion_to_euler)
 
-from examples.uav.fixed_wing_dynamics import dynamics
-from examples.uav.fixed_wing_dynamics.containers import VehicleState, Controls
-from examples.uav.vehicle_models.aerosonde import constants, aero_model
+from examples.fixed_wing.fixed_wing_dynamics import dynamics
+from examples.fixed_wing.fixed_wing_dynamics.containers import VehicleState, Controls
+from examples.fixed_wing.vehicle_models.aerosonde import constants, aero_model
 
 from .test_containers import random_states, random_controls
 

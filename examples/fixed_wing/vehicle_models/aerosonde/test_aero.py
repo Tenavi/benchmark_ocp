@@ -3,9 +3,9 @@ import pytest
 
 from optimalcontrol.utilities import approx_derivative
 
-from examples.uav.vehicle_models.aerosonde import aero, constants
-from examples.uav.fixed_wing_dynamics.tests.test_containers import (random_states,
-                                                                    random_controls)
+from examples.fixed_wing.vehicle_models.aerosonde import aero, constants
+from examples.fixed_wing.fixed_wing_dynamics.tests.test_containers import (random_states,
+                                                                           random_controls)
 
 
 rng = np.random.default_rng()

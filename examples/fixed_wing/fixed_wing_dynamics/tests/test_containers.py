@@ -3,8 +3,8 @@ import pytest
 
 from examples.common_utilities.dynamics import (euler_to_quaternion,
                                                 quaternion_to_euler)
-from examples.uav.fixed_wing_dynamics import containers
-from examples.uav.vehicle_models.aerosonde import constants
+from examples.fixed_wing.fixed_wing_dynamics import containers
+from examples.fixed_wing.vehicle_models.aerosonde import constants
 
 
 def rotation_matrix(yaw, pitch, roll):

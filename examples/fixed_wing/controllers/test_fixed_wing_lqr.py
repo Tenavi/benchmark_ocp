@@ -6,9 +6,9 @@ from optimalcontrol.simulate import integrate
 
 from tests._utilities import compare_finite_difference
 
-from examples.uav import FixedWing
-from examples.uav.controllers import FixedWingLQR
-from examples.uav import example_config as config
+from examples.fixed_wing import FixedWing
+from examples.fixed_wing.controllers import FixedWingLQR
+from examples.fixed_wing import example_config as config
 
 
 @pytest.mark.parametrize('n_points', [1, 2])

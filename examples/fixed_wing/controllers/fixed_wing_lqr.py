@@ -2,7 +2,7 @@ import numpy as np
 
 from optimalcontrol.controls import LinearQuadraticRegulator
 
-from examples.uav.problem_definition import scale_altitude
+from examples.fixed_wing.problem_definition import scale_altitude
 
 
 class FixedWingLQR(LinearQuadraticRegulator):

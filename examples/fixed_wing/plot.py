@@ -11,8 +11,8 @@ from optimalcontrol.utilities import load_data
 from examples.common_utilities.dynamics import quaternion_to_euler
 from examples.common_utilities.plotting import make_legend, save_fig_dict
 
-from examples.uav.problem_definition import FixedWing
-from examples.uav.fixed_wing_dynamics.containers import VehicleState
+from examples.fixed_wing.problem_definition import FixedWing
+from examples.fixed_wing.fixed_wing_dynamics.containers import VehicleState
 
 
 _control_labels = [r'$\delta_t$', r'$\delta_a$ [deg]',
@@ -256,7 +256,7 @@ def _get_positions(t, states):
 
 
 if __name__ == '__main__':
-    from examples.uav import example_config as config
+    from examples.fixed_wing import example_config as config
 
     parser = ap.ArgumentParser()
     parser.add_argument('data', type=str,
