@@ -16,7 +16,7 @@ from examples.fixed_wing import example_config as config
 if __name__ == '__main__':
     parser = ap.ArgumentParser()
     parser.add_argument('n_traj', type=int,
-                        help="Number of open loop optimal control problems to "
+                        help="Number of open-loop optimal control problems to "
                              "solve. Note: slightly fewer trajectories may be "
                              "produced if the solver fails to find solutions.")
     parser.add_argument('-s', '--random_seed', type=int,

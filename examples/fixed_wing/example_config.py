@@ -2,9 +2,9 @@ import os
 
 
 # Directories where data, figures, and feedback controllers will be saved
-data_dir = os.path.join('examples', 'uav', 'data')
-fig_dir = os.path.join('examples', 'uav', 'figures')
-controller_dir = os.path.join('examples', 'uav', 'controllers')
+data_dir = os.path.join('examples', 'fixed_wing', 'data')
+fig_dir = os.path.join('examples', 'fixed_wing', 'figures')
+controller_dir = os.path.join('examples', 'fixed_wing', 'controllers')
 
 for directory in [data_dir, fig_dir, controller_dir]:
     os.makedirs(directory, exist_ok=True)

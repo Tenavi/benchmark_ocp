@@ -251,8 +251,8 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
         if ode_sol.status == 0 or ode_sol.t_events[0].size >= 1:
             break
 
-        # Sometimes when the ODE solution fails too early we run into problems,
-        # so make sure we advance time at least a little
+        # If the ODE solution fails too early we run into problems, so make sure
+        # time advances at least a little
         t1 = np.maximum(ode_sol.t[-1], sols[-1].t[1])
 
         if len(sols) >= max_n_segments:
@@ -280,6 +280,14 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
             print(f"Starting new Bellman segment at t{k + 1} = "
                   f"{t_break[-1]:.2g}")
             print(f"Running cost L(t{k + 1}) = {L1:.2g}")
+
+        # If time hasn't advanced far, this indicates we may need more nodes to
+        # solve the problem
+        if t1 < sols[-1].t[2]:
+            n_nodes = n_nodes + 1
+            if verbose:
+                print(f"Previous Bellman segment was very short. Increasing "
+                      f"number of LGR nodes to {n_nodes:d}.")
 
     if len(sols) == 1:
         return sols[0]

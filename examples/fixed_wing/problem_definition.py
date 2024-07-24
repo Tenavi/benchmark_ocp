@@ -14,14 +14,14 @@ from .vehicle_models import aerosonde
 
 
 _va_target_default = 25.
-_h_cost_ceil_default = 50.
+_h_cost_ceil_default = 100.
 _Q_default = VehicleState(h=1.,
                           u=1.,
                           v=1.,
                           w=1.,
-                          p=np.deg2rad(15.) ** -2,
-                          q=np.deg2rad(15.) ** -2,
-                          r=np.deg2rad(15.) ** -2,
+                          p=np.deg2rad(30.) ** -2,
+                          q=np.deg2rad(30.) ** -2,
+                          r=np.deg2rad(30.) ** -2,
                           attitude=[1., 1., 1., 0.]).to_array()
 _R_default = ((aerosonde.constants.max_controls
               - aerosonde.constants.min_controls) ** -2).to_array()
@@ -107,35 +107,36 @@ class FixedWing(OptimalControlProblem):
                 setattr(obj, var, var_val.reshape(-1, 1))
 
         if 'x0_max_perturb' in new_params:
-            min_quat = np.array([-1., -1., -1., 0.]) - 1e-03
-            max_quat = np.array([1., 1., 1., 1.]) + 1e-03
-
             obj.x_lb = VehicleState(h=-3. * np.abs(obj.x0_max_perturb.h),
                                     u=-np.inf, v=-np.inf, w=-np.inf,
                                     p=-np.inf, q=-np.inf, r=-np.inf,
-                                    attitude=min_quat)
+                                    attitude=-np.ones(4) - 1e-07)
 
             obj.x_ub = VehicleState(h=3. * np.abs(obj.x0_max_perturb.h),
                                     u=np.inf, v=np.inf, w=np.inf,
                                     p=np.inf, q=np.inf, r=np.inf,
-                                    attitude=max_quat)
+                                    attitude=np.ones(4) + 1e-07)
 
         if any([not hasattr(obj, '_x0_sampler'),
                 'x0_sample_seed' in new_params,
                 'x0_max_perturb' in new_params]):
             xf = np.concatenate([obj.trim_state.to_array()[:-4],
                                  quaternion_to_euler(obj.trim_state.attitude)])
-            x0_perturb = np.concatenate([
+            x0_perturb = np.abs(np.concatenate([
                 obj.x0_max_perturb.to_array()[:-4],
-                quaternion_to_euler(obj.x0_max_perturb.attitude)])
+                quaternion_to_euler(obj.x0_max_perturb.attitude)]))
+
+            lb = xf - x0_perturb
+            ub = xf + x0_perturb
 
             if not hasattr(obj, '_x0_sampler'):
+                perturb_norm = np.diag(1. / np.maximum(1e-07, x0_perturb**2))
                 obj._x0_sampler = UniformSampler(
-                    lb=xf - x0_perturb, ub=xf + x0_perturb, xf=xf, norm=np.inf,
+                    lb=lb, ub=ub, xf=xf, norm=perturb_norm,
                     seed=getattr(obj, 'x0_sample_seed', None))
             else:
                 obj._x0_sampler.update(
-                    lb=xf - x0_perturb, ub=xf + x0_perturb, xf=xf,
+                    lb=lb, ub=ub, xf=xf,
                     seed=new_params.get('attitude_sample_seed', None))
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
@@ -143,16 +144,20 @@ class FixedWing(OptimalControlProblem):
         Generate initial conditions. Euler angles yaw, pitch, roll are sampled
         uniformly from a hypercube, then converted to quaternions, while other
         states are sampled uniformly from a hypercube. Optionally, initial
-        conditions may be sampled with a specified distance from equilibrium.
+        conditions may be sampled with a specified distance from equilibrium in
+        terms of a weighted l2 norm.
 
         Parameters
         ----------
         n_samples : int, default=1
             Number of sample points to generate.
         distance : positive float, optional
-            Desired infinity norm of initial condition. Note that depending on
-            how `distance` is specified, samples may be outside the hypercube
-            defined by `self.parameters.x0_max_perturb`.
+            Desired weighted l2 norm of initial condition, specifically
+            `distance(x0) = sqrt(sum(x0 / w) ** 2)`
+            where `x0` is the initial condition with attitude specified in
+            Euler angles and the `w = self.parameters.x0_max_perturb` with
+            attitude  converted to Euler angles. Note that this point could be
+            outside the hypercube defined by `self.parameters.x0_max_perturb`.
 
         Returns
         -------
@@ -161,8 +166,7 @@ class FixedWing(OptimalControlProblem):
             sample. If `n_samples==1` then `x0` will be a 1d array.
         """
         # Sample from the hypercube
-        x0 = self.parameters._x0_sampler(n_samples=n_samples,
-                                         distance=distance)
+        x0 = self.parameters._x0_sampler(n_samples=n_samples, distance=distance)
 
         # Convert Euler angles to quaternions
         angles = x0[-3:]

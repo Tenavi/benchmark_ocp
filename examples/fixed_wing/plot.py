@@ -35,7 +35,7 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
                     save_dir=None):
     r"""
     Plot states, controls, and running cost vs. time for a set of trajectories,
-    as well as a 3d plot of the UAV's path.
+    as well as a 3d plot of the aircraft's path.
 
     Parameters
     ----------
@@ -89,7 +89,7 @@ def plot_fixed_wing(ocp, sims, sim_labels=None, t_max=None,
     if isinstance(sims, dict):
         sims = [sims]
 
-    print(f"Plotting {len(sims)} UAV trajectories...")
+    print(f"Plotting {len(sims)} aircraft trajectories...")
 
     states = [VehicleState.from_array(sim['x']) for sim in sims]
     positions = [_get_positions(sim['t'], state_traj)
@@ -270,7 +270,8 @@ if __name__ == '__main__':
     # Load and plot the open-loop optimal dataset
     data = load_data(args.data)
 
-    plot_kwargs = {'color': 'black', 'alpha': 0.1}
+    plot_kwargs = {'color': 'black',
+                   'alpha': max(0.2, 0.975 ** (len(data) - 1))}
 
     if args.show_plots:
         plot_fixed_wing(ocp, data,
