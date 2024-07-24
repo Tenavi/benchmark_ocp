@@ -34,6 +34,22 @@ _x0_max_perturb_default = VehicleState(h=100.,
                                        r=np.deg2rad(15.),
                                        attitude=euler_to_quaternion(
                                            [179.9, 89.9, 179.9], degrees=True))
+_x_lb_default = VehicleState(h=-300.,
+                             u=-10.,
+                             v=-10.,
+                             w=-50.,
+                             p=-np.deg2rad(360.),
+                             q=-np.deg2rad(360.),
+                             r=-np.deg2rad(360.),
+                             attitude=-np.ones(4) - 1e-07)
+_x_ub_default = VehicleState(h=300.,
+                             u=100.,
+                             v=10.,
+                             w=50.,
+                             p=np.deg2rad(360.),
+                             q=np.deg2rad(360.),
+                             r=np.deg2rad(360.),
+                             attitude=np.ones(4) + 1e-07)
 
 
 class FixedWing(OptimalControlProblem):
@@ -43,7 +59,9 @@ class FixedWing(OptimalControlProblem):
                             'h_cost_ceil': _h_cost_ceil_default,
                             'Q': _Q_default,
                             'R': _R_default,
-                            'x0_max_perturb': _x0_max_perturb_default}
+                            'x0_max_perturb': _x0_max_perturb_default,
+                            'x_lb': _x_lb_default,
+                            'x_ub': _x_ub_default}
     _optional_parameters = {'x0_sample_seed': None}
 
     @property
@@ -60,13 +78,10 @@ class FixedWing(OptimalControlProblem):
 
     @property
     def state_lb(self):
-        """(`n_states`,) array. Lower bounds on `h` (altitude) and quaternion
-        states, specifying that the scalar quaternion must be positive."""
         return self.parameters.x_lb.to_array()
 
     @property
     def state_ub(self):
-        """(`n_states`,) array. Upper bound on `h` (altitude)."""
         return self.parameters.x_ub.to_array()
 
     @property
@@ -106,16 +121,12 @@ class FixedWing(OptimalControlProblem):
                 setattr(obj, var + '_2_diag', np.diag(var_val / 2.))
                 setattr(obj, var, var_val.reshape(-1, 1))
 
-        if 'x0_max_perturb' in new_params:
-            obj.x_lb = VehicleState(h=-3. * np.abs(obj.x0_max_perturb.h),
-                                    u=-np.inf, v=-np.inf, w=-np.inf,
-                                    p=-np.inf, q=-np.inf, r=-np.inf,
-                                    attitude=-np.ones(4) - 1e-07)
-
-            obj.x_ub = VehicleState(h=3. * np.abs(obj.x0_max_perturb.h),
-                                    u=np.inf, v=np.inf, w=np.inf,
-                                    p=np.inf, q=np.inf, r=np.inf,
-                                    attitude=np.ones(4) + 1e-07)
+        if 'x_lb' in new_params or 'x_ub' in new_params:
+            for attr in ['x_lb', 'x_ub']:
+                if not isinstance(getattr(obj, attr), VehicleState):
+                    raise TypeError(f"{attr} must be a VehicleState")
+            if not np.all(obj.x_lb.to_array() < obj.x_ub.to_array()):
+                raise ValueError("x_lb must be less than x_ub")
 
         if any([not hasattr(obj, '_x0_sampler'),
                 'x0_sample_seed' in new_params,

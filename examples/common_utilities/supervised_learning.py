@@ -191,12 +191,12 @@ class SimpleQRnet(controls.Controller):
 
     ##### References
 
-    1. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, *Neural Network Optimal
-        Feedback Control with Enhanced Closed Loop Stability*, in American
+    1. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, Neural Network Optimal
+        Feedback Control with Enhanced Closed Loop Stability, in American
         Control Conference, 2022, pp. 2373-2378.
         https://doi.org/10.23919/ACC53348.2022.9867619
-    2. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, *Neural Network Optimal
-        Feedback Control with Guaranteed Local Stability*, IEEE Open Journal of
+    2. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, Neural Network Optimal
+        Feedback Control with Guaranteed Local Stability, IEEE Open Journal of
         Control Systems, 1 (2022), pp. 210-222.
         https://doi.org/10.1109/OJCSYS.2022.3205863
     """

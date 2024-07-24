@@ -12,12 +12,14 @@ from examples.fixed_wing import example_config as config
 
 
 @pytest.mark.parametrize('n_points', [1, 2])
-def test_lqr_jac(n_points):
+@pytest.mark.parametrize('quat_sign', [1., -1.])
+def test_lqr_jac(n_points, quat_sign):
     ocp = FixedWing(**config.params)
     lqr = FixedWingLQR(ocp)
 
     # Test at single point
     x = ocp.sample_initial_conditions(n_points)
+    x[-1] *= quat_sign
 
     dudx = lqr.jac(x)
 
@@ -38,8 +40,8 @@ def test_locally_stable():
     u_trim = ocp.trim_controls
 
     # Find actual trim state and control by integration
-    xf, status = analyze.find_equilibrium(ocp, lqr, x_trim,
-                                          config.t_int, config.t_max)
+    xf, status = analyze.find_equilibrium(ocp, lqr, x_trim, config.t_int,
+                                          config.t_max, method='RK23')
 
     assert np.sum(status == 0) == 1
 
@@ -51,7 +53,7 @@ def test_locally_stable():
     _, _, max_eig = analyze.linear_stability(ocp, lqr, xf, zero_tol=1e-06)
 
     # Verify that a small perturbation from trim returns to trim
-    x0 = ocp.sample_initial_conditions(distance=0.01).reshape(-1, 1)
+    x0 = ocp.sample_initial_conditions(distance=1e-03).reshape(-1, 1)
 
     t, x, status = integrate(ocp, lqr, x0, [0., config.t_int],
                              **config.sim_kwargs)

@@ -23,9 +23,12 @@ class FixedWingLQR(LinearQuadraticRegulator):
         x_rescale = np.copy(x)
         x_rescale[0] = self._h_scale * scale_altitude(x_rescale[0],
                                                       self._h_scale)
+        # Treat scalar quaternion as positive
+        x_rescale[-1] = np.abs(x_rescale[-1])
         return super().__call__(x_rescale)
 
     def jac(self, x, u0=None):
         dudx = super().jac(x, u0=u0)
         dudx[:, 0] /= np.cosh(x[0] / self._h_scale) ** 2
+        dudx[:, -1] *= np.sign(x[-1])
         return dudx

@@ -97,11 +97,11 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
 
     ##### References
 
-    1. I. M. Ross, Q. Gong, and P. Sekhavat, *Low-thrust, high-accuracy
-        trajectory optimization*, Journal of Guidance, Control, and Dynamics, 30
+    1. I. M. Ross, Q. Gong, and P. Sekhavat, Low-thrust, high-accuracy
+        trajectory optimization, Journal of Guidance, Control, and Dynamics, 30
         (2007), pp. 921-933. https://doi.org/10.2514/1.23181
-    2. D. Garg, W. W. Hager, and A. V. Rao, *Pseudospectral methods for solving
-        infinite-horizon optimal control problems*, Automatica, 47 (2011), pp.
+    2. D. Garg, W. W. Hager, and A. V. Rao, Pseudospectral methods for solving
+        infinite-horizon optimal control problems, Automatica, 47 (2011), pp.
         829-837. https://doi.org/10.1016/j.automatica.2011.01.085
 
     Parameters

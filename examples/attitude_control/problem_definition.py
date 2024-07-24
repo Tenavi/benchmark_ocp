@@ -3,8 +3,8 @@ Problem adapted from ref. [1].
 
 ##### References
 
-1. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
-    nonlinear optimal control problems*, Journal of Guidance, Control, and
+1. F. Fahroo and I. M. Ross, Pseudospectral methods for infinite-horizon
+    nonlinear optimal control problems, Journal of Guidance, Control, and
     Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
 """
 

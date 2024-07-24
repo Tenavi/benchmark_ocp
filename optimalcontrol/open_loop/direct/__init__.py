@@ -31,17 +31,17 @@ mapping as presented in ref. [4].
 
 ##### References
 
-1. I. M. Ross, Q. Gong, F. Fahroo, and W. Kang, *Practical stabilization through
-    real-time optimal control*, in American Control Conference, 2006, pp.
+1. I. M. Ross, Q. Gong, F. Fahroo, and W. Kang, Practical stabilization through
+    real-time optimal control, in American Control Conference, 2006, pp.
     304-309. https://doi.org/10.1109/ACC.2006.1655372
-2. I. M. Ross, Q. Gong, and P. Sekhavat, *Low-thrust, high-accuracy trajectory
-    optimization*, Journal of Guidance, Control, and Dynamics, 30 (2007), pp.
+2. I. M. Ross, Q. Gong, and P. Sekhavat, Low-thrust, high-accuracy trajectory
+    optimization, Journal of Guidance, Control, and Dynamics, 30 (2007), pp.
     921-933. https://doi.org/10.2514/1.23181
-3. F. Fahroo and I. M. Ross, *Pseudospectral methods for infinite-horizon
-    nonlinear optimal control problems*, Journal of Guidance, Control, and
+3. F. Fahroo and I. M. Ross, Pseudospectral methods for infinite-horizon
+    nonlinear optimal control problems, Journal of Guidance, Control, and
     Dynamics, 31 (2008), pp. 927-936. https://doi.org/10.2514/1.33117
-4. D. Garg, W. W. Hager, and A. V. Rao, *Pseudospectral methods for solving
-    infinite-horizon optimal control problems*, Automatica, 47 (2011), pp.
+4. D. Garg, W. W. Hager, and A. V. Rao, Pseudospectral methods for solving
+    infinite-horizon optimal control problems, Automatica, 47 (2011), pp.
     829-837. https://doi.org/10.1016/j.automatica.2011.01.085
 """
 
