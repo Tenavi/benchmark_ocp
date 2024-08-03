@@ -54,8 +54,9 @@ _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
 print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
-    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-    random_state=random_seed + 2, **config.controller_kwargs)
+    u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 2,
+    **config.controller_kwargs)
+nn_control.train(x_train, u_train)
 
 print(f"\nLinear stability analysis for {nn_control}:")
 

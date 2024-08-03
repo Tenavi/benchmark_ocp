@@ -40,7 +40,7 @@ dependencies:
     pytest
     jupyter
     matplotlib
-    scikit-learn>=1.0
+    scikit-learn>=1.1
 
 ---
 

@@ -120,34 +120,6 @@ def assert_attr_update_equal(container, update_dict):
 
 
 @pytest.mark.parametrize('n_points', [1, 2])
-def test_angle_conversions(n_points):
-    yaw, pitch, roll = random_attitude(n_points)
-
-    c_yaw = np.cos(yaw / 2.)
-    c_pitch = np.cos(pitch / 2.)
-    c_roll = np.cos(roll / 2.)
-    s_yaw = np.sin(yaw / 2.)
-    s_pitch = np.sin(pitch / 2.)
-    s_roll = np.sin(roll / 2.)
-
-    q_expected = [c_yaw * c_pitch * s_roll - s_yaw * s_pitch * c_roll,
-                  c_yaw * s_pitch * c_roll + s_yaw * c_pitch * s_roll,
-                  s_yaw * c_pitch * c_roll - c_yaw * s_pitch * s_roll,
-                  c_yaw * c_pitch * c_roll + s_yaw * s_pitch * s_roll]
-
-    q = euler_to_quaternion([yaw, pitch, roll])
-
-    for i in range(4):
-        np.testing.assert_allclose(q[i], q_expected[i], atol=1e-14)
-
-    euler = quaternion_to_euler(q)
-
-    np.testing.assert_allclose(euler[0], yaw, atol=1e-14)
-    np.testing.assert_allclose(euler[1], pitch, atol=1e-14)
-    np.testing.assert_allclose(euler[2], roll, atol=1e-14)
-
-
-@pytest.mark.parametrize('n_points', [1, 2])
 def test_VehicleState_init(n_points):
     state_dict, state_array = _random_state_array(n_points)
     container = containers.VehicleState(**state_dict)

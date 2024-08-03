@@ -32,6 +32,8 @@ rng = np.random.default_rng(random_seed + 2)
 ocp = AttitudeControl(attitude_sample_seed=random_seed,
                       rate_sample_seed=random_seed + 1, **config.params)
 
+q0_state = 3
+
 q_final = euler_to_quaternion(ocp.parameters.final_attitude)
 
 xf = np.concatenate((q_final, np.zeros(3))).reshape(-1, 1)
@@ -93,26 +95,31 @@ _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
 print("\nTraining polynomial controller...")
 try:
-    poly_control = supervised_learning.PolynomialController(
-        x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-        random_state=random_seed + 2, **config.poly_kwargs)
+    poly_control = supervised_learning.QuaternionControlWrapper(
+        q0_state, supervised_learning.PolynomialController,
+        u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 2,
+        **config.poly_kwargs)
 # In case the linear_model doesn't take a random_state or verbose
 except TypeError:
-    poly_control = supervised_learning.PolynomialController(
-        x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-        **config.poly_kwargs)
+    poly_control = supervised_learning.QuaternionControlWrapper(
+        q0_state, supervised_learning.PolynomialController,
+        u_lb=ocp.control_lb, u_ub=ocp.control_ub, **config.poly_kwargs)
+poly_control.train(x_train, u_train)
 
 print("\nTraining K-neighbors-LQR...")
-k_nn_control = supervised_learning.SimpleQRnet(
-    lqr, supervised_learning.KNeighborsController, x_train, u_train,
-    **config.k_nn_kwargs)
+k_nn_control = supervised_learning.QuaternionControlWrapper(
+    q0_state, supervised_learning.SimpleQRnet,
+    lqr, supervised_learning.KNeighborsController, **config.k_nn_kwargs)
+k_nn_control.train(x_train, u_train)
 
 print("\nTraining neural network controller...")
-nn_control = supervised_learning.NeuralNetworkController(
-    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-    random_state=random_seed + 3, **config.nn_kwargs)
+nn_control = supervised_learning.QuaternionControlWrapper(
+    q0_state, supervised_learning.NeuralNetworkController,
+    u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 3,
+    **config.nn_kwargs)
+nn_control.train(x_train, u_train)
 
-controllers = (lqr, poly_control, k_nn_control, nn_control)
+controllers = (lqr, poly_control, k_nn_control, k_nn_lqr, nn_control)
 
 print("\n" + "+" * 80)
 

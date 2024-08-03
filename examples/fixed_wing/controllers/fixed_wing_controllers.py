@@ -32,3 +32,6 @@ class FixedWingLQR(LinearQuadraticRegulator):
         dudx[:, 0] /= np.cosh(x[0] / self._h_scale) ** 2
         dudx[:, -1] *= np.sign(x[-1])
         return dudx
+
+
+

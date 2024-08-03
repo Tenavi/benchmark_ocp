@@ -12,9 +12,8 @@ for directory in [data_dir, fig_dir, controller_dir]:
 # Changes to default problem parameters
 params = {}
 
-# Number of training and test trajectories
-n_train = 300
-n_test = 100
+# Number of training trajectories (rest are used for testing)
+n_train = 400
 
 # Distance of initial condition samples from trim
 x0_distance = None
@@ -39,8 +38,6 @@ open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5,
 k_nn_kwargs = {'weights': 'distance', 'n_neighbors': 100}
 
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',
-             'solver': 'adam', 'batch_size': 128, 'learning_rate': 'adaptive',
-             'max_iter': 5000, 'tol': 1e-06, 'n_iter_no_change': 100, 'verbose': True}
-             #'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-04, 'verbose': True}
+             'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-04, 'verbose': True}
 
 random_seed = None

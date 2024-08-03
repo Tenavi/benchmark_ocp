@@ -17,7 +17,7 @@ params = {}
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
 n_train = 30
-n_test = 20
+n_test = 30
 
 # Quadrature integrated norm of initial condition samples (leave as None for
 # uniform sampling)

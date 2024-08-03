@@ -17,12 +17,39 @@ class SupervisedController(controls.Controller):
     supervised learning.
 
     To do this, we generate a dataset of state-control pairs
-    (`x_data`, `u_data`), and optionally for time-dependent problems, associated
-    time values `t_data`, and train a regression model of the mapping from
-    `x_data` (and `t_data`) to `u_data`.
+    (`x_data`, `u_data`), and train a regression model of the mapping from
+    `x_data` to `u_data`.
     """
-    def __init__(self, x_data, u_data, t_data=None, u_lb=None, u_ub=None,
-                 **options):
+    def __init__(self, u_lb=None, u_ub=None, **options):
+        """
+        Parameters
+        ----------
+        u_lb : (n_controls, 1) array, optional
+            Lower control saturation bounds.
+        u_ub : (n_controls, 1) array, optional
+            Upper control saturation bounds.
+        **options : dict
+            Keyword arguments to pass to the regression model.
+        """
+        self.u_lb, self.u_ub = u_lb, u_ub
+
+        self._x_scaler = RobustScaler()
+        self._u_scaler = RobustScaler()
+
+        self._options = options
+        self._regressor = None
+
+        self.train_time = 0.
+
+    @property
+    def n_states(self):
+        return self._x_scaler.n_features_in_
+
+    @property
+    def n_controls(self):
+        return self._u_scaler.n_features_in_
+
+    def train(self, x_data, u_data):
         """
         Parameters
         ----------
@@ -31,49 +58,29 @@ class SupervisedController(controls.Controller):
             optimal control problems).
         u_data : (n_controls, n_data) array
             The optimal feedback controls evaluated at the states `x_data`.
-        t_data : (n_data,) array, optional
-            For time-dependent problems, the time values at which the pairs
-            (`x_data`, `u_data`) are obtained.
-        u_lb : (n_controls, 1) array, optional
-            Lower control saturation bounds.
-        u_ub : (n_controls, 1) array, optional
-            Upper control saturation bounds.
-        **options : dict
-            Keyword arguments to pass to the regression model.
         """
         start_time = time.time()
 
         x_data = np.transpose(np.atleast_2d(x_data))
-        if t_data is not None:
-            raise NotImplementedError("Time-dependent problems are not yet "
-                                      "implemented")
         u_data = np.transpose(np.atleast_2d(u_data))
 
         # Scale the input and output data based on the interquartile range
-        self._x_scaler = RobustScaler().fit(x_data)
-        self._u_scaler = RobustScaler().fit(u_data)
-
-        if t_data is None:
-            self.n_states = self._x_scaler.n_features_in_
-        else:
-            self.n_states = self._x_scaler.n_features_in_ - 1
-
-        self.n_controls = self._u_scaler.n_features_in_
+        self._x_scaler.fit(x_data)
+        self._u_scaler.fit(u_data)
 
         self._regressor = self._fit_regressor(
             self._x_scaler.transform(x_data),
-            np.squeeze(self._u_scaler.transform(u_data)), **options)
-
-        self.u_lb, self.u_ub = u_lb, u_ub
+            np.squeeze(self._u_scaler.transform(u_data)),
+            **self._options)
 
         if self.u_lb is not None:
             self.u_lb = utilities.resize_vector(self.u_lb, self.n_controls)
         if self.u_ub is not None:
             self.u_ub = utilities.resize_vector(self.u_ub, self.n_controls)
 
-        self._train_time = time.time() - start_time
-        if options.get('verbose', True):
-            print(f"\nTraining time: {self._train_time:.2f} seconds")
+        self.train_time = time.time() - start_time
+        if self._options.get('verbose', True):
+            print(f"Training time: {self.train_time:.2f} seconds")
 
     def _fit_regressor(self, x_scaled, u_scaled, **options):
         """
@@ -170,7 +177,7 @@ class PolynomialController(SupervisedController):
         return regressor.fit(x_scaled, u_scaled)
 
 
-class SimpleQRnet(controls.Controller):
+class SimpleQRnet(SupervisedController):
     """
     Example of the basic u-QRnet method from ref. [1], which combines a
     regression model (such as a NN) with an LQR controller.
@@ -200,7 +207,7 @@ class SimpleQRnet(controls.Controller):
         Control Systems, 1 (2022), pp. 210-222.
         https://doi.org/10.1109/OJCSYS.2022.3205863
     """
-    def __init__(self, lqr, controller_class, x_data, u_data, **options):
+    def __init__(self, lqr, controller_class, **options):
         """
         Parameters
         ----------
@@ -210,34 +217,33 @@ class SimpleQRnet(controls.Controller):
         controller_class : reference to `SupervisedController` subclass
             Reference to a subclass of `SupervisedController` which is used to
             model the nonlinear parts of the optimal control.
-        x_data : (n_states, n_data) array
-            A set of system states (obtained by solving a set of open-loop
-            optimal control problems).
-        u_data : (n_controls, n_data) array
-            The optimal feedback controls evaluated at the states `x_data`.
         **options : dict, default=`{'u_lb': lqr.u_lb, 'u_ub': lqr.u_ub}`
             Keyword arguments to pass to `controller_class`.
         """
         kwargs = {'u_lb': lqr.u_lb, 'u_ub': lqr.u_ub, **options}
+        super().__init__(**kwargs)
 
-        self._wrapped_controller = controller_class(
-            x_data, u_data - lqr(x_data), **kwargs)
-
+        self.wrapped_controller = controller_class(**kwargs)
         self._lqr = lqr
 
         self.xf = lqr.xf
-        self.u_lb = lqr.u_lb
-        self.u_ub = lqr.u_ub
+        self._wrapped_uf = None
 
-        self._wrapped_uf = self._wrapped_controller(lqr.xf)
+        self._x_scaler = self.wrapped_controller._x_scaler
+        self._u_scaler = self.wrapped_controller._u_scaler
 
     def __str__(self):
-        return f"{str(self._wrapped_controller).strip('Controller')}+LQR"
+        return f"{str(self.wrapped_controller).strip('Controller')}+LQR"
+
+    def train(self, x_data, u_data):
+        self.wrapped_controller.train(x_data, u_data - self._lqr(x_data))
+        self._wrapped_uf = self.wrapped_controller(self.xf)
+        self.train_time = self.wrapped_controller.train_time
 
     def __call__(self, x):
         u_lqr = self._lqr(x)
 
-        u_model = self._wrapped_controller(x)
+        u_model = self.wrapped_controller(x)
 
         u = u_model + u_lqr
 
@@ -247,6 +253,52 @@ class SimpleQRnet(controls.Controller):
             u -= self._wrapped_uf
 
         return utilities.saturate(u, self.u_lb, self.u_ub)
+
+
+class QuaternionControlWrapper(SupervisedController):
+    """
+    Wrapper of another `SupervisedController` which always treats a scalar
+    quaternion state as positive.
+    """
+    def __init__(self, q0_state, controller_class, *args, **kwargs):
+        """
+        Parameters
+        ----------
+        q0_state : int
+            Index of the state which contains the scalar quaternion which should
+            be transformed to be positive.
+        controller_class : reference to `SupervisedController` subclass
+            Reference to a subclass of `SupervisedController` which is used to
+            model the optimal control.
+        *args : tuple, optional
+            Positional arguments to pass to `controller_class`.
+        **kwargs : dict, optional
+            Keyword arguments to pass to `controller_class`.
+        """
+
+        super().__init__(**kwargs)
+
+        self.wrapped_controller = controller_class(*args, **kwargs)
+        self._q0_state = int(q0_state)
+
+        self._x_scaler = self.wrapped_controller._x_scaler
+        self._u_scaler = self.wrapped_controller._u_scaler
+
+    def __str__(self):
+        return str(self.wrapped_controller)
+
+    def _make_positive_quaternion(self, x_in):
+        x_out = np.copy(x_in)
+        x_out[self._q0_state] = np.abs(x_out[self._q0_state])
+        return x_out
+
+    def train(self, x_data, u_data):
+        self.wrapped_controller.train(self._make_positive_quaternion(x_data),
+                                      u_data)
+        self.train_time = self.wrapped_controller.train_time
+
+    def __call__(self, x):
+        return self.wrapped_controller(self._make_positive_quaternion(x))
 
 
 def generate_data(ocp, guesses, verbose=0, **kwargs):

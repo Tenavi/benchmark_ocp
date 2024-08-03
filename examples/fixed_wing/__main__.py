@@ -21,6 +21,8 @@ rng = np.random.default_rng(random_seed)
 
 ocp = FixedWing(**config.params)
 
+q0_state = ocp.n_states - 1
+
 lqr = from_pickle(os.path.join(config.controller_dir, 'lqr.pickle'))
 
 # Load the dataset and split into training and test data
@@ -29,7 +31,7 @@ data = utilities.load_data(os.path.join(config.data_dir, 'data.csv'))
 data_idx = np.arange(len(data))
 rng.shuffle(data_idx)
 train_idx = data_idx[:config.n_train]
-test_idx = data_idx[config.n_train:config.n_train + config.n_test]
+test_idx = data_idx[config.n_train:]
 
 train_data = data[train_idx]
 test_data = data[test_idx]
@@ -39,17 +41,17 @@ _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
 print("\nTraining K-neighbors-LQR...")
-k_nn_control = supervised_learning.SimpleQRnet(
-    lqr, supervised_learning.KNeighborsController, x_train, u_train,
-    **config.k_nn_kwargs)
-#k_nn_control = supervised_learning.KNeighborsController(
-#    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-#    **config.k_nn_kwargs)
+k_nn_control = supervised_learning.QuaternionControlWrapper(
+    q0_state, supervised_learning.SimpleQRnet,
+    lqr, supervised_learning.KNeighborsController, **config.k_nn_kwargs)
+k_nn_control.train(x_train, u_train)
 
 print("\nTraining neural network controller...")
-nn_control = supervised_learning.NeuralNetworkController(
-    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-    random_state=random_seed + 1, **config.nn_kwargs)
+nn_control = supervised_learning.QuaternionControlWrapper(
+    q0_state, supervised_learning.NeuralNetworkController,
+    u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 1,
+    **config.nn_kwargs)
+nn_control.train(x_train, u_train)
 
 controllers = (lqr, k_nn_control, nn_control)
 

@@ -78,13 +78,15 @@ _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
 print("\nTraining neural network controller...")
 nn_control = supervised_learning.NeuralNetworkController(
-    x_train, u_train, u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-    random_state=random_seed + 3, **config.nn_kwargs)
+    u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 3,
+    **config.nn_kwargs)
+nn_control.train(x_train, u_train)
 
 print("\nTraining u-QRnet controller...")
 qrnet = supervised_learning.SimpleQRnet(
-    lqr, supervised_learning.NeuralNetworkController, x_train, u_train,
+    lqr, supervised_learning.NeuralNetworkController,
     random_state=random_seed + 3, **config.nn_kwargs)
+qrnet.train(x_train, u_train)
 
 controllers = (lqr, nn_control, qrnet)
 

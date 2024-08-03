@@ -16,9 +16,6 @@ from . import utilities
 
 class Controller:
     """Base class for implementing a state feedback controller."""
-    def __init__(self, *args, **kwargs):
-        pass
-
     def __str__(self):
         return type(self).__name__
 

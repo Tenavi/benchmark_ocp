@@ -1,1 +1,1 @@
-from .fixed_wing_lqr import FixedWingLQR
+from .fixed_wing_controllers import FixedWingLQR
