@@ -8,6 +8,9 @@ from optimalcontrol.controls import ConstantControl, LinearQuadraticRegulator
 from examples.van_der_pol import VanDerPol
 
 
+rng = np.random.default_rng()
+
+
 class SinusoidSystem(OptimalControlProblem):
     _required_parameters = {'freq': None}
     _optional_parameters = {'x0_sample_seed': None}
@@ -156,29 +159,20 @@ def test_find_multiple_equilibria(x0):
     assert np.isclose(x, x0, atol=ftol, rtol=ftol)
 
 
-def test_disk_margins_mimo():
-    A = np.array([[-0.2529, 0.6962, -1.9870, -9.7491, 0],
-                  [-0.6108, -3.6183, 19.4199, -0.9979, 0],
-                  [0.3036, -2.9669, -4.2358, 0, 0],
-                  [0, 0, 1, 0, 0],
-                  [0.1018, -0.9948, 0, 20, 0]])
-    B = np.array([[-0.0025, 5.3843],
-                  [-1.6575, 0],
-                  [-23.1119, 0],
-                  [0, 0],
-                  [0, 0]])
-    Q = np.diag([1.,
-                 1.,
-                 np.deg2rad(30.) ** -2,
-                 np.deg2rad(5.) ** -2,
-                 100. ** -2])
-    R = np.diag([np.deg2rad(30.) ** -2,
-                 1.])
+@pytest.mark.parametrize('n', [1, 2, 3])
+@pytest.mark.parametrize('n_w', [1, 2, 3])
+def test_scale_matrix(n, n_w):
+    d = rng.normal(loc=1., scale=0.1, size=(n_w, n))
+    M = rng.normal(size=(n_w, n, n)) + 1j * rng.normal(size=(n_w, n, n))
 
-    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-10., x0_ub=10.)
-    ctrl = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
+    dMd = analyze.robustness._scale_matrix(d, M)
 
-    print(analyze.disk_margins(ocp, ctrl, ctrl.xf))
+    assert dMd.shape == M.shape
+
+    for i in range(n_w):
+        D = np.diag(d[i])
+        dMd_expect = D @ M[i] @ np.linalg.inv(D)
+        np.testing.assert_allclose(dMd[i], dMd_expect, atol=1e-12)
 
 
 def test_disk_margins_siso():
@@ -206,20 +200,54 @@ def test_disk_margins_siso():
     ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-10., x0_ub=10.)
     ctrl = LinearQuadraticRegulator(K=K)
 
-    # Make sure the state space system is setup correctly
-    _, eigs, _ = analyze.linear_stability(ocp, ctrl, ctrl.xf)
+    # Make sure the state space system is set up correctly
+    _, eigs, _ = analyze.linear_stability(ocp, ctrl, ctrl.xf, verbose=False)
 
     np.testing.assert_allclose(eigs.real, [-9.33, -0.33, -0.33], atol=0.01)
     np.testing.assert_allclose(np.abs(eigs.imag), [0., 1.91, 1.91], atol=0.01)
 
     margins = analyze.disk_margins(ocp, ctrl, ctrl.xf)
 
-    gm_expect = (2. - margins['disk_margin']) / (2. + margins['disk_margin'])
-    gm_expect = gm_expect ** np.array([1., -1.])
-    pm_expect = np.rad2deg(np.arccos(2. / gm_expect.sum()))
-    pm_expect = [-pm_expect, pm_expect]
+    np.testing.assert_allclose(margins['disk_margin'], 0.46, atol=0.01)
+    np.testing.assert_allclose(margins['critical_frequency'], 1.94, atol=0.05)
 
-    np.testing.assert_allclose(margins['disk_margin'], 0.46, atol=0.1)
-    np.testing.assert_allclose(margins['critical_frequency'], 1.94, atol=0.1)
-    np.testing.assert_allclose(margins['gain_margin'], gm_expect, atol=1e-12)
+    gm = margins['gain_margin']
+    pm_expect = (1. + gm.prod()) / gm.sum()
+    pm_expect = np.rad2deg(np.arccos(pm_expect)) * np.array([-1., 1.])
+
+    np.testing.assert_allclose(gm, [0.63, 1.59], atol=0.01)
     np.testing.assert_allclose(margins['phase_margin'], pm_expect, atol=1e-12)
+
+
+def test_disk_margins_mimo():
+    A = np.array([[-0.2529, 0.6962, -1.9870, -9.7491, 0],
+                  [-0.6108, -3.6183, 19.4199, -0.9979, 0],
+                  [0.3036, -2.9669, -4.2358, 0, 0],
+                  [0, 0, 1, 0, 0],
+                  [0.1018, -0.9948, 0, 20, 0]])
+    B = np.array([[-0.0025, 5.3843],
+                  [-1.6575, 0],
+                  [-23.1119, 0],
+                  [0, 0],
+                  [0, 0]])
+    Q = np.diag([1.,
+                 1.,
+                 np.deg2rad(30.) ** -2,
+                 np.deg2rad(5.) ** -2,
+                 100. ** -2])
+    R = np.diag([np.deg2rad(30.) ** -2,
+                 1.])
+
+    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-10., x0_ub=10.)
+    ctrl = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
+
+    margins = analyze.disk_margins(ocp, ctrl, ctrl.xf, tol=1e-10)
+
+    np.testing.assert_allclose(margins['disk_margin'], 1.8633, atol=0.01)
+    np.testing.assert_allclose(margins['critical_frequency'], 27.1031, atol=0.5)
+
+    gm_expect = [0.0354, 28.2696]
+    pm_expect = [-85.9482, 85.9482]
+
+    np.testing.assert_allclose(margins['gain_margin'], gm_expect, rtol=0.05)
+    np.testing.assert_allclose(margins['phase_margin'], pm_expect, rtol=0.05)

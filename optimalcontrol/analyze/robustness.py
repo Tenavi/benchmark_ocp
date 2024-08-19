@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from scipy.optimize import minimize
 
 
-def disk_margins(ocp, controller, x, w=np.logspace(-1., 2., 100), skew=0.,
+def disk_margins(ocp, controller, x, w=np.logspace(-1., 2., 300), skew=0.,
                  bound='tight', plot=False, **minimize_kwargs):
     """
     Evaluate multi-loop disk margins at the input channel for the closed-loop
@@ -101,7 +101,6 @@ def disk_margins(ocp, controller, x, w=np.logspace(-1., 2., 100), skew=0.,
     # Generate analysis matrices
     A, B = ocp.jac(x, u)
     K = controller.jac(x, u)
-
     L, _ = _loop_gain(w, A, B, K)
 
     dm, S, M = _disk_margins_general(w, L, **minimize_kwargs)
@@ -209,26 +208,23 @@ def _loop_gain(w, A, B, K):
 
 
 def _sensitivity(L):
-    S = L + np.eye(L.shape[1])[None, ...]
-    return np.linalg.inv(S)
+    Sinv = L + np.eye(L.shape[1])[None, ...]
+    return np.linalg.inv(Sinv)
 
 
 def _system_matrix(S, skew=0.):
-    if np.isclose(skew, 0., atol=1e-07):
-        return S.copy()
-
     return S + (skew - 1.) / 2. * np.eye(S.shape[1])[None, ...]
 
 
 def _scale_matrix(d, M):
-    """Batch computes the matrix product diag(d) @ M @ diag(1 / d)."""
-    M_D_inv = np.einsum('ij...,i...->ij...', M, 1. / d)
-    return np.einsum('i...,ij...->ij...', d, M_D_inv)
+    """Batch computes the matrix product diag(d) @ M @ inv(diag(d))."""
+    M_D_inv = np.einsum('...ij,...j->...ij', M, 1. / d)
+    return np.einsum('...ij,...i->...ij', M_D_inv, d)
 
 
 def _mu_svd(d, M):
-    S = np.linalg.svd(_scale_matrix(d, M), compute_uv=False)
-    return S.max(axis=-1)
+    sigma = np.linalg.svd(_scale_matrix(d, M), compute_uv=False)
+    return sigma.max(axis=-1)
 
 
 def _mu_fro(d, M):
