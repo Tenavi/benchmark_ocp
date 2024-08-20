@@ -252,7 +252,7 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
 
         # If the ODE solution fails too early we run into problems, so make sure
         # time advances at least a little
-        t1 = np.maximum(ode_sol.t[-1], sols[-1].t[1])
+        t1 = np.maximum(ode_sol.t[-1], sols[-1].t[1] / 2.)
 
         if len(sols) >= max_n_segments:
             if len(t_break) >= 1:
@@ -282,8 +282,8 @@ def solve_infinite_horizon(ocp, t, x, u, time_map='log2', time_scale=1.,
 
         # If time hasn't advanced far, this indicates we may need more nodes to
         # solve the problem
-        if t1 < sols[-1].t[2]:
-            n_nodes = n_nodes + 1
+        if t1 < sols[-1].t[1]:
+            n_nodes = n_nodes + 2
             if verbose:
                 print(f"Previous Bellman segment was very short. Increasing "
                       f"number of LGR nodes to {n_nodes:d}.")
@@ -354,7 +354,6 @@ def _solve_infinite_horizon(ocp, t, x, u, time_scale=1.,
         Solution of the open-loop OCP. Should only be trusted if
         `sol.status==0`.
     """
-
     tau, w, D = radau.make_scaled_lgr(n_nodes, time_scale=time_scale,
                                       time_map_deriv=time_map.derivative)
     cost_fun, dyn_constr, bounds = setup_nlp.setup(ocp, x[:, 0], tau, w, D,
@@ -367,7 +366,7 @@ def _solve_infinite_horizon(ocp, t, x, u, time_scale=1.,
     xu = setup_nlp.collect_vars(x, u, order=reshape_order)
 
     if verbose:
-        print(f"\nNumber of LGR nodes: {n_nodes}")
+        print(f"\nSolving problem with {n_nodes} LGR nodes")
         print("-" * 80)
 
     minimize_opts = {'maxiter': max_iter, 'iprint': verbose, 'disp': verbose}
@@ -421,20 +420,14 @@ def _setup_open_loop(ocp, t1_tol, interp_tol):
 
 
 def _get_next_segment_guess(last_sol, t1, x1):
-    idx = last_sol.t >= t1
-    # Need at least two points
-    idx[-2:] = True
+    idx = last_sol.t > t1
 
-    t = last_sol.t[idx]
-    t1 = np.minimum(t1, t[0])
+    t = np.concatenate(([0.], last_sol.t[idx] - t1))
 
     # Set the initial condition to the one obtained by integration
     x = np.hstack((x1.reshape(-1, 1), last_sol.x[:, idx]))
 
     u1 = last_sol(t1, return_x=False, return_p=False, return_v=False)
     u = np.hstack((u1.reshape(-1, 1), last_sol.u[:, idx]))
-
-    # Time starts at zero. Add a small constant to keep points distinct
-    t = np.concatenate(([0.], t - t1 + 1e-07))
 
     return t, x, u

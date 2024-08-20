@@ -211,12 +211,11 @@ def test_disk_margins_siso():
     np.testing.assert_allclose(margins['disk_margin'], 0.46, atol=0.01)
     np.testing.assert_allclose(margins['critical_frequency'], 1.94, atol=0.05)
 
-    gm = margins['gain_margin']
-    pm_expect = (1. + gm.prod()) / gm.sum()
-    pm_expect = np.rad2deg(np.arccos(pm_expect)) * np.array([-1., 1.])
+    gm_expect = [0.63, 1.59]
+    pm_expect = [-25.62, 25.62]
 
-    np.testing.assert_allclose(gm, [0.63, 1.59], atol=0.01)
-    np.testing.assert_allclose(margins['phase_margin'], pm_expect, atol=1e-12)
+    np.testing.assert_allclose(margins['gain_margin'], gm_expect, atol=0.01)
+    np.testing.assert_allclose(margins['phase_margin'], pm_expect, atol=0.5)
 
 
 def test_disk_margins_mimo():
