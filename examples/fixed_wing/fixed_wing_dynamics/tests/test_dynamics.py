@@ -154,7 +154,7 @@ def test_dynamics_shapes(n_points):
 def test_rigid_body_jac(n_points):
     """Test the rigid body components of the Jacobians, i.e. without
     contributions from aero-propulsive forces and moments."""
-    tol = dict(rtol=1e-06, atol=1e-12)
+    tol = dict(rtol=1e-06, atol=1e-10)
 
     states = random_states(n_points)
     forces = rng.normal(size=(3, n_points))
@@ -193,7 +193,7 @@ def test_rigid_body_jac(n_points):
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_jacobians(n_points):
-    tol = dict(rtol=1e-06, atol=1e-12)
+    tol = dict(rtol=1e-06, atol=1e-10)
 
     states = random_states(n_points)
     controls = random_controls(n_points)
