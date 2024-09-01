@@ -27,6 +27,7 @@ def solve_fixed_time(ocp, t, x, u, n_nodes=32, n_nodes_init=None, tol=1e-06,
 
     Parameters
     ----------
+
     ocp : OptimalControlProblem
         The optimal control problem to solve.
     t : (n_points,) array

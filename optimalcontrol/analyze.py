@@ -2,8 +2,52 @@ import warnings
 
 import numpy as np
 
-from optimalcontrol.simulate import integrate_to_converge
-from optimalcontrol.utilities import closed_loop_jacobian
+from .simulate import integrate_to_converge
+from .utilities import closed_loop_jacobian
+
+
+def linear_stability(ocp, controller, x, zero_tol=1e-08):
+    r"""
+    Find the eigenvalues and the maximum non-zero eigenvalue of the closed-loop
+    Jacobian matrix, $Df/Dx = df/dx + df/du \cdot du/dx$.
+
+    Parameters
+    ----------
+    ocp : `OptimalControlProblem`
+        The dynamical system to analyze.
+    controller : `Controller`
+        The feedback controller closing the loop.
+    x : (`ocp.n_states`,) array
+        Equilibrium point to analyze.
+    zero_tol : float, default=1e-08
+        Tolerance for considering an eigenvalue to have zero real part, i.e.
+        eigenvalues with `abs(real(eigs)) < zero_tol` are considered to be zero.
+
+    Returns
+    -------
+    jac : (`ocp.n_states`, `ocp.n_states`) array
+        Closed-loop Jacobian at `x`.
+    eigs : (n_states,) complex array
+        Eigenvalues of `jac`, ordered from largest to largest real part.
+    max_eig : complex scalar
+        Largest non-zero eigenvalue of `jac`.
+    """
+    x = np.reshape(x, (ocp.n_states,))
+    jac = closed_loop_jacobian(x, ocp.jac, controller)
+
+    eigs = np.linalg.eigvals(jac)
+    eigs = eigs[np.argsort(eigs.real)]
+    i = eigs.shape[0] - 1
+    max_eig = eigs[i]
+
+    while np.isclose(max_eig.real, 0., atol=zero_tol) and i >= 1:
+        i -= 1
+        max_eig = eigs[i]
+
+    print(f"Largest non-zero Jacobian eigenvalue = "
+          f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
+
+    return jac, eigs, max_eig
 
 
 def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
@@ -80,47 +124,3 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
         return x, status
 
     return x[:, status == 0].reshape(-1), status
-
-
-def linear_stability(ocp, controller, x, zero_tol=1e-08):
-    r"""
-    Find the eigenvalues and the maximum non-zero eigenvalue of the closed-loop
-    Jacobian matrix, $Df/Dx = df/dx + df/du \cdot du/dx$.
-
-    Parameters
-    ----------
-    ocp : `OptimalControlProblem`
-        The dynamical system to analyze.
-    controller : `Controller`
-        The feedback controller closing the loop.
-    x : (`ocp.n_states`,) array
-        Equilibrium point to analyze.
-    zero_tol : float, default=1e-08
-        Tolerance for considering an eigenvalue to have zero real part, i.e.
-        eigenvalues with `abs(real(eigs)) < zero_tol` are considered to be zero.
-
-    Returns
-    -------
-    jac : (`ocp.n_states`, `ocp.n_states`) array
-        Closed-loop Jacobian at `x`.
-    eigs : (n_states,) complex array
-        Eigenvalues of `jac`, ordered from largest to largest real part.
-    max_eig : complex scalar
-        Largest non-zero eigenvalue of `jac`.
-    """
-    x = np.reshape(x, (ocp.n_states,))
-    jac = closed_loop_jacobian(x, ocp.jac, controller)
-
-    eigs = np.linalg.eigvals(jac)
-    eigs = eigs[np.argsort(eigs.real)]
-    i = eigs.shape[0] - 1
-    max_eig = eigs[i]
-
-    while np.isclose(max_eig.real, 0., atol=zero_tol) and i >= 1:
-        i -= 1
-        max_eig = eigs[i]
-
-    print(f"Largest non-zero Jacobian eigenvalue = "
-          f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
-
-    return jac, eigs, max_eig

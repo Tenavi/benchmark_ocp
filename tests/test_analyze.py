@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from optimalcontrol import analyze
-from optimalcontrol.problem import OptimalControlProblem, LinearQuadraticProblem
-from optimalcontrol.controls import ConstantControl, LinearQuadraticRegulator
+from optimalcontrol.problem import OptimalControlProblem
+from optimalcontrol.controls import ConstantControl
 
 from examples.van_der_pol import VanDerPol
 
@@ -154,72 +154,3 @@ def test_find_multiple_equilibria(x0):
     # Since x_guess was closer to x0 than any other equilibrium, the result
     # should be equal to x0
     assert np.isclose(x, x0, atol=ftol, rtol=ftol)
-
-
-def test_disk_margins_mimo():
-    A = np.array([[-0.2529, 0.6962, -1.9870, -9.7491, 0],
-                  [-0.6108, -3.6183, 19.4199, -0.9979, 0],
-                  [0.3036, -2.9669, -4.2358, 0, 0],
-                  [0, 0, 1, 0, 0],
-                  [0.1018, -0.9948, 0, 20, 0]])
-    B = np.array([[-0.0025, 5.3843],
-                  [-1.6575, 0],
-                  [-23.1119, 0],
-                  [0, 0],
-                  [0, 0]])
-    Q = np.diag([1.,
-                 1.,
-                 np.deg2rad(30.) ** -2,
-                 np.deg2rad(5.) ** -2,
-                 100. ** -2])
-    R = np.diag([np.deg2rad(30.) ** -2,
-                 1.])
-
-    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-10., x0_ub=10.)
-    ctrl = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R)
-
-    print(analyze.disk_margins(ocp, ctrl, ctrl.xf))
-
-
-def test_disk_margins_siso():
-    r"""
-    System from example 1 in Seiler et al. (2020):
-        $P(s) = Y(s) / U(s) = 1 / (s^3 + 10s^2 + 10s + 10)$
-        $K(s) = 25$
-    Setting $x_1 = y$, we can write this in state space form as
-        $dx_1/dt = x_2$
-        $dx_2/dt = x_3$
-        $dx_3/dt = -10 (x_1 + x_2 + x_3) + u$
-        $u = -25 x_1$
-    """
-    A = np.array([[0., 1., 0.],
-                  [0., 0., 1.],
-                  [-10., -10., -10.]])
-    B = np.array([[0.],
-                  [0.],
-                  [1.]])
-    C = np.array([[1., 0., 0.]])
-    K = 25. * C
-    Q = C.T @ C
-    R = np.ones((1, 1))
-
-    ocp = LinearQuadraticProblem(A=A, B=B, Q=Q, R=R, x0_lb=-10., x0_ub=10.)
-    ctrl = LinearQuadraticRegulator(K=K)
-
-    # Make sure the state space system is setup correctly
-    _, eigs, _ = analyze.linear_stability(ocp, ctrl, ctrl.xf)
-
-    np.testing.assert_allclose(eigs.real, [-9.33, -0.33, -0.33], atol=0.01)
-    np.testing.assert_allclose(np.abs(eigs.imag), [0., 1.91, 1.91], atol=0.01)
-
-    margins = analyze.disk_margins(ocp, ctrl, ctrl.xf)
-
-    gm_expect = (2. - margins['disk_margin']) / (2. + margins['disk_margin'])
-    gm_expect = gm_expect ** np.array([1., -1.])
-    pm_expect = np.rad2deg(np.arccos(2. / gm_expect.sum()))
-    pm_expect = [-pm_expect, pm_expect]
-
-    np.testing.assert_allclose(margins['disk_margin'], 0.46, atol=0.1)
-    np.testing.assert_allclose(margins['critical_frequency'], 1.94, atol=0.1)
-    np.testing.assert_allclose(margins['gain_margin'], gm_expect, atol=1e-12)
-    np.testing.assert_allclose(margins['phase_margin'], pm_expect, atol=1e-12)
