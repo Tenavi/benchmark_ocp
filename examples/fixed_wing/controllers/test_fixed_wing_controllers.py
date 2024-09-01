@@ -11,12 +11,13 @@ from examples.fixed_wing.controllers import FixedWingLQR
 from examples.fixed_wing import example_config as config
 
 
+ocp = FixedWing(**config.params)
+lqr = FixedWingLQR(ocp)
+
+
 @pytest.mark.parametrize('n_points', [1, 2])
 @pytest.mark.parametrize('quat_sign', [1., -1.])
 def test_lqr_jac(n_points, quat_sign):
-    ocp = FixedWing(**config.params)
-    lqr = FixedWingLQR(ocp)
-
     # Test at single point
     x = ocp.sample_initial_conditions(n_points)
     x[-1] *= quat_sign
@@ -32,9 +33,6 @@ def test_lqr_jac(n_points, quat_sign):
 
 
 def test_locally_stable():
-    ocp = FixedWing(**config.params)
-    lqr = FixedWingLQR(ocp)
-
     # Expected trim states and controls
     x_trim = ocp.trim_state
     u_trim = ocp.trim_controls
@@ -50,7 +48,8 @@ def test_locally_stable():
     np.testing.assert_allclose(lqr(xf), u_trim, atol=1e-03, rtol=1e-05)
 
     # LQR should be linearly stable at trim
-    _, _, max_eig = analyze.linear_stability(ocp, lqr, xf, zero_tol=1e-06)
+    _, _, max_eig = analyze.linear_stability(ocp, lqr, xf, zero_tol=1e-06,
+                                             verbose=False)
 
     # Verify that a small perturbation from trim returns to trim
     x0 = ocp.sample_initial_conditions(distance=1e-03).reshape(-1, 1)

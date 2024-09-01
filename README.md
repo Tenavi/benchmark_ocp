@@ -22,9 +22,9 @@ If you use this software, please cite the software package and the relevant publ
 
 ## Installation
 
-First create a python environment (using e.g. conda or pip) with
+First create a python environment (using e.g. `conda` or `virtualenv`) with
 
-    python>=3.8
+    python>=3.9
 
 Activate the environment, then install the `optimalcontrol` package (in
 developer mode), run
@@ -36,7 +36,7 @@ dependencies:
     
     numpy>=1.21
     pandas>=1.3
-    scipy>=1.10
+    scipy>=1.11
     tqdm
     pytest
     jupyter
