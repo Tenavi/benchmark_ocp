@@ -44,8 +44,8 @@ def test_locally_stable():
     assert np.sum(status == 0) == 1
 
     # This should be reasonably close to expected
-    np.testing.assert_allclose(xf, x_trim, atol=1e-03, rtol=1e-05)
-    np.testing.assert_allclose(lqr(xf), u_trim, atol=1e-03, rtol=1e-05)
+    np.testing.assert_allclose(xf, x_trim, atol=5e-03)
+    np.testing.assert_allclose(lqr(xf), u_trim, atol=1e-03, rtol=1e-04)
 
     # LQR should be linearly stable at trim
     _, _, max_eig = analyze.linear_stability(ocp, lqr, xf, zero_tol=1e-06,

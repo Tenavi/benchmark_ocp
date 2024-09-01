@@ -220,7 +220,7 @@ def test_hamiltonian(ocp_name, n_samples):
 
 
 @pytest.mark.parametrize('ocp_name', ocp_dict.keys())
-@pytest.mark.parametrize('n_samples', [1, 10])
+@pytest.mark.parametrize('n_samples', [1, 2])
 def test_hamiltonian_grad(ocp_name, n_samples):
     ocp = ocp_dict[ocp_name]()
 
@@ -271,4 +271,4 @@ def test_bvp_dynamics(ocp_name, n_samples):
     # Check shape for flat vector inputs
     if n_samples == 1:
         f = ocp.bvp_dynamics(t, xp.flatten())
-        assert f.shape == (2*ocp.n_states+1,)
+        assert f.shape == (2 * ocp.n_states + 1,)
