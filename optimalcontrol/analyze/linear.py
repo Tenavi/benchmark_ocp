@@ -82,7 +82,7 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
     return x[:, status == 0].reshape(-1), status
 
 
-def linear_stability(ocp, controller, x, zero_tol=1e-08, verbose=True):
+def linear_stability(ocp, controller, x, zero_tol=1e-08):
     r"""
     Find the eigenvalues and the maximum non-zero eigenvalue of the closed-loop
     Jacobian matrix, $Df/Dx = df/dx + df/du \cdot du/dx$.
@@ -98,8 +98,6 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08, verbose=True):
     zero_tol : float, default=1e-08
         Tolerance for considering an eigenvalue to have zero real part, i.e.
         eigenvalues with `abs(real(eigs)) < zero_tol` are considered to be zero.
-    verbose : bool, default=True
-        If `verbose=True` (default), then print out the largest eigenvalue.
 
     Returns
     -------
@@ -122,8 +120,7 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08, verbose=True):
         i -= 1
         max_eig = eigs[i]
 
-    if verbose:
-        print(f"Largest non-zero Jacobian eigenvalue = "
-              f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
+    print(f"Largest non-zero Jacobian eigenvalue = "
+          f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
 
     return jac, eigs, max_eig
