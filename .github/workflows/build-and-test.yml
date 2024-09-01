@@ -6,7 +6,12 @@ name: benchmarkocp
 
 on:
   pull_request:
-    branches: [ "main" ]
+    types:
+      - opened
+      - reopened
+  push:
+    branches:
+      - 'main'
 
 permissions:
   contents: read
