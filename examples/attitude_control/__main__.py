@@ -119,7 +119,7 @@ nn_control = supervised_learning.QuaternionControlWrapper(
     **config.nn_kwargs)
 nn_control.train(x_train, u_train)
 
-controllers = (lqr, poly_control, k_nn_control, k_nn_lqr, nn_control)
+controllers = (lqr, poly_control, k_nn_control, nn_control)
 
 print("\n" + "+" * 80)
 
