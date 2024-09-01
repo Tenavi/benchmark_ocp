@@ -63,8 +63,8 @@ def test_SimpleQRnet(n_x, n_u):
     np.testing.assert_array_equal(ctrl.u_ub, u_ub)
 
     # Generate linear training data using lqr
-    x_train = rng.normal(xf, size=(n_x, 10))
-    x_test = rng.normal(xf, size=(n_x, 10))
+    x_train = rng.normal(xf, size=(n_x, 100))
+    x_test = rng.normal(xf, size=(n_x, 50))
     u_train = lqr(x_train)
 
     ctrl.train(x_train, u_train)
@@ -79,7 +79,7 @@ def test_SimpleQRnet(n_x, n_u):
     np.testing.assert_allclose(ctrl(x_test), lqr(x_test), rtol=1e-10)
 
     # Now modify the data to have nonlinearities and retrain
-    k2, k3 = 0.1, -0.01
+    k2, k3 = 0.5, -0.1
     u_train = lqr(x_train) + k2 * x_train ** 2 + k3 * x_train ** 3
 
     ctrl.train(x_train, u_train)
