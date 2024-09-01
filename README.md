@@ -1,4 +1,4 @@
-# benchmark_ocp
+# Benchmark problems for optimal feedback control
 
 ##### Authors
 * Tenavi Nakamura-Zimmerer (tenavi.nz@gmail.com)
@@ -20,15 +20,16 @@ If you use this software, please cite the software package and the relevant publ
 
 ---
 
-# Installation
+## Installation
 
 First create a python environment (using e.g. conda or pip) with
 
     python>=3.8
 
-Then to install the `optimalcontrol` package (in developer mode), run
+Activate the environment, then install the `optimalcontrol` package (in
+developer mode), run
 
-    pip install -e .
+    pip install -e . --config-settings editable_mode=compat
 
 This package and the examples have been developed and tested with the following software
 dependencies:
@@ -66,7 +67,7 @@ Then from the root directory, run
 
 ---
 
-# The `optimalcontrol` package
+## The `optimalcontrol` package
 
 The `optimalcontrol` package is made up of the following modules:
 
@@ -86,4 +87,4 @@ The `optimalcontrol` package is made up of the following modules:
 
 ---
 
-# The benchmark `examples`
+## The benchmark `examples`

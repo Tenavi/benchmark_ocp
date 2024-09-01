@@ -6,7 +6,7 @@ from .simulate import integrate_to_converge
 from .utilities import closed_loop_jacobian
 
 
-def linear_stability(ocp, controller, x, zero_tol=1e-08):
+def linear_stability(ocp, controller, x, zero_tol=1e-08, verbose=True):
     r"""
     Find the eigenvalues and the maximum non-zero eigenvalue of the closed-loop
     Jacobian matrix, $Df/Dx = df/dx + df/du \cdot du/dx$.
@@ -22,6 +22,8 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08):
     zero_tol : float, default=1e-08
         Tolerance for considering an eigenvalue to have zero real part, i.e.
         eigenvalues with `abs(real(eigs)) < zero_tol` are considered to be zero.
+    verbose : bool, default=True
+        If `verbose=True` (default), then print out the largest eigenvalue.
 
     Returns
     -------
@@ -44,8 +46,9 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08):
         i -= 1
         max_eig = eigs[i]
 
-    print(f"Largest non-zero Jacobian eigenvalue = "
-          f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
+    if verbose:
+        print(f"Largest non-zero Jacobian eigenvalue = "
+              f"{max_eig.real:.4g} + j{np.abs(max_eig.imag):.4g}")
 
     return jac, eigs, max_eig
 

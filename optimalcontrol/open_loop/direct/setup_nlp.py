@@ -82,7 +82,8 @@ def make_objective_fun(ocp, w, order='F'):
         L = ocp.running_cost(x, u)
         dLdx, dLdu = ocp.running_cost_grad(x, u, L0=L)
 
-        cost = np.dot(L, w)
+        cost = np.einsum('i,i', L, w)
+
         jac = collect_vars(dLdx * w, dLdu * w, order=order)
 
         return cost, jac
@@ -115,8 +116,7 @@ def make_dynamic_constraint(ocp, D, order='F'):
     """
     def dynamics_constr_fun(x, u):
         f = ocp.dynamics(x, u)
-        Dx = np.matmul(x, D.T)
-        return f - Dx
+        return f - np.einsum('ij,kj->ik', x, D)
 
     return make_nonlinear_constraint(ocp.n_states, ocp.n_controls, D.shape[0],
                                      dynamics_constr_fun, jac=ocp.jac,
@@ -360,7 +360,4 @@ def interp_guess(t, x, u, t_interp):
     x_interp = make_interp_spline(t, x, k=1, axis=-1)
     u_interp = make_interp_spline(t, u, k=1, axis=-1)
 
-    x_interp = x_interp(t_interp)
-    u_interp = u_interp(t_interp)
-
-    return x_interp, u_interp
+    return x_interp(t_interp), u_interp(t_interp)
