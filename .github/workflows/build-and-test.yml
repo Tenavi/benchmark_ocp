@@ -5,9 +5,10 @@
 name: benchmarkocp
 
 on:
-  - pull_request
-  - push:
-      branches: 'main'
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: 'main'
 
 permissions:
   contents: read
