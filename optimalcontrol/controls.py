@@ -169,11 +169,10 @@ class LinearQuadraticRegulator(Controller):
             self._RB = np.linalg.solve(R, np.transpose(B))
             self.K = np.matmul(self._RB, self.P)
 
+        self.A, self.B, self.Q, self.R = A, B, Q, R
+
         self.xf = utilities.resize_vector(xf, self.K.shape[1])
         self.uf = utilities.resize_vector(uf, self.K.shape[0])
-
-        self.n_states = self.xf.shape[0]
-        self.n_controls = self.uf.shape[0]
 
         self.u_lb, self.u_ub = u_lb, u_ub
 
@@ -181,6 +180,16 @@ class LinearQuadraticRegulator(Controller):
             self.u_lb = utilities.resize_vector(self.u_lb, self.n_controls)
         if self.u_ub is not None:
             self.u_ub = utilities.resize_vector(self.u_ub, self.n_controls)
+
+    @property
+    def n_states(self):
+        """The number of system states (positive int)."""
+        return self.xf.shape[0]
+
+    @property
+    def n_controls(self):
+        """The number of control inputs to the system (positive int)."""
+        return self.uf.shape[0]
 
     @staticmethod
     def solve_care(A, B, Q, R, zero_tol=1e-12):

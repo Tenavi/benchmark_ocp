@@ -16,7 +16,7 @@ class FixedWingLQR(LinearQuadraticRegulator):
         super().__init__(A=A, B=B, Q=Q, R=R, xf=xf, uf=uf,
                          u_lb=ocp.control_lb, u_ub=ocp.control_ub)
 
-        self._h_scale = ocp.parameters.h_cost_ceil
+        self._h_scale = ocp.parameters.h_scale
 
     def __call__(self, x):
         # Rescale altitude so LQR doesn't act badly for large commands

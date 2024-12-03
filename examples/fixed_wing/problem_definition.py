@@ -12,19 +12,18 @@ from .fixed_wing_dynamics.dynamics import dynamics as dynamics_fun
 from .fixed_wing_dynamics.dynamics import jacobians as jac_fun
 from .vehicle_models import aerosonde
 
-
 _va_target_default = 25.
-_h_cost_ceil_default = 100.
-_Q_default = VehicleState(h=1.,
+_h_scale_default = 100.
+_Q_default = VehicleState(h=400.,
                           u=1.,
                           v=1.,
                           w=1.,
-                          p=np.deg2rad(15.) ** -2,
-                          q=np.deg2rad(15.) ** -2,
-                          r=np.deg2rad(15.) ** -2,
+                          p=np.deg2rad(30.) ** -2,
+                          q=np.deg2rad(30.) ** -2,
+                          r=np.deg2rad(30.) ** -2,
                           attitude=[1., 1., 1., 0.]).to_array()
-_R_default = ((aerosonde.constants.max_controls
-              - aerosonde.constants.min_controls) ** -2).to_array()
+_R_default = aerosonde.constants.max_controls - aerosonde.constants.min_controls
+_R_default = ((_R_default / 2.) ** -2).to_array()
 _x0_max_perturb_default = VehicleState(h=100.,
                                        u=5.,
                                        v=5.,
@@ -56,7 +55,7 @@ class FixedWing(OptimalControlProblem):
     _required_parameters = {'vehicle_parameters': aerosonde.constants,
                             'aero_model': aerosonde.aero_model,
                             'va_target': _va_target_default,
-                            'h_cost_ceil': _h_cost_ceil_default,
+                            'h_scale': _h_scale_default,
                             'Q': _Q_default,
                             'R': _R_default,
                             'x0_max_perturb': _x0_max_perturb_default,
@@ -98,9 +97,9 @@ class FixedWing(OptimalControlProblem):
 
     @staticmethod
     def _parameter_update_fun(obj, **new_params):
-        if 'h_cost_ceil' in new_params:
-            if obj.h_cost_ceil < 1.:
-                raise ValueError("h_cost_ceil must be >= 1")
+        if 'h_scale' in new_params:
+            if obj.h_scale < 1.:
+                raise ValueError("h_scale must be >= 1")
 
         if 'vehicle_parameters' in new_params:
             obj.u_lb = obj.vehicle_parameters.min_controls.to_array(copy=True)
@@ -194,7 +193,7 @@ class FixedWing(OptimalControlProblem):
             x, u, self.parameters.trim_state.to_array(),
             self.parameters.trim_controls.to_array())
 
-        x_err[0] = scale_altitude(x_err[0], self.parameters.h_cost_ceil)
+        x_err[0] = scale_altitude(x_err[0], self.parameters.h_scale)
 
         L = (np.sum((self.parameters.Q / 2.) * x_err ** 2, axis=0)
              + np.sum((self.parameters.R / 2.) * u_err ** 2, axis=0))
@@ -212,9 +211,9 @@ class FixedWing(OptimalControlProblem):
 
         if return_dLdx:
             # Chain rule for tanh
-            x_err[0] /= self.parameters.h_cost_ceil
+            x_err[0] /= self.parameters.h_scale
             x_err[0] = np.sinh(x_err[0]) / np.cosh(x_err[0]) ** 3
-            x_err[0] /= self.parameters.h_cost_ceil
+            x_err[0] /= self.parameters.h_scale
 
             dLdx = self.parameters.Q * x_err
 
@@ -239,9 +238,9 @@ class FixedWing(OptimalControlProblem):
 
         if return_dLdx:
             # Chain rule for tanh
-            h_err = x[0] / self.parameters.h_cost_ceil
+            h_err = x[0] / self.parameters.h_scale
             h_err = (1. - 2. * np.sinh(h_err) ** 2) / np.cosh(h_err) ** 4
-            h_err /= self.parameters.h_cost_ceil ** 2
+            h_err /= self.parameters.h_scale ** 2
 
             if squeeze:
                 Q = self.parameters.Q_2_diag.copy()
