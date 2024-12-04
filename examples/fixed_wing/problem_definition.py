@@ -23,7 +23,7 @@ _Q_default = VehicleState(h=400.,
                           r=np.deg2rad(30.) ** -2,
                           attitude=[1., 1., 1., 0.]).to_array()
 _R_default = aerosonde.constants.max_controls - aerosonde.constants.min_controls
-_R_default = ((_R_default / 2.) ** -2).to_array()
+_R_default = (_R_default.to_array() / 2.) ** -2
 _x0_max_perturb_default = VehicleState(h=100.,
                                        u=5.,
                                        v=5.,
