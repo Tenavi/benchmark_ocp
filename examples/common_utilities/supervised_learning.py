@@ -161,9 +161,10 @@ class PolynomialController(SupervisedController):
     `x_data` (and `t_data`) to `u_data`. The polynomial is implemented with
     `sklearn.preprocessing.PolynomialFeatures` and a choice of model from
     `sklearn.linear_model`, controlled by the `linear_model` keyword
-    (default='Ridge'). Note that if `n_controls > 1` and a cross alidation-based
-    `linear_model` is used, this is not natively supported in `sklearn` so the
-    regressor will be wrapped with `sklearn.multioutput.MultiOutputRegressor`.
+    (default='Ridge'). Note that if `n_controls > 1` and a cross
+    validation-based `linear_model` is used, this is not natively supported in
+    `sklearn` so the regressor will be wrapped with
+    `sklearn.multioutput.MultiOutputRegressor`.
     """
     def _fit_regressor(self, x_scaled, u_scaled, degree=1, linear_model='Ridge',
                        **options):
@@ -194,7 +195,7 @@ class SimpleQRnet(SupervisedController):
     unlike the more advanced methods in ref. [2]. Furthermore, in this
     simplified implementation, the `u_model(xf)` term is not included during
     training, it is only added afterward. This should not make a large impact,
-    but including this term in training should slightly improve accuracy.
+    but including this term in training would slightly improve accuracy.
 
     ##### References
 
