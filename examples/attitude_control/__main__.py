@@ -96,27 +96,29 @@ _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 print("\nTraining polynomial controller...")
 try:
     poly_control = supervised_learning.QuaternionControlWrapper(
-        q0_state, supervised_learning.PolynomialController,
-        u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 2,
-        **config.poly_kwargs)
+        q0_state, supervised_learning.PolynomialController(
+            u_lb=ocp.control_lb, u_ub=ocp.control_ub,
+            random_state=random_seed + 2,
+            **config.poly_kwargs))
 # In case the linear_model doesn't take a random_state or verbose
 except TypeError:
     poly_control = supervised_learning.QuaternionControlWrapper(
-        q0_state, supervised_learning.PolynomialController,
-        u_lb=ocp.control_lb, u_ub=ocp.control_ub, **config.poly_kwargs)
+        q0_state, supervised_learning.PolynomialController(
+            u_lb=ocp.control_lb, u_ub=ocp.control_ub,
+            **config.poly_kwargs))
 poly_control.train(x_train, u_train)
 
 print("\nTraining K-neighbors-LQR...")
 k_nn_control = supervised_learning.QuaternionControlWrapper(
-    q0_state, supervised_learning.SimpleQRnet,
-    lqr, supervised_learning.KNeighborsController, **config.k_nn_kwargs)
+    q0_state, supervised_learning.SimpleQRnet(
+        lqr, supervised_learning.KNeighborsController(**config.k_nn_kwargs)))
 k_nn_control.train(x_train, u_train)
 
 print("\nTraining neural network controller...")
 nn_control = supervised_learning.QuaternionControlWrapper(
-    q0_state, supervised_learning.NeuralNetworkController,
-    u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 3,
-    **config.nn_kwargs)
+    q0_state, supervised_learning.NeuralNetworkController(
+        u_lb=ocp.control_lb, u_ub=ocp.control_ub,
+        random_state=random_seed + 3, **config.nn_kwargs))
 nn_control.train(x_train, u_train)
 
 controllers = (lqr, poly_control, k_nn_control, nn_control)
@@ -138,7 +140,7 @@ print("\n" + "+" * 80)
 for controller in controllers:
     train_r2 = controller.r2_score(x_train, u_train)
     test_r2 = controller.r2_score(x_test, u_test)
-    print(f"\n{controller} R2 score: {train_r2:.4f} (train),"
+    print(f"\n{controller} R2 score: {train_r2:.4f} (train), "
           f"{test_r2:.4f} (test)")
 
 print("\n" + "+" * 80 + "\n")
@@ -221,7 +223,6 @@ for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
         fig_name = f'closed_loop_{name}'
         figs[data_name][fig_name] = plotting.plot_closed_loop(
             sims[data_idx], t_max=2 * config.t_int,
-            #x_index=[3, 4], u_index=[0],
             x_labels=x_labels, u_labels=u_labels,
             subtitle=f'{name}, {data_name}')
 

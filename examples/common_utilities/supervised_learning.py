@@ -208,33 +208,30 @@ class SimpleQRnet(SupervisedController):
         Control Systems, 1 (2022), pp. 210-222.
         https://doi.org/10.1109/OJCSYS.2022.3205863
     """
-    def __init__(self, lqr, controller_class, **options):
+    def __init__(self, lqr, controller):
         """
         Parameters
         ----------
         lqr : `LinearQuadraticRegulator`
             Instance of `LinearQuadraticRegulator` for the linearized optimal
             control problem.
-        controller_class : reference to `SupervisedController` subclass
-            Reference to a subclass of `SupervisedController` which is used to
-            model the nonlinear parts of the optimal control.
-        **options : dict, default=`{'u_lb': lqr.u_lb, 'u_ub': lqr.u_ub}`
-            Keyword arguments to pass to `controller_class`.
+        controller : `SupervisedController`
+            Instance of a `SupervisedController` subclass which is used to model
+            nonlinear parts of the optimal control.
         """
-        kwargs = {'u_lb': lqr.u_lb, 'u_ub': lqr.u_ub, **options}
-        super().__init__(**kwargs)
+        super().__init__(u_lb=lqr.u_lb, u_ub=lqr.u_ub)
 
-        self.wrapped_controller = controller_class(**kwargs)
+        self.wrapped_controller = controller
         self._lqr = lqr
 
         self.xf = lqr.xf
         self._wrapped_uf = None
 
-        self._x_scaler = self.wrapped_controller._x_scaler
-        self._u_scaler = self.wrapped_controller._u_scaler
+        self._x_scaler = controller._x_scaler
+        self._u_scaler = controller._u_scaler
 
     def __str__(self):
-        return f"{str(self.wrapped_controller).strip('Controller')}+LQR"
+        return f"{str(self.wrapped_controller).replace('Controller', '')}+LQR"
 
     def train(self, x_data, u_data):
         self.wrapped_controller.train(x_data, u_data - self._lqr(x_data))
@@ -261,25 +258,20 @@ class QuaternionControlWrapper(SupervisedController):
     Wrapper of another `SupervisedController` which always treats a scalar
     quaternion state as positive.
     """
-    def __init__(self, q0_state, controller_class, *args, **kwargs):
+    def __init__(self, q0_state, controller):
         """
         Parameters
         ----------
         q0_state : int
             Index of the state which contains the scalar quaternion which should
             be transformed to be positive.
-        controller_class : reference to `SupervisedController` subclass
-            Reference to a subclass of `SupervisedController` which is used to
-            model the optimal control.
-        *args : tuple, optional
-            Positional arguments to pass to `controller_class`.
-        **kwargs : dict, optional
-            Keyword arguments to pass to `controller_class`.
+        controller : `SupervisedController`
+            Instance of a `SupervisedController` subclass which is used to model
+            the optimal control.
         """
+        super().__init__()
 
-        super().__init__(**kwargs)
-
-        self.wrapped_controller = controller_class(*args, **kwargs)
+        self.wrapped_controller = controller
         self._q0_state = int(q0_state)
 
         self._x_scaler = self.wrapped_controller._x_scaler
@@ -288,18 +280,19 @@ class QuaternionControlWrapper(SupervisedController):
     def __str__(self):
         return str(self.wrapped_controller)
 
-    def _make_positive_quaternion(self, x_in):
+    def _make_positive_q0(self, x_in):
         x_out = np.copy(x_in)
         x_out[self._q0_state] = np.abs(x_out[self._q0_state])
         return x_out
 
     def train(self, x_data, u_data):
-        self.wrapped_controller.train(self._make_positive_quaternion(x_data),
-                                      u_data)
+        self.wrapped_controller.train(self._make_positive_q0(x_data), u_data)
+        self.u_lb = self.wrapped_controller.u_lb
+        self.u_ub = self.wrapped_controller.u_ub
         self.train_time = self.wrapped_controller.train_time
 
     def __call__(self, x):
-        return self.wrapped_controller(self._make_positive_quaternion(x))
+        return self.wrapped_controller(self._make_positive_q0(x))
 
 
 def generate_data(ocp, guesses, verbose=0, **kwargs):

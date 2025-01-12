@@ -57,10 +57,11 @@ def test_SimpleQRnet(n_x, n_u):
                                    u_lb=u_lb, u_ub=u_ub)
 
     ctrl = supervised_learning.SimpleQRnet(
-        lqr, supervised_learning.PolynomialController, degree=3)
+        lqr, supervised_learning.PolynomialController(degree=3))
 
     np.testing.assert_array_equal(ctrl.u_lb, u_lb)
     np.testing.assert_array_equal(ctrl.u_ub, u_ub)
+    assert ctrl.wrapped_controller._options['degree'] == 3
 
     # Generate linear training data using lqr
     x_train = rng.normal(xf, size=(n_x, 100))
@@ -86,3 +87,38 @@ def test_SimpleQRnet(n_x, n_u):
 
     # There should be some differences between lqr and the new controls
     assert np.abs(ctrl(x_test) - lqr(x_test)).max() > 0.01
+
+
+@pytest.mark.parametrize('degree', [1, 2])
+def test_QuaternionControlWrapper(degree):
+    n_x, n_u = rng.integers(low=1, high=3, size=(2,))
+
+    u_lb = -1.
+    u_ub = 1.
+
+    # Generate training data
+    x_train = rng.uniform(low=-1., high=1., size=(n_x, 100))
+    u_train = np.sin(rng.normal(size=(n_u, n_x)) @ x_train)
+
+    kwargs = dict(u_lb=-1., u_ub=1., degree=degree)
+
+    for q0_idx in range(n_x):
+        ctrl = supervised_learning.QuaternionControlWrapper(
+            q0_idx, supervised_learning.PolynomialController(**kwargs))
+
+        assert ctrl.wrapped_controller._options['degree'] == degree
+
+        ctrl.train(x_train, u_train)
+
+        assert ctrl.n_states == n_x
+        assert ctrl.n_controls == n_u
+
+        np.testing.assert_array_equal(ctrl.u_lb, u_lb)
+        np.testing.assert_array_equal(ctrl.u_ub, u_ub)
+
+        assert ctrl.train_time is ctrl.wrapped_controller.train_time
+
+        x_train_neg = x_train.copy()
+        x_train_neg[q0_idx] *= -1
+
+        np.testing.assert_allclose(ctrl(x_train), ctrl(x_train_neg), rtol=1e-14)

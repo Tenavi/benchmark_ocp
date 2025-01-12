@@ -34,8 +34,6 @@ sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {}
 
-random_seed = 123
-
 # Keyword arguments for the polynomial, K-nearest neighbors, and NN controllers
 poly_kwargs = {'degree': 6, 'alpha': 0.5}
 
@@ -43,3 +41,5 @@ k_nn_kwargs = {'weights': 'distance', 'n_neighbors': 10}
 
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
              'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-03}
+
+random_seed = 123

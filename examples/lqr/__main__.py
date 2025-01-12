@@ -7,8 +7,9 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import r2_score
 from importlib.machinery import SourceFileLoader
 
-from optimalcontrol import controls, simulate, utilities, analyze
+from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.problem.linear_quadratic import LinearQuadraticProblem
+from optimalcontrol.controls import LinearQuadraticRegulator
 
 from examples.common_utilities import supervised_learning, plotting
 
@@ -29,7 +30,7 @@ if random_seed is None:
 rng = np.random.default_rng(random_seed + 1)
 
 ocp = LinearQuadraticProblem(**config.lqr_param_dict, **config.x0_bounds)
-lqr = controls.LinearQuadraticRegulator(**config.lqr_param_dict)
+lqr = LinearQuadraticRegulator(**config.lqr_param_dict)
 
 # First sample initial conditions
 x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,

@@ -5,7 +5,9 @@ import time
 from optimalcontrol import analyze
 from optimalcontrol.utilities import load_data, stack_dataframes
 
-from examples.common_utilities import supervised_learning
+from examples.common_utilities.supervised_learning import (
+    QuaternionControlWrapper, SimpleQRnet,
+    KNeighborsController, NeuralNetworkController, PolynomialController)
 
 from examples.fixed_wing.problem_definition import FixedWing
 from examples.fixed_wing.controllers import FixedWingLQR
@@ -38,19 +40,17 @@ if __name__ == '__main__':
     _, x_train, u_train, _, _ = stack_dataframes(*train_data)
     _, x_test, u_test, _, _ = stack_dataframes(*test_data)
 
-    controllers = [lqr,
-                   supervised_learning.QuaternionControlWrapper(
-                       q0_state, supervised_learning.SimpleQRnet,
-                       lqr, supervised_learning.KNeighborsController,
-                       **config.k_nn_kwargs),
-                   supervised_learning.QuaternionControlWrapper(
-                       q0_state, supervised_learning.NeuralNetworkController,
-                       u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-                       random_state=random_seed + 1, **config.nn_kwargs)]
+    controllers = [
+        lqr,
+        SimpleQRnet(lqr, PolynomialController(**config.poly_kwargs)),
+        SimpleQRnet(lqr, KNeighborsController(**config.k_nn_kwargs)),
+        SimpleQRnet(lqr, NeuralNetworkController(**config.nn_kwargs,
+                                                 random_state=random_seed + 1))]
 
-    for controller in controllers[1:]:
-        print(f"\nTraining {controller}...")
-        controller.train(x_train, u_train)
+    for i in range(1, len(controllers)):
+        print(f"\nTraining {controllers[i]}...")
+        controllers[i] = QuaternionControlWrapper(q0_state, controllers[i])
+        controllers[i].train(x_train, u_train)
 
     print("\n" + "+" * 80)
 

@@ -86,9 +86,9 @@ _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 print("\nTraining polynomial controller...")
 try:
     poly_control = supervised_learning.PolynomialController(
-        u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 2,
+        u_lb=ocp.control_lb, u_ub=ocp.control_ub,
+        random_state=random_seed + 2,
         **config.poly_kwargs)
-
 # In case the linear_model doesn't take random_state or verbose keywords
 except TypeError:
     poly_control = supervised_learning.PolynomialController(
