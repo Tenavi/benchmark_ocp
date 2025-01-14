@@ -144,4 +144,7 @@ if __name__ == '__main__':
     plot_slices(plot_1d, fun, beta, rudder, 'beta', 'rudder', zlabels,
                 va=va, p=0., r=0., aileron=0.)
 
+    plot_2d(aero.prop_forces, ['thrust', 'torque'],
+            va=np.linspace(15., 30., 16), throttle=np.linspace(0., 1.))
+
     plt.show()

@@ -26,17 +26,18 @@ if __name__ == '__main__':
                         help="If False (default), append new data to data.csv "
                              "if it already exists. If True, overwrite any "
                              "existing data.")
-    parser.add_argument('-t', '--split', choices={'train', 'test', ''},
+    parser.add_argument('-t', '--split', choices={'train', 'test'},
                         help="Specify 'train' or 'test' data, or leave "
                              "unchanged to save to a generic name.")
     args = parser.parse_args()
 
     n_x0 = max(1, args.n_traj)
     overwrite_data = args.overwrite_data
-    split = args.split
 
-    if split != '':
-        split = split + '_'
+    if args.split is None:
+        split = ''
+    else:
+        split = args.split + '_'
 
     ocp = FixedWing(x0_sample_seed=args.random_seed, **config.params)
 
@@ -58,7 +59,7 @@ if __name__ == '__main__':
 
     # Save data and LQR controller
     save_data(lqr_sims[status == 0],
-              os.path.join(config.data_dir, f'{split}LQR_sims.csv'),
+              os.path.join(config.data_dir, f'{split}{lqr}_sims.csv'),
               overwrite=overwrite_data)
     save_data(data[status == 0],
               os.path.join(config.data_dir, f'{split}data.csv'),
