@@ -1,6 +1,15 @@
+"""
+##### References
+1. R. W. Beard and T. W. McClain, Small Unmanned Aircraft: Theory and Practice,
+    Princeton University Press, Princeton, NJ, 2012.
+2. R. W. Beard and T. W. McClain, Small Unmanned Aircraft: Theory and Practice
+    [Supplement], Princeton University Press, Princeton, NJ, 2nd. ed., 2022.
+"""
+
 import numpy as np
 
 from examples.fixed_wing.fixed_wing_dynamics.containers import Controls
+
 
 mass = 11.  # [kg]
 rho = 1.2682  # air density, [kg / m^3]
@@ -12,7 +21,7 @@ eos = 0.9  # Oswald's Efficiency Factor [dimensionless between 0 and 1]
 
 # Some derived quantities
 AR = b ** 2 / S
-rhoS = 0.5 * rho * S
+half_rhoS = 0.5 * rho * S
 
 alpha_stall = np.deg2rad(20.)  # stall angle of attack [deg]
 aero_blend_rate = 50.  # barrier function coefficient for stall angle of attack
@@ -71,14 +80,14 @@ Cnr = -0.095
 CndeltaA = -0.011
 CndeltaR = -0.069
 
-# Basic propeller model
+# Basic propeller model from ref. [1]
 Sprop = 0.2027  # propeller area [m^2]
 kmotor = 32.  # motor constant, DIFFERENT FROM BEARD
 kTp = 0.  # motor torque constant
 kOmega = 0.  # motor speed constant
 Cprop = 0.45  # thrust efficiency coefficient, DIFFERENT FROM BEARD
 
-# Alternate propeller model from Beard supplement. Code adapted from
+# Propeller model from ref. [2]. Code adapted from
 #   https://github.com/randybeard/mavsim_public/blob/main/mavsim_python/parameters/aerosonde_parameters.py
 D_prop = 20. * 0.0254  # prop diameter [m]
 KV_rpm_per_volt = 145.  # Motor speed constant [RPM/V]
@@ -98,7 +107,7 @@ C_Q1 = 0.004970
 C_Q0 = 0.005230
 
 # Control constraints
-max_angle = np.deg2rad(25.)
+max_angle = np.deg2rad(45.)
 min_controls = Controls(throttle=0.,
                         aileron=-max_angle,
                         elevator=-max_angle,

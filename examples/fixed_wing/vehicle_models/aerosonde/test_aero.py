@@ -4,8 +4,8 @@ import pytest
 from optimalcontrol.utilities import approx_derivative
 
 from examples.fixed_wing.vehicle_models.aerosonde import aero, constants
-from examples.fixed_wing.fixed_wing_dynamics.tests.test_containers import (random_states,
-                                                                           random_controls)
+from examples.fixed_wing.fixed_wing_dynamics.tests.test_containers import (
+    random_states, random_controls)
 
 
 rng = np.random.default_rng()
@@ -243,7 +243,7 @@ def test_prop_forces_output_shape(n_points):
 
 def test_prop_forces_zero_rotation():
     """
-    Special case where omega = 0 [rad/s]. From Beard supplement,
+    Special case where omega = 0 [rad/s]. From ref. [1],
         thrust = rho * D_prop ** 2 * C_T2 * va ** 2
     and
         torque = rho * D_prop ** 3 * C_Q2 * va ** 2
@@ -252,6 +252,11 @@ def test_prop_forces_zero_rotation():
     which implies
         va ** 2 = KQ / (rho * D_prop ** 3 * C_Q2) * (voltage / R_motor - i0)
     Since C_Q2 < 0, this is only valid for voltage <= i0 * R_motor.
+
+    ##### References
+    1. R. W. Beard and T. W. McClain, Small Unmanned Aircraft: Theory and
+        Practice [Supplement], Princeton University Press, Princeton, NJ, 2nd.
+        ed., 2022.
     """
     max_volt = constants.i0 * constants.R_motor
     max_throttle = max_volt / constants.V_max

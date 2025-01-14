@@ -13,9 +13,9 @@ def dynamics(states, controls, parameters, aero_model):
 
     Parameters
     ----------
-    states : VehicleState
+    states : `VehicleState`
         Current states.
-    controls : Controls
+    controls : `Controls`
         Control inputs.
     parameters : object
         Object containing mass and aerodynamic properties of the vehicle.
@@ -24,7 +24,7 @@ def dynamics(states, controls, parameters, aero_model):
 
     Returns
     -------
-    derivatives : VehicleState
+    derivatives : `VehicleState`
         State dynamics, dx/dt.
     """
     forces, moments = aero_model(states, controls)
@@ -38,9 +38,9 @@ def jacobians(states, controls, parameters, aero_model,
 
     Parameters
     ----------
-    states : VehicleState
+    states : `VehicleState`
         Current states.
-    controls : Controls
+    controls : `Controls`
         Control inputs.
     parameters : object
         Object containing mass and aerodynamic properties of the vehicle.
@@ -56,10 +56,9 @@ def jacobians(states, controls, parameters, aero_model,
     Returns
     -------
     dfdx : (11, 11) or (11, 11, n_points) array
-        State Jacobians $df/dx (x,u)$ evaluated at `x=states` and `u=controls`.
+        State Jacobians df/dx (x,u) evaluated at `x=states` and `u=controls`.
     dfdu : (11, 4) or (11, 4, n_points) array
-        Control Jacobians $df/du (x,u)$ evaluated at `x=states` and
-        `u=controls`.
+        Control Jacobians df/du (x,u) evaluated at `x=states` and `u=controls`.
     """
 
     forces_0, moments_0 = aero_model(states, controls)
@@ -102,12 +101,12 @@ def jacobians(states, controls, parameters, aero_model,
 
 def rigid_body_dynamics(states, forces, moments, parameters):
     """
-    Evaluate the state dynamics given states, aero-propulsive forces and moments,
-    and vehicle mass properties.
+    Evaluate the state dynamics given states, aero-propulsive forces and
+    moments, and vehicle mass properties.
 
     Parameters
     ----------
-    states : VehicleState
+    states : `VehicleState`
         Current states.
     forces : (3,) or (3, n_points) array
         Aero-propulsive forces acting in body frame along body x, y, and z axes.
@@ -122,7 +121,7 @@ def rigid_body_dynamics(states, forces, moments, parameters):
 
     Returns
     -------
-    derivatives : VehicleState
+    derivatives : `VehicleState`
         State dynamics, dx/dt.
     """
     vb = states.velocity
@@ -160,7 +159,7 @@ def rigid_body_jac(states, forces_jac, moments_jac, parameters):
 
     Parameters
     ----------
-    states : VehicleState
+    states : `VehicleState`
         Current states.
     forces_jac : (3, 6) or (3, 6, n_points) array
         Jacobians of aero-propulsive forces with respect to body frame velocity

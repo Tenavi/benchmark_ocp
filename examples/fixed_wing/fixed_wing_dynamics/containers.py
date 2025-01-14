@@ -3,7 +3,7 @@ from scipy.spatial.transform import Rotation
 
 
 class Container:
-    """Base class for state and control containers."""
+    """Base class for `VehicleState` and `Controls` containers."""
     dim = None
 
     def __init__(self, array):

@@ -29,7 +29,8 @@ def test_lqr_jac(n_points, quat_sign):
     else:
         assert dudx.shape == (ocp.n_controls, ocp.n_states, n_points)
 
-    compare_finite_difference(x, dudx, lqr, method='3-point')
+    compare_finite_difference(x, dudx, lqr, method='3-point',
+                              rtol=1e-05, atol=1e-10)
 
 
 def test_locally_stable():

@@ -8,7 +8,7 @@ from examples.fixed_wing.fixed_wing_dynamics import trim
 from examples.fixed_wing.vehicle_models.aerosonde import constants, aero_model
 
 
-@pytest.mark.parametrize('va', np.arange(18., 33., 2.))
+@pytest.mark.parametrize('va', np.arange(14., 33., 2.))
 def test_trim_cruise(va):
     tol = 1e-02
 

@@ -423,8 +423,8 @@ def test_saturate(n_points, multiplier, inplace):
     rng = np.random.default_rng()
 
     ctrl_array = np.vstack([rng.uniform(low=1., high=2., size=(1, n_points)),
-                            rng.uniform(low=25. * np.pi / 180.,
-                                        high=50. * np.pi / 180.,
+                            rng.uniform(low=constants.max_angle,
+                                        high=2. * constants.max_angle,
                                         size=(3, n_points))])
     ctrl_array *= multiplier
 

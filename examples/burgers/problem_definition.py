@@ -1,6 +1,5 @@
-import os
-
 import numpy as np
+import os
 from matplotlib import pyplot as plt
 from scipy.spatial.distance import cdist
 from scipy.interpolate import RegularGridInterpolator
@@ -506,5 +505,3 @@ def plot_closed_loop(sims, open_loop_sols, t_max=None, x_min=None, x_max=None,
 
     if save_dir is None:
         return figs
-
-    return
