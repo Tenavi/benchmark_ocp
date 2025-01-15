@@ -99,6 +99,8 @@ def test_find_equilibrium_inside_limit_cycle(mu, norm, ftol, t_int):
 
     assert np.sum(status == 0) == 1
 
+    x = x[:, status == 0]
+
     f = ocp.dynamics(x, controller(x))
 
     assert np.linalg.norm(f, ord=norm) < ftol
@@ -116,41 +118,44 @@ def test_find_equilibrium_fails_outside_limit_cycle(mu, t_int):
     # Initial guess
     x0 = ocp.sample_initial_conditions(distance=3.)
 
-    with pytest.warns(RuntimeWarning, match="No equilibrium was found"):
-        x, status = analyze.find_equilibrium(ocp, controller, x0, t_int,
-                                             10. * t_int)
+    x, status = analyze.find_equilibrium(ocp, controller, x0,
+                                         t_int, 10. * t_int)
 
     # Integration should fail or reach the end of the integration horizon
     assert np.all(status != 0)
 
     # Double check that the point is not an equilibrium
-    f = ocp.dynamics(x, controller(x))
-    assert np.linalg.norm(f) >= 1e-03
+    for i in range(x.shape[1]):
+        f = ocp.dynamics(x[:, i], controller(x[:, i]))
+        assert np.linalg.norm(f) >= 1e-03
+        assert np.all(np.linalg.norm(x[:, i], axis=0) >= 1.)
 
-    assert np.all(np.linalg.norm(x, axis=0) >= 1.)
 
-
-@pytest.mark.parametrize('x0', (-2 * np.pi, -np.pi, 0., np.pi, 2 * np.pi))
+@pytest.mark.parametrize('x0', [-2., -1., 0., 1., 2.])
 def test_find_multiple_equilibria(x0):
     """
-    For the system `dxdt = sin(x)`, we expect equilibria at integer multiples of
-    pi.
+    For the system `dxdt = sin(pi * x)`, we expect stable equilibria at odd
+    integers and unstable equilibria at even integers.
     """
-    ftol = 1e-03
+    ftol = 1e-02
+    x0_stable = 1 == (int(x0) % 2)
 
-    ocp = SinusoidSystem(freq=1.)
+    ocp = SinusoidSystem(freq=np.pi)
     controller = ConstantControl(np.zeros(ocp.n_controls))
 
     # Set the initial guess to be slightly closer to x0 than the next
-    # equilibrium, x0 + pi
-    x_guess = x0 + np.pi * 0.49
+    # equilibrium, x0 + 1
+    x_guess = x0 + 0.49
 
     x, status = analyze.find_equilibrium(ocp, controller, x_guess, 10., 100.,
                                          ftol=ftol)
 
-    assert np.sum(status == 0) == 1
-    assert np.sum(status) == 3
+    if x0_stable:
+        idx = [0, 1]
+    else:
+        idx = [1, 0]
 
-    # Since x_guess was closer to x0 than any other equilibrium, the result
-    # should be equal to x0
-    assert np.isclose(x, x0, atol=ftol, rtol=ftol)
+    assert status[idx[0]] == 0
+    assert status[idx[1]] == 3
+    assert np.isclose(x[:, idx[0]], x0, atol=ftol, rtol=ftol)
+    assert np.isclose(x[:, idx[1]], x0 + 1., atol=ftol, rtol=ftol)

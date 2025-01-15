@@ -66,9 +66,11 @@ x, status = analyze.find_equilibrium(ocp, nn_control,
                                      config.t_int, config.t_max,
                                      **config.sim_kwargs)
 if np.any(status == 0):
-    print("Equilibrium point:")
-    print(x.reshape(-1, 1))
-    analyze.linear_stability(ocp, nn_control, x)
+    print(f"Found likely {'un' if status[1] == 0 else ''}stable equilibrium:")
+    print(x[:, status == 0].reshape(-1, 1))
+    analyze.linear_stability(ocp, nn_control, x[:, status == 0])
+else:
+    print("No equilibrium point found...")
 
 print("\n" + "+" * 80)
 

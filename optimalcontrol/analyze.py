@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 
 from .simulate import integrate_to_converge
@@ -55,17 +53,15 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08, verbose=True):
 
 def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
     r"""
-    Finds an equilibrium of the closed-loop dynamics, $dx/dt = f(x, u(x))$, near
+    Finds an equilibria of the closed-loop dynamics, $dx/dt = f(x, u(x))$, near
     a given point `x0`.
 
     This is accomplished by integrating both forwards and backwards in time
     using `simulate.integrate_to_converge` until a maximum time horizon or
     dynamic equilibrium, $f(x, u(x)) = 0$, is reached. Integrating both
-    directions allows both stable and unstable equilibria to be found. If both
-    integrations converged to an equilibrium, returns the point which is closest
-    to the initial guess. If neither integration converged, raises a
-    `RuntimeWarning` and returns the last points evaluated in both directions
-    and the integration `status` returned by `integrate_to_converge` for each.
+    directions allows both stable and unstable equilibria to be found. The
+    integration `status` of each integration is also returned to inform the
+    selection of the appropriate point.
 
     Parameters
     ----------
@@ -86,11 +82,13 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
 
     Returns
     -------
-    x : (`ocp.n_states`,) array or (`ocp.n_states, 2`) array
-        Closed-loop equilibrium, or, if no equilibrium was found, the states
-        found by integrating forward and backward in time.
+    x : (`ocp.n_states, 2`) array
+        States found by integrating forward (`x[:, 0]`) and backward (`x[:, 1]`)
+        in time. If `status[i] == 0` then that point is an equilibrium.
     status : (2,) int array
-        Reason for integration termination:
+        Reasons for integration termination. `status[0]` contains the forward
+        integration status corresponding to `x[:, 0]`, and `status[1]` contains
+        the backward integration status corresponding to `x[:, 1]`.
 
             * -1: Integration step failed.
             *  0: The system reached a steady state as determined by `ftol`.
@@ -99,7 +97,8 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
             *  3: Both forward and backward integration converged to equilibria,
                 but this equilibrium was further from `x0`.
     """
-    t_int, t_max = np.abs(t_int), np.abs(t_max)
+    t_int = np.abs(t_int)
+    t_max = np.abs(t_max)
 
     # Setup array to store forward and backward integration solutions
     x = np.tile(np.reshape(x0, (ocp.n_states, 1)), (1, 2))
@@ -108,22 +107,18 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
 
     # Forward and backwards integration
     for i, sign in enumerate([1., -1.]):
-        t_sol, x_sol, status[i] = integrate_to_converge(ocp, controller, x0,
-                                                        t_int * sign,
-                                                        t_max * sign, **kwargs)
+        _, x_sol, status[i] = integrate_to_converge(ocp, controller, x0,
+                                                    t_int * sign, t_max * sign,
+                                                    **kwargs)
         x[:, i] = x_sol[:, -1]
 
     # If both forward and backwards integrations converged to an equilibrium,
     # check which point is closer to the start
     if np.all(status == 0):
-        dists = ocp.distances(x, x0)
-        status[np.argmax(dists)] = 3
-    # If neither converged, warn the user and return all states
-    elif not np.any(status == 0):
-        dxdt = ocp.dynamics(x, controller(x))
-        dxdt = np.abs(dxdt).max(axis=0).min()
-        warnings.warn(f"No equilibrium was found, max(|dxdt|) = {dxdt:.4g}",
-                      RuntimeWarning)
-        return x, status
+        dists = ocp.distances(x, x0).reshape(2)
+        if dists[0] <= dists[1]:
+            status[1] = 3
+        else:
+            status[0] = 3
 
-    return x[:, status == 0].reshape(-1), status
+    return x, status

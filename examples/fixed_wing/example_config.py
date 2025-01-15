@@ -35,11 +35,9 @@ open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5,
                     'ivp_options': sim_kwargs}
 
 # Keyword arguments for the supervised learning-based controllers
-poly_kwargs = {'alpha': 100., 'degree': 3}
-
 k_nn_kwargs = {'weights': 'distance', 'n_neighbors': 10}
 
-nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',
-             'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-04, 'verbose': True}
+nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32, 32), 'activation': 'tanh',
+             'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-03, 'verbose': True}
 
 random_seed = None

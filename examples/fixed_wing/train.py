@@ -42,7 +42,6 @@ if __name__ == '__main__':
 
     controllers = [
         lqr,
-        SimpleQRnet(lqr, PolynomialController(**config.poly_kwargs)),
         SimpleQRnet(lqr, KNeighborsController(**config.k_nn_kwargs)),
         SimpleQRnet(lqr, NeuralNetworkController(**config.nn_kwargs,
                                                  random_state=random_seed + 1))]
@@ -58,12 +57,16 @@ if __name__ == '__main__':
         print(f"\nLinear stability analysis for {controller}:")
 
         x, status = analyze.find_equilibrium(ocp, controller, lqr.xf,
-                                             config.t_int, config.t_max,
+                                             2. * config.t_int, config.t_max,
                                              **config.sim_kwargs)
         if np.any(status == 0):
-            print("Equilibrium point:")
-            print(x.reshape(-1, 1))
-            analyze.linear_stability(ocp, controller, x)
+            stability = f"{'un' if status[1] == 0 else ''}stable"
+            print(f"Found likely {stability} equilibrium:")
+            print(x[:, status == 0].reshape(-1, 1))
+            analyze.linear_stability(ocp, controller, x[:, status == 0],
+                                     zero_tol=1e-05)
+        else:
+            print("No equilibrium point found...")
 
     print("\n" + "+" * 80)
 

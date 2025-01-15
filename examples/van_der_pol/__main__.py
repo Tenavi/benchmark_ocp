@@ -116,9 +116,12 @@ for controller in controllers:
     x, status = analyze.find_equilibrium(ocp, controller, xf, config.t_int,
                                          config.t_max, **config.sim_kwargs)
     if np.any(status == 0):
-        print("Equilibrium point:")
-        print(x.reshape(-1, 1))
-        analyze.linear_stability(ocp, controller, x)
+        stability = f"{'un' if status[1] == 0 else ''}stable"
+        print(f"Found likely {stability} equilibrium:")
+        print(x[:, status == 0].reshape(-1, 1))
+        analyze.linear_stability(ocp, controller, x[:, status == 0])
+    else:
+        print("No equilibrium point found...")
 
 print("\n" + "+" * 80)
 
