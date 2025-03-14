@@ -89,13 +89,12 @@ def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
         Reasons for integration termination. `status[0]` contains the forward
         integration status corresponding to `x[:, 0]`, and `status[1]` contains
         the backward integration status corresponding to `x[:, 1]`.
-
-            * -1: Integration step failed.
-            *  0: The system reached a steady state as determined by `ftol`.
-            *  1: A termination event occurred.
-            *  2: `t[-1]` exceeded `t_max`.
-            *  3: Both forward and backward integration converged to equilibria,
-                but this equilibrium was further from `x0`.
+        * -1: Integration step failed.
+        *  0: The system reached a steady state as determined by `ftol`.
+        *  1: A termination event occurred.
+        *  2: `t[-1]` exceeded `t_max`.
+        *  3: Both forward and backward integration converged to equilibria,
+            but this equilibrium was further from `x0`.
     """
     t_int = np.abs(t_int)
     t_max = np.abs(t_max)

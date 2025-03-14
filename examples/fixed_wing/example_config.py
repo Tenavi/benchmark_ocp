@@ -35,9 +35,10 @@ open_loop_kwargs = {'method': 'direct', 'time_scale': 0.5,
                     'ivp_options': sim_kwargs}
 
 # Keyword arguments for the supervised learning-based controllers
-k_nn_kwargs = {'weights': 'distance', 'n_neighbors': 10}
+nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',
+             'alpha': 1e-01, 'max_iter': 5000, 'tol': 1e-05, 'solver': 'adam'}
 
-nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32, 32), 'activation': 'tanh',
-             'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-03, 'verbose': True}
+rff_kwargs = {'n_features': 200, 'sigma': [0.5] + [0.5] * 3 + [0.5] * 3 + [0.5] * 4}
 
-random_seed = None
+# Random seed for supervised learning models. Does not affect data generation
+random_seed = 123

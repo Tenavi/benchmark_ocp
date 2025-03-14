@@ -1,8 +1,10 @@
+import warnings
+
 import numpy as np
 from tqdm import tqdm
 
-from ._ivp import solve_ivp
-from ..utilities import closed_loop_jacobian
+from optimalcontrol.simulate._ivp import solve_ivp
+from optimalcontrol.utilities import closed_loop_jacobian
 
 
 def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
@@ -30,10 +32,8 @@ def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
     method : string or `OdeSolver`, default='RK45'
         See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
         available; these are:
-
-            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
-                a first order method.
-            * 'RK4': Classic fourth order Runge-Kutta method.
+        * 'Euler': Explicit first order Euler method.
+        * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
         argument, which is a positive float defining the size of the time
@@ -47,10 +47,9 @@ def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
         System states at times `t`.
     status : int
         Reason for algorithm termination:
-
-            * -1: Integration step failed.
-            *  0: The solver successfully reached the end of `t_span`.
-            *  1: A termination event occurred.
+        * -1: Integration step failed.
+        *  0: The solver successfully reached the end of `t_span`.
+        *  1: A termination event occurred.
     """
     def fun(t, x):
         u = controller(x)
@@ -62,13 +61,15 @@ def integrate(ocp, controller, x0, t_span, t_eval=None, method='RK45',
 
     integration_events = _make_state_bound_events(ocp)
 
-    try:
-        ode_sol = solve_ivp(fun, t_span, x0, jac=jac, events=integration_events,
-                            t_eval=t_eval, vectorized=True, method=method,
-                            **options)
-        return ode_sol.t, ode_sol.y, ode_sol.status
-    except ValueError:
-        return np.asarray(t_span[:1]), np.reshape(x0, (-1, 1)), -1
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
+        try:
+            ode_sol = solve_ivp(fun, t_span, x0, jac=jac,
+                                events=integration_events, t_eval=t_eval,
+                                vectorized=True, method=method, **options)
+            return ode_sol.t, ode_sol.y, ode_sol.status
+        except (ValueError, RuntimeWarning):
+            return np.asarray(t_span[:1]), np.reshape(x0, (-1, 1)), -1
 
 
 def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
@@ -96,9 +97,9 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     t_max : float
         Maximum time allowed for integration. Can be negative.
     norm : {1, 2, `np.inf`}, default=2
-            Integration continues until `norm(f(x,u)) <= ftol`, where `f`
-            denotes `ocp.dynamics` and `norm` specifies the norm used for
-            this condition (l1, l2, or l-infinity).
+        Integration continues until `norm(f(x,u)) <= ftol`, where `f` denotes
+        `ocp.dynamics` and `norm` specifies the norm used for this condition
+        (l1, l2, or l-infinity).
     ftol : float or array_like, default=1e-03
         Tolerance for detecting system steady states. If `ftol` is array_like,
         then it must have shape `(ocp.n_states,)` and specifies a different
@@ -108,10 +109,8 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
     method : string or `OdeSolver`, default='RK45'
         See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
         available; these are:
-
-            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
-                a first order method.
-            * 'RK4': Classic fourth order Runge-Kutta method.
+        * 'Euler': Explicit first order Euler method.
+        * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
         argument, which is a positive float defining the size of the time
@@ -125,11 +124,10 @@ def integrate_to_converge(ocp, controller, x0, t_int, t_max, norm=2, ftol=1e-03,
         Values of the state at times `t`.
     status : int
         Reason for algorithm termination:
-
-            * -1: Integration step failed.
-            *  0: The system reached a steady state as determined by `ftol`.
-            *  1: A termination event occurred.
-            *  2: `t[-1]` exceeded `t_max`.
+        * -1: Integration step failed.
+        *  0: The system reached a steady state as determined by `ftol`.
+        *  1: A termination event occurred.
+        *  2: `t[-1]` exceeded `t_max`.
     """
     ftol = np.reshape(ftol, -1)
 
@@ -212,10 +210,8 @@ def monte_carlo(ocp, controller, x0, t_span, t_eval=None, method='RK45',
     method : string or `OdeSolver`, default='RK45'
         See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
         available; these are:
-
-            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
-                a first order method.
-            * 'RK4': Classic fourth order Runge-Kutta method.
+        * 'Euler': Explicit first order Euler method.
+        * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
         argument, which is a positive float defining the size of the time
@@ -226,19 +222,17 @@ def monte_carlo(ocp, controller, x0, t_span, t_eval=None, method='RK45',
     sims : (n_sims,) object array of dicts
         The results of the closed loop simulations for each initial condition,
         `x0[:, i]`. Each list element is a dict containing
-
-            * t : (n_points,) array
-                Time points.
-            * x : (`ocp.n_states`, n_points) array
-                System states at times `t`.
-            * u : (`ocp.n_controls`, n_points) array
-                Feedback control inputs at times `t`.
+        * t : (n_points,) array
+            Time points.
+        * x : (`ocp.n_states`, n_points) array
+            System states at times `t`.
+        * u : (`ocp.n_controls`, n_points) array
+            Feedback control inputs at times `t`.
     status : (n_sims,) integer array
         `status[i]` contains the reason for algorithm termination for `sims[i]`:
-
-            * -1: Integration step failed.
-            *  0: The solver successfully reached the end of `t_span`.
-            *  1: A termination event occurred.
+        * -1: Integration step failed.
+        *  0: The solver successfully reached the end of `t_span`.
+        *  1: A termination event occurred.
     """
     return _monte_carlo(ocp, controller, x0, integrate, t_span,
                         t_eval=t_eval, method=method, **options)
@@ -267,9 +261,9 @@ def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
     t_max : float
         Maximum time allowed for integration.
     norm : {1, 2, `np.inf`}, default=2
-            Integration continues until `norm(f(x,u)) <= ftol`, where `f`
-            denotes `ocp.dynamics` and `norm` specifies the norm used for
-            this condition (l1, l2, or l-infinity).
+        Integration continues until `norm(f(x,u)) <= ftol`, where `f` denotes
+        `ocp.dynamics` and `norm` specifies the norm used for this condition
+        (l1, l2, or l-infinity).
     ftol : float or array_like, default=1e-03
         Tolerance for detecting system steady states. If `ftol` is array_like,
         then it must have shape `(ocp.n_states,)` and specifies a different
@@ -279,10 +273,8 @@ def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
     method : string or `OdeSolver`, default='RK45'
         See `scipy.integrate.solve_ivp`. Additional fixed step-size solvers are
         available; these are:
-
-            * 'Euler': Explicit Euler method with fixed timestep, `dt`. This is
-                a first order method.
-            * 'RK4': Classic fourth order Runge-Kutta method.
+        * 'Euler': Explicit first order Euler method.
+        * 'RK4': Classic fourth order Runge-Kutta method.
     **options : keyword arguments
         See `scipy.integrate.solve_ivp`. Fixed step-size solvers require a `dt`
         argument, which is a positive float defining the size of the time
@@ -293,20 +285,18 @@ def monte_carlo_to_converge(ocp, controller, x0, t_int, t_max, norm=2,
     sims : (n_sims,) object array of dicts
         The results of the closed loop simulations for each initial condition,
         `x0[:, i]`. Each list element is a dict containing
-
-            * 't' : (n_points,) array
-                Time points.
-            * 'x' : (`ocp.n_states`, n_points) array
-                System states at times 't'.
-            * 'u' : (`ocp.n_controls`, n_points) array
-                Feedback control inputs at times 't'.
+        * 't' : (n_points,) array
+            Time points.
+        * 'x' : (`ocp.n_states`, n_points) array
+            System states at times 't'.
+        * 'u' : (`ocp.n_controls`, n_points) array
+            Feedback control inputs at times 't'.
     status : (n_sims,) integer array
         `status[i]` contains the reason for algorithm termination for `sims[i]`:
-
-            * -1: Integration step failed.
-            *  0: The solver successfully reached the end of `t_span`.
-            *  1: A termination event occurred.
-            *  2: `sims[i]['t'][-1]` exceeded `t_max`.
+        * -1: Integration step failed.
+        *  0: The solver successfully reached the end of `t_span`.
+        *  1: A termination event occurred.
+        *  2: `sims[i]['t'][-1]` exceeded `t_max`.
     """
     return _monte_carlo(ocp, controller, x0, integrate_to_converge, t_int,
                         t_max, norm=norm, ftol=ftol, method=method, **options)

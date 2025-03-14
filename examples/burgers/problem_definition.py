@@ -1,6 +1,7 @@
-import numpy as np
 import os
+
 from matplotlib import pyplot as plt
+import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.interpolate import RegularGridInterpolator
 from tqdm import tqdm
@@ -218,7 +219,7 @@ class BurgersPDE(OptimalControlProblem):
     def dynamics(self, x, u):
         x, u, squeeze = self._reshape_inputs(x, u)
 
-        dxdt = (-0.5 * np.matmul(self.parameters._D, x**2)
+        dxdt = (-0.5 * np.matmul(self.parameters._D, x ** 2)
                 + np.matmul(self.parameters.nu * self.parameters._D2, x)
                 + x * self.parameters._alpha / np.exp(self.parameters.gamma * x)
                 + np.matmul(self.parameters._B, u))

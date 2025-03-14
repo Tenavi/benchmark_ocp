@@ -1,3 +1,4 @@
+import argparse as ap
 import os
 import time
 
@@ -8,11 +9,23 @@ from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.controls import LinearQuadraticRegulator
 from optimalcontrol.open_loop import solve_infinite_horizon
 
-from examples.common_utilities import supervised_learning, plotting
+from examples.common_utilities import plotting
+from examples.common_utilities.supervised_learning import (
+    generate_data, SimpleQRnet, NeuralNetworkController,
+    RandomFourierController)
 
 from examples.burgers.problem_definition import BurgersPDE, plot_closed_loop
 from examples.burgers import example_config as config
 
+
+parser = ap.ArgumentParser()
+parser.add_argument('-n', '--new_data', action='store_true',
+                    help="Generate and use new data instead of using "
+                         "pre-generated data.")
+args = parser.parse_args()
+
+train_data_path = os.path.join(config.data_dir, 'train.csv')
+test_data_path = os.path.join(config.data_dir, 'test.csv')
 
 # Initialize the optimal control problem
 random_seed = getattr(config, 'random_seed', None)
@@ -32,21 +45,32 @@ Q, R = ocp.running_cost_hess(xf, uf)
 lqr = LinearQuadraticRegulator(A=A, B=B, Q=Q, R=R,
                                u_lb=ocp.control_lb, u_ub=ocp.control_ub)
 
-# Generate some training and test data
+if args.new_data:
+    # Generate some training and test data
 
-# First sample initial conditions
-x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
-                                        distance=config.x0_distance)
+    # First sample initial conditions
+    x0_pool = ocp.sample_initial_conditions(config.n_train + config.n_test,
+                                            distance=config.x0_distance)
+else:
+    train_data = utilities.load_data(train_data_path)
+    test_data = utilities.load_data(test_data_path)
+    data = np.concatenate([train_data, test_data])
+
+    train_idx = np.arange(len(train_data))
+    test_idx = len(train_data) + np.arange(len(test_data))
+
+    x0_pool = np.hstack([sol['x'][:, :1] for sol in train_data]
+                        + [sol['x'][:, :1] for sol in test_data])
 
 # Warm start the optimal control solver by integrating the system with LQR
-lqr_sims, status = simulate.monte_carlo_to_converge(
+lqr_sims, lqr_status = simulate.monte_carlo_to_converge(
     ocp, lqr, x0_pool, config.t_int, config.t_max, **config.sim_kwargs)
 lqr_sims = np.asarray(lqr_sims, dtype=object)
 
 for i, sim in enumerate(lqr_sims):
     # If the simulation failed to converge to equilibrium, reset the guess to
     # interpolate initial and final conditions
-    if status[i] != 0:
+    if lqr_status[i] != 0:
         x0 = x0_pool[:, i:i+1]
         x_interp = make_interp_spline([0., config.t_int],
                                       np.hstack((x0, xf.reshape(-1, 1))),
@@ -57,38 +81,51 @@ for i, sim in enumerate(lqr_sims):
     # Use LQR to generate a guess for the costates
     sim['p'] = 2. * lqr.P @ sim['x']
 
-# Solve open loop optimal control problems
-data, status, messages = supervised_learning.generate_data(
-    ocp, lqr_sims, **config.open_loop_kwargs)
+if args.new_data:
+    # Solve open loop optimal control problems
+    data, status, messages = generate_data(ocp, lqr_sims,
+                                           **config.open_loop_kwargs)
 
-print("\n" + "+" * 80)
+    print("\n" + "+" * 80)
 
-# Reserve a subset of data for testing and use the rest for training
-data_idx = np.arange(x0_pool.shape[1])[status == 0]
-rng.shuffle(data_idx)
-train_idx = data_idx[config.n_test:]
-test_idx = data_idx[:config.n_test]
+    # Reserve a subset of data for testing and use the rest for training
+    data_idx = np.arange(x0_pool.shape[1])[status == 0]
+    rng.shuffle(data_idx)
+    train_idx = data_idx[config.n_test:]
+    test_idx = data_idx[:config.n_test]
 
-train_data = data[train_idx]
-test_data = data[test_idx]
+    train_data = data[train_idx]
+    test_data = data[test_idx]
+
+    # Save data
+    utilities.save_data(train_data, train_data_path)
+    utilities.save_data(test_data, test_data_path)
 
 # Turn data into numpy arrays for training and test evaluation
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
-print("\nTraining neural network controller...")
-nn_control = supervised_learning.NeuralNetworkController(
-    u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-    random_state=random_seed + 3, **config.nn_kwargs)
-nn_control.train(x_train, u_train)
+# Initialize and train controllers
+common_kwargs = {'u_lb': ocp.control_lb, 'u_ub': ocp.control_ub}
 
-print("\nTraining u-QRnet controller...")
-qrnet = supervised_learning.SimpleQRnet(
-    lqr, supervised_learning.NeuralNetworkController(
-        random_state=random_seed + 3, **config.nn_kwargs))
-qrnet.train(x_train, u_train)
+controllers = [lqr,
+               NeuralNetworkController(**common_kwargs,
+                                       random_state=random_seed + 2,
+                                       **config.nn_kwargs),
+               SimpleQRnet(lqr,
+                           NeuralNetworkController(random_state=random_seed + 2,
+                                                   **config.nn_kwargs)),
+               RandomFourierController(**common_kwargs,
+                                       random_state=random_seed + 3,
+                                       **config.rff_kwargs),
+               SimpleQRnet(lqr,
+                           RandomFourierController(**common_kwargs,
+                                                   random_state=random_seed + 3,
+                                                   **config.rff_kwargs))]
 
-controllers = (lqr, nn_control, qrnet)
+for i in range(1, len(controllers)):
+    print(f"\nTraining {controllers[i]}...")
+    controllers[i].train(x_train, u_train)
 
 print("\n" + "+" * 80)
 
@@ -99,8 +136,8 @@ for controller in controllers:
                                          config.t_max, **config.sim_kwargs)
     if np.any(status == 0):
         stability = f"{'un' if status[1] == 0 else ''}stable"
-        print(f"Found likely {stability} equilibrium:")
-        print(x[:, status == 0].reshape(-1, 1))
+        print(f"Found likely {stability} equilibrium with norm ||x|| = "
+              f"{np.squeeze(ocp.distances(x[:, status == 0], xf)):.4g}")
         analyze.linear_stability(ocp, controller, x[:, status == 0])
     else:
         print("No equilibrium point found...")
@@ -113,15 +150,20 @@ for controller in controllers:
     print(f"\n{controller} R2 score: {train_r2:.4f} (train), "
           f"{test_r2:.4f} (test)")
 
+    controller.pickle(os.path.join(config.controller_dir,
+                                   f'{controller}.pickle'))
+
 print("\n" + "+" * 80 + "\n")
 
 # Evaluate performance of the learned controllers in closed-loop simulation
 all_sims = {'LQR': lqr_sims}
+status = {'LQR': lqr_status}
 
 for controller in controllers[1:]:
-    all_sims[str(controller)], _ = simulate.monte_carlo_to_converge(
-        ocp, controller, x0_pool, config.t_int, config.t_max,
-        **config.sim_kwargs)
+    sim_res = simulate.monte_carlo_to_converge(ocp, controller, x0_pool,
+                                               config.t_int, config.t_max,
+                                               **config.sim_kwargs)
+    all_sims[str(controller)], status[str(controller)] = sim_res
 
 for sims in all_sims.values():
     for sim in sims:
@@ -135,12 +177,12 @@ for name, sims in list(all_sims.items())[1:]:
         for i, sol in enumerate(dataset):
             sim = sims[idx[i]]
 
-            if sol['v'][0] > sim['v'][0]:
-                # Try to resolve the OCP if the initial guess looks better
+            # Try to resolve the OCP if the initial guess looks better
+            if status[name][idx[i]] == 0 and sol['v'][0] > sim['v'][0]:
                 new_sol = solve_infinite_horizon(
                     ocp, sim['t'], sim['x'], u=sim['u'], v=sim['v'],
-                    p=2. * lqr.P @ sim['x'],
-                    **config.open_loop_kwargs)
+                    p=2. * lqr.P @ sim['x'], **config.open_loop_kwargs)
+
                 cost_change = 1. - new_sol.v[0] / sol['v'][0]
                 if cost_change < 0.:
                     print(f"Found a better solution for OCP #{idx[i]:d} using "
@@ -155,30 +197,23 @@ for name, sims in list(all_sims.items())[1:]:
 # Plot the results
 print("Making plots...")
 
-figs = {'training': dict(), 'test': dict()}
-
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
+    figs = {}
+
     costs = {name: [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
                     for sim in sims[data_idx]]
              for name, sims in all_sims.items()}
 
-    figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
+    figs['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in data[data_idx]],
         controller_costs=costs,
         title=f'Closed-loop cost evaluation ({data_name})')
 
-    plotting.save_fig_dict(figs, config.fig_dir)
+    fig_dir = os.path.join(config.fig_dir, data_name)
+    plotting.save_fig_dict(figs, fig_dir)
 
     for name, sims in all_sims.items():
         fig_name = f'closed_loop_{name}'
-        fig_dir = os.path.join(config.fig_dir, data_name, fig_name)
+        _fig_dir = os.path.join(fig_dir, fig_name)
         plot_closed_loop(sims[data_idx], data[data_idx], t_max=config.t_int,
-                         subtitle=f'{name}, {data_name}', save_dir=fig_dir)
-
-# Save data, figures, and trained controllers
-utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
-
-for controller in controllers:
-    controller.pickle(os.path.join(config.controller_dir,
-                                   f'{controller}.pickle'))
+                         subtitle=f'{name}, {data_name}', save_dir=_fig_dir)

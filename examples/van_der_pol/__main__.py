@@ -2,15 +2,18 @@ import argparse as ap
 import os
 import time
 
+from matplotlib import pyplot as plt
 import numpy as np
 from scipy.interpolate import make_interp_spline
-from matplotlib import pyplot as plt
 
 from optimalcontrol import simulate, utilities, analyze
 from optimalcontrol.controls import LinearQuadraticRegulator
 from optimalcontrol.open_loop import solve_infinite_horizon
 
-from examples.common_utilities import supervised_learning, plotting
+from examples.common_utilities import plotting
+from examples.common_utilities.supervised_learning import (
+    generate_data, KNeighborsController, NeuralNetworkController,
+    RandomFourierController)
 
 from examples.van_der_pol import VanDerPol
 from examples.van_der_pol import example_config as config
@@ -65,8 +68,7 @@ for i, sim in enumerate(lqr_sims):
     sim['p'] = 2. * lqr.P @ (sim['x'] - ocp.parameters.xf)
 
 # Solve open loop optimal control problems
-data, status, messages = supervised_learning.generate_data(
-    ocp, lqr_sims, **config.open_loop_kwargs)
+data, status, messages = generate_data(ocp, lqr_sims, **config.open_loop_kwargs)
 
 print("\n" + "+" * 80)
 
@@ -79,34 +81,28 @@ test_idx = data_idx[:config.n_test]
 train_data = data[train_idx]
 test_data = data[test_idx]
 
+# Save data
+utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
+utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
+
 # Turn data into numpy arrays for training and test evaluation
 _, x_train, u_train, _, _ = utilities.stack_dataframes(*train_data)
 _, x_test, u_test, _, _ = utilities.stack_dataframes(*test_data)
 
-print("\nTraining polynomial controller...")
-try:
-    poly_control = supervised_learning.PolynomialController(
-        u_lb=ocp.control_lb, u_ub=ocp.control_ub,
-        random_state=random_seed + 2,
-        **config.poly_kwargs)
-# In case the linear_model doesn't take random_state or verbose keywords
-except TypeError:
-    poly_control = supervised_learning.PolynomialController(
-        u_lb=ocp.control_lb, u_ub=ocp.control_ub, **config.poly_kwargs)
-poly_control.train(x_train, u_train)
+common_kwargs = {'u_lb': ocp.control_lb, 'u_ub': ocp.control_ub}
 
-print("\nTraining K-nearest neighbors controller...")
-k_nn_control = supervised_learning.KNeighborsController(
-    u_lb=ocp.control_lb, u_ub=ocp.control_ub, **config.k_nn_kwargs)
-k_nn_control.train(x_train, u_train)
+controllers = [lqr,
+               KNeighborsController(**common_kwargs, **config.k_nn_kwargs),
+               NeuralNetworkController(**common_kwargs,
+                                       random_state=random_seed + 2,
+                                       **config.nn_kwargs),
+               RandomFourierController(**common_kwargs,
+                                       random_state=random_seed + 3,
+                                       **config.rff_kwargs)]
 
-print("\nTraining neural network controller...")
-nn_control = supervised_learning.NeuralNetworkController(
-    u_lb=ocp.control_lb, u_ub=ocp.control_ub, random_state=random_seed + 3,
-    **config.nn_kwargs)
-nn_control.train(x_train, u_train)
-
-controllers = (lqr, poly_control, k_nn_control, nn_control)
+for i in range(1, len(controllers)):
+    print(f"\nTraining {controllers[i]}...")
+    controllers[i].train(x_train, u_train)
 
 print("\n" + "+" * 80)
 
@@ -130,6 +126,9 @@ for controller in controllers:
     test_r2 = controller.r2_score(x_test, u_test)
     print(f"\n{controller} R2 score: {train_r2:.4f} (train), "
           f"{test_r2:.4f} (test)")
+
+    controller.pickle(os.path.join(config.controller_dir,
+                                   f'{controller}.pickle'))
 
 print("\n" + "+" * 80 + "\n")
 
@@ -169,47 +168,40 @@ for name, sims in list(all_sims.items())[1:]:
                         sol[key] = getattr(new_sol, key)
 
 # Plot the results
-figs = {'training': dict(), 'test': dict()}
-
 for data_idx, data_name in zip((train_idx, test_idx), ('training', 'test')):
+    figs = {}
+
     costs = {name: [ocp.total_cost(sim['t'], sim['x'], sim['u'])[-1]
                     for sim in sims[data_idx]]
              for name, sims in all_sims.items()}
 
-    figs[data_name]['cost_comparison'] = plotting.plot_total_cost(
+    figs['cost_comparison'] = plotting.plot_total_cost(
         [sol['v'][0] for sol in data[data_idx]],
         controller_costs=costs,
         title=f'Closed-loop cost evaluation ({data_name})')
 
-    figs[data_name]['data'] = plotting.plot_closed_loop(
-        data[data_idx], t_max=config.t_int, subtitle=f'optimal, {data_name}')
+    figs['data'] = plotting.plot_closed_loop(data[data_idx],
+                                             t_max=config.t_int,
+                                             subtitle=f'optimal, {data_name}')
 
     for name, sims in all_sims.items():
         fig_name = f'closed_loop_{name}'
-        figs[data_name][fig_name] = plotting.plot_closed_loop(
-            sims[data_idx], t_max=config.t_int,
-            subtitle=f'{name}, {data_name}')
+        figs[fig_name] = plotting.plot_closed_loop(
+            sims[data_idx], t_max=config.t_int, subtitle=f'{name}, {data_name}')
 
         fig_name = f'closed_loop_3d_{name}'
-        figs[data_name][fig_name] = plotting.plot_closed_loop_3d(
+        figs[fig_name] = plotting.plot_closed_loop_3d(
             sims[data_idx], data[data_idx], controller_name=name,
             title=f'Closed-loop trajectories and controls ({name}, '
                   f'{data_name})')
 
-# Save data, figures, and trained controllers
-utilities.save_data(train_data, os.path.join(config.data_dir, 'train.csv'))
-utilities.save_data(test_data, os.path.join(config.data_dir, 'test.csv'))
-
-for data_name, figs_subset in figs.items():
     _fig_dir = os.path.join(config.fig_dir, data_name)
     os.makedirs(_fig_dir, exist_ok=True)
-    for fig_name, fig in figs_subset.items():
+    for fig_name, fig in figs.items():
         plt.figure(fig)
         plt.savefig(os.path.join(_fig_dir, fig_name + '.pdf'))
-
-for controller in controllers:
-    controller.pickle(os.path.join(config.controller_dir,
-                                   f'{controller}.pickle'))
+        if not args.show_plots:
+            plt.close(fig)
 
 if args.show_plots:
     plt.show()

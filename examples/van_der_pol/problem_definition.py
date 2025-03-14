@@ -82,9 +82,9 @@ class VanDerPol(OptimalControlProblem):
         x_err = x_err ** 2
         u_err = u_err ** 2
 
-        L = (self.parameters.Wx/2.) * x_err[:1]
-        L += (self.parameters.Wy/2.) * x_err[1:]
-        L += (self.parameters.Wu/2.) * u_err
+        L = (self.parameters.Wx / 2.) * x_err[:1]
+        L += (self.parameters.Wy / 2.) * x_err[1:]
+        L += (self.parameters.Wu / 2.) * u_err
 
         if squeeze:
             return L[0, 0]

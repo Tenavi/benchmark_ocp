@@ -16,8 +16,8 @@ params = {}
 # Number of training and test trajectories
 # Note: slightly fewer training trajectories may be produced if the solver fails
 # to find open-loop solutions
-n_train = 30
-n_test = 30
+n_train = 40
+n_test = 40
 
 # Distance (by default in l-infinity norm) of initial condition samples
 x0_distance = 3.0
@@ -34,12 +34,12 @@ sim_kwargs = {'atol': 1e-08, 'rtol': 1e-04, 'method': 'RK23'}
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {}
 
-# Keyword arguments for the polynomial, K-nearest neighbors, and NN controllers
-poly_kwargs = {'degree': 6, 'alpha': 0.5}
-
+# Keyword arguments for the supervised learning controllers
 k_nn_kwargs = {'weights': 'distance', 'n_neighbors': 10}
 
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32), 'activation': 'tanh',
              'solver': 'lbfgs', 'max_iter': 2000, 'tol': 1e-03}
 
-random_seed = 123
+rff_kwargs = {'sigma': [2., 1.], 'n_features': 200}
+
+random_seed = 1234

@@ -6,7 +6,8 @@ from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import RobustScaler, PolynomialFeatures
+from sklearn.preprocessing import (RobustScaler, PolynomialFeatures,
+                                   FunctionTransformer)
 
 from optimalcontrol import controls, utilities, open_loop
 
@@ -157,25 +158,129 @@ class PolynomialController(SupervisedController):
 
     To do this, we generate a dataset of state-control pairs
     (`x_data`, `u_data`), and optionally for time-dependent problems, associated
-    time values `t_data`, and the polynomial regressor learns the mapping from
+    time values `t_data`, and the regressor learns a polynomial mapping from
     `x_data` (and `t_data`) to `u_data`. The polynomial is implemented with
     `sklearn.preprocessing.PolynomialFeatures` and a choice of model from
     `sklearn.linear_model`, controlled by the `linear_model` keyword
-    (default='Ridge'). Note that if `n_controls > 1` and a cross
+    (default='BayesianRidge'). Note that if `n_controls > 1` and a cross
     validation-based `linear_model` is used, this is not natively supported in
     `sklearn` so the regressor will be wrapped with
     `sklearn.multioutput.MultiOutputRegressor`.
     """
-    def _fit_regressor(self, x_scaled, u_scaled, degree=1, linear_model='Ridge',
-                       **options):
+    def _fit_regressor(self, x_scaled, u_scaled, degree=1,
+                       linear_model='BayesianRidge', **options):
         regressor = getattr(sk_linear_models, linear_model)(**options)
-
-        if self.n_controls > 1 and linear_model[-2:] == 'CV':
-            regressor = MultiOutputRegressor(regressor)
 
         regressor = Pipeline([('kernel', PolynomialFeatures(degree=degree)),
                               ('regressor', regressor)])
-        return regressor.fit(x_scaled, u_scaled)
+
+        try:
+            return regressor.fit(x_scaled, u_scaled)
+        except ValueError:
+            return MultiOutputRegressor(regressor).fit(x_scaled, u_scaled)
+
+
+class RandomFourierController(SupervisedController):
+    """
+    A simple example of how one might implement a random Fourier feature control
+    law trained by supervised learning.
+
+    To do this, we generate a dataset of state-control pairs
+    (`x_data`, `u_data`), and optionally for time-dependent problems, associated
+    time values `t_data`, and the regressor learns a random Fourier feature
+    mapping (see ref. [1]) from `x_data` (and `t_data`) to `u_data`.
+
+    A random Fourier feature mapping is formulated as follows. Let `x` and `u`
+    be scaled inputs and outputs of dimensions `n_states` and `n_controls`,
+    respectively. We choose `n_features`, `sigma`, `random_state`, and
+    `linear_model` parameters (see below). We sample a matrix of frequencies,
+    `W`, from a normal distribution, and a vector of biases, `B`, uniformly:
+    ```
+    rng = np.random.default_rng(random_state)
+    W = rng.normal(scale=sigma, size=(n_features, n_states))
+    B = rng.uniform(low=0, high=2 * np.pi, size=(n_features, 1))
+    ```
+    These frequencies and biases are instantiated and fixed when the model is
+    first trained. We then learn a linear model of the form
+    ```
+    z = cos(W @ x + B)
+    u = K @ z + C
+    ```
+    where `K` and `C` are `(n_controls, n_features)` and `(n_controls, 1)`
+    matrices, respectively. The linear regression step is implemented with
+    `sklearn.linear_model`.
+
+    ##### References
+    1. A. Rahimi and B. Recht, Random features for large-scale kernel machines,
+        in Advances in Neural Information Processing Systems, 2007, pp.
+        1177-1184.
+
+    Parameters
+    ----------
+    u_lb : (`n_controls`, 1) array, optional
+        Lower control saturation bounds.
+    u_ub : (`n_controls`, 1) array, optional
+        Upper control saturation bounds.
+    n_features : int, default=`10 * n_states * n_controls`
+        Number of Fourier features (i.e., random frequencies).
+    sigma : {float, (`n_states`,) array}, default=0.5
+        Standard deviation of the random frequencies for each input. Note that
+        inputs are scaled using `sklearn.preprocessing.RobustScaler`.
+    random_state : int, optional
+        Seed for the random number generator.
+    linear_model : str, default='BayesianRidge'
+        Linear regression method to use. Can be anything implemented in
+        `sklearn.linear_model`. Note that if `n_u > 1` and a cross
+        validation-based `linear_model` is used, this is not natively supported
+        in `sklearn` so the regressor will be wrapped with
+        `sklearn.multioutput.MultiOutputRegressor`.
+    **options : dict
+        Keyword arguments to pass to the linear regression model.
+    """
+    def __init__(self, u_lb=None, u_ub=None, n_features=None, sigma=0.5,
+                 random_state=None, linear_model='BayesianRidge', **options):
+        super().__init__(u_lb=u_lb, u_ub=u_ub, n_features=n_features,
+                         sigma=sigma, linear_model=linear_model,
+                         random_state=random_state, **options)
+        self.W = None
+        """`(n_features, n_states)` array. Matrix of random frequencies."""
+        self.B = None
+        """`(n_features, 1)` array. Vector of random frequency biases."""
+        self._rng = np.random.default_rng(random_state)
+
+    def _fit_regressor(self, x_scaled, u_scaled, n_features=None, sigma=0.5,
+                       random_state=None, linear_model='BayesianRidge',
+                       **options):
+        # Initialize frequencies and bias
+        if n_features is None:
+            n_features = 10 * self.n_states * self.n_controls
+
+        w_shape = (n_features, self.n_states)
+        if self.W is None or self.W.shape != w_shape:
+            self.W = self._rng.normal(scale=np.reshape(sigma, -1), size=w_shape)
+
+        b_shape = (n_features, 1)
+        if self.B is None or self.B.shape != b_shape:
+            self.B = self._rng.uniform(high=2. * np.pi, size=b_shape)
+
+        kernel = FunctionTransformer(self._map_to_fourier, validate=True)
+
+        regressor = getattr(sk_linear_models, linear_model)
+        try:
+            regressor = regressor(random_state=random_state, **options)
+        # In case the linear_model doesn't take a random_state parameter
+        except TypeError:
+            regressor = regressor(**options)
+
+        regressor = Pipeline([('kernel', kernel), ('regressor', regressor)])
+
+        try:
+            return regressor.fit(x_scaled, u_scaled)
+        except ValueError:
+            return MultiOutputRegressor(regressor).fit(x_scaled, u_scaled)
+
+    def _map_to_fourier(self, x):
+        return np.cos(x @ self.W.T + self.B.T)
 
 
 class SimpleQRnet(SupervisedController):
@@ -194,11 +299,10 @@ class SimpleQRnet(SupervisedController):
     Note that this basic method promotes but does not guarantee local stability,
     unlike the more advanced methods in ref. [2]. Furthermore, in this
     simplified implementation, the `u_model(xf)` term is not included during
-    training, it is only added afterward. This should not make a large impact,
-    but including this term in training would slightly improve accuracy.
+    training--it is added afterward. This should not make a large impact, but
+    including this term in training would likely improve accuracy.
 
     ##### References
-
     1. T. Nakamura-Zimmerer, Q. Gong, and W. Kang, Neural Network Optimal
         Feedback Control with Enhanced Closed Loop Stability, in American
         Control Conference, 2022, pp. 2373-2378.

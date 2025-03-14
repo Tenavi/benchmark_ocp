@@ -35,8 +35,10 @@ sim_kwargs = {'method': 'BDF'}
 # Keyword arguments for open-loop data generation
 open_loop_kwargs = {'tol': 1e-04, 'max_nodes': 2000}
 
-random_seed = 123
-
-# Keyword arguments for the NN controller
+# Keyword arguments for the supervised learning controllers
 nn_kwargs = {'hidden_layer_sizes': (32, 32, 32, 32), 'activation': 'tanh',
-             'solver': 'lbfgs', 'max_iter': 5000, 'tol': 1e-04}
+             'alpha': 1e-03, 'max_iter': 5000, 'tol': 1e-03, 'solver': 'adam'}
+
+rff_kwargs = {'sigma': 0.5}
+
+random_seed = 123
