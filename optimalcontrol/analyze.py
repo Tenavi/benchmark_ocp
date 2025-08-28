@@ -53,8 +53,8 @@ def linear_stability(ocp, controller, x, zero_tol=1e-08, verbose=True):
 
 def find_equilibrium(ocp, controller, x0, t_int, t_max, **kwargs):
     r"""
-    Finds an equilibria of the closed-loop dynamics, $dx/dt = f(x, u(x))$, near
-    a given point `x0`.
+    Finds equilibria of the closed-loop dynamics, $dx/dt = f(x, u(x))$, near a
+    given point `x0`.
 
     This is accomplished by integrating both forwards and backwards in time
     using `simulate.integrate_to_converge` until a maximum time horizon or
