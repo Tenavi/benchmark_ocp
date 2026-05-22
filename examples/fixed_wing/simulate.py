@@ -1,3 +1,4 @@
+import argparse as ap
 import os
 
 import numpy as np
@@ -11,6 +12,12 @@ from examples.fixed_wing import example_config as config
 
 
 if __name__ == '__main__':
+    parser = ap.ArgumentParser()
+    parser.add_argument('-d', '--data', type=str, default='',
+                        help="Path to a .csv file with trajectories to "
+                             "simulate. If no")
+    args = parser.parse_args()
+
     # Initialize the optimal control problem
     ocp = FixedWing(**config.params)
 
@@ -18,24 +25,29 @@ if __name__ == '__main__':
 
     # Load controllers
     controllers = []
-    for fn in os.listdir(config.controller_dir):
+    for fn in sorted(os.listdir(config.controller_dir)):
         if fn.endswith('.pickle'):
             filepath = os.path.join(config.controller_dir, fn)
             controllers.append(from_pickle(filepath))
             print(f"Loaded {controllers[-1]}")
 
-    # Load the training and test datasets
-    all_data = {split: load_data(os.path.join(config.data_dir,
-                                              f'{split}_data.csv'))
-                for split in ('test', 'train')}
+    # Load the data
+    try:
+        _, data_name = os.path.split(args.data)
+        data_name = data_name.rstrip('.csv')
+        all_data = {data_name: load_data(args.data)}
+    except FileNotFoundError:
+        all_data = {split: load_data(os.path.join(config.data_dir,
+                                                  f'{split}_data.csv'))
+                    for split in ('test', 'train')}
 
-    # Restrict training data only to the actual trajectories used for training
-    # This attribute was created manually in the training script
-    used_idx = controllers[-1]._train_idx
-    extra_idx = np.arange(len(all_data['train']))
-    extra_idx = extra_idx[~np.isin(extra_idx, used_idx)]
-    all_data['unused_train'] = all_data['train'][extra_idx]
-    all_data['train'] = all_data['train'][used_idx]
+        # Restrict training data only to the actual trajectories used for
+        # training. This attribute was created manually in the training script
+        used_idx = getattr(controllers[-1], '_train_idx', [])
+        extra_idx = np.arange(len(all_data['train']))
+        extra_idx = extra_idx[~np.isin(extra_idx, used_idx)]
+        all_data['unused_train'] = all_data['train'][extra_idx]
+        all_data['train'] = all_data['train'][used_idx]
 
     print("\n" + "+" * 80 + "\n")
 

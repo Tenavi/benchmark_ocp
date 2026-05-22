@@ -172,7 +172,7 @@ class VehicleState(Container):
 
     h = property(lambda self: _generic_array_getter(self, 0),
                  lambda self, val: _generic_array_setter(self, val, 0))
-    h.__doc__ = ("(n_points,) array. Altitude [m].")
+    h.__doc__ = "(n_points,) array. Altitude [m]."
 
     u = property(lambda self: _generic_array_getter(self, 1),
                  lambda self, val: _generic_array_setter(
