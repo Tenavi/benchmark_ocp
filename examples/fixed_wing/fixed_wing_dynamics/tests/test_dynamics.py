@@ -20,7 +20,7 @@ rng = np.random.default_rng()
 def test_dynamics_position(n_points):
     states = random_states(n_points)
 
-    _, pitch, roll = quaternion_to_euler(states.attitude)
+    roll, pitch, _ = quaternion_to_euler(states.attitude)
 
     forces = rng.normal(size=(3, n_points))
     moments = rng.normal(size=(3, n_points))
@@ -43,8 +43,7 @@ def test_dynamics_velocity(n_points):
 
     dxdt = dynamics.rigid_body_dynamics(states, forces, moments, constants)
 
-    angles = quaternion_to_euler(states.attitude).reshape(3, n_points)
-    pitch, roll = angles[1:]
+    roll, pitch, _ = quaternion_to_euler(states.attitude).reshape(3, n_points)
     gravity = [-np.sin(pitch),
                np.cos(pitch) * np.sin(roll),
                np.cos(pitch) * np.cos(roll)]
@@ -117,7 +116,7 @@ def test_dynamics_axis_rates(n_points):
 
     # Any yaw angle should be okay
     angles = np.zeros((3, n_points))
-    angles[0] = rng.uniform(low=-np.pi, high=np.pi, size=(1, n_points))
+    angles[2] = rng.uniform(low=-np.pi, high=np.pi, size=(1, n_points))
     angles = np.squeeze(angles)
     attitude = euler_to_quaternion(np.squeeze(angles))
 
@@ -135,9 +134,7 @@ def test_dynamics_axis_rates(n_points):
 
     d_angles = (new_angles - angles) / dt
 
-    # Angles are in [yaw, pitch, roll] order for euler_to_quaternion, but rates
-    # are in [p, q, r] order, so look at d_angles in reverse.
-    np.testing.assert_allclose(d_angles[::-1], rates, atol=tol, rtol=tol)
+    np.testing.assert_allclose(d_angles, rates, atol=tol, rtol=tol)
 
 
 @pytest.mark.parametrize('n_points', [1, 2])

@@ -159,7 +159,7 @@ class FixedWing(OptimalControlProblem):
 
     def sample_initial_conditions(self, n_samples=1, distance=None):
         """
-        Generate initial conditions. Euler angles yaw, pitch, roll are sampled
+        Generate initial conditions. Euler angles roll, pitch, yaw are sampled
         uniformly from a hypercube, then converted to quaternions, while other
         states are sampled uniformly from a hypercube. Optionally, initial
         conditions may be sampled with a specified distance from equilibrium in

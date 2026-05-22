@@ -162,8 +162,6 @@ def _plot_time_series(ocp, sims, states, positions, sim_labels, t_max=None,
     for sim, state_traj, pos, label in zip(sims, states, positions, sim_labels):
         t = sim['t']
         eul_angles = quaternion_to_euler(state_traj.attitude, degrees=True)
-        # Change yaw, pitch, roll to roll, pitch, yaw order
-        eul_angles = eul_angles[::-1]
         rates = np.rad2deg(state_traj.rates)
 
         for i in range(3):

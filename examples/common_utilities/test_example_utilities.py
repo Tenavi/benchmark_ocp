@@ -11,32 +11,32 @@ rng = np.random.default_rng()
 
 @pytest.mark.parametrize('n_points', [1, 2])
 def test_angle_conversions(n_points):
-    yaw = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
-    pitch = rng.uniform(low=-np.pi / 2., high=np.pi / 2., size=(n_points,))
     roll = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
+    pitch = rng.uniform(low=-np.pi / 2., high=np.pi / 2., size=(n_points,))
+    yaw = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
 
-    c_yaw = np.cos(yaw / 2.)
-    c_pitch = np.cos(pitch / 2.)
     c_roll = np.cos(roll / 2.)
-    s_yaw = np.sin(yaw / 2.)
-    s_pitch = np.sin(pitch / 2.)
+    c_pitch = np.cos(pitch / 2.)
+    c_yaw = np.cos(yaw / 2.)
     s_roll = np.sin(roll / 2.)
+    s_pitch = np.sin(pitch / 2.)
+    s_yaw = np.sin(yaw / 2.)
 
     q_expected = [c_yaw * c_pitch * s_roll - s_yaw * s_pitch * c_roll,
                   c_yaw * s_pitch * c_roll + s_yaw * c_pitch * s_roll,
                   s_yaw * c_pitch * c_roll - c_yaw * s_pitch * s_roll,
                   c_yaw * c_pitch * c_roll + s_yaw * s_pitch * s_roll]
 
-    q = dynamics.euler_to_quaternion([yaw, pitch, roll])
+    q = dynamics.euler_to_quaternion([roll, pitch, yaw])
 
     for i in range(4):
         np.testing.assert_allclose(q[i], q_expected[i], atol=1e-14)
 
     euler = dynamics.quaternion_to_euler(q)
 
-    np.testing.assert_allclose(euler[0], yaw, atol=1e-14)
+    np.testing.assert_allclose(euler[0], roll, atol=1e-14)
     np.testing.assert_allclose(euler[1], pitch, atol=1e-14)
-    np.testing.assert_allclose(euler[2], roll, atol=1e-14)
+    np.testing.assert_allclose(euler[2], yaw, atol=1e-14)
 
 
 @pytest.mark.parametrize('n_x', [1, 2])

@@ -68,13 +68,14 @@ def quaternion_to_euler(quat, degrees=False, normalize=True,
     -------
     angles : (3, n_angles) or (3,) array
         `quat` converted to Euler angle representation. `angles[0]` contains
-        yaw, `angles[1]` contains pitch, and `angles[2]` contains roll.
+        roll, `angles[1]` contains pitch, and `angles[2]` contains yaw.
     """
     with warnings.catch_warnings():
         if ignore_warnings:
             warnings.simplefilter('ignore', category=UserWarning)
         angles = Rotation(np.asarray(quat).T, normalize=normalize)
-        return angles.as_euler('ZYX', degrees=degrees).T
+        angles = angles.as_euler('ZYX', degrees=degrees).T
+        return angles[::-1]
 
 
 def euler_to_quaternion(angles, degrees=False):
@@ -85,7 +86,7 @@ def euler_to_quaternion(angles, degrees=False):
     ----------
     angles : (3, n_angles) or (3,) array
         Euler angles to convert to quaternion representation. `angles[0]`
-        is assumed to contain yaw, `angles[1]` pitch, and `angles[2]` roll.
+        is assumed to contain roll, `angles[1]` pitch, and `angles[2]` yaw.
     degrees : bool, default=False
         If `degrees=False` (default), assumes `angles` are in radians. If True,
         assumes `angles` are in degrees.
@@ -96,5 +97,6 @@ def euler_to_quaternion(angles, degrees=False):
         `angles` in quaternion representation. `quat[:3]` contains the vector
         portion of the quaternion, and `quat[3]` contains the scalar portion.
     """
-    angles = Rotation.from_euler('ZYX', np.asarray(angles).T, degrees=degrees)
+    angles = np.asarray(angles)[::-1]
+    angles = Rotation.from_euler('ZYX', angles.T, degrees=degrees)
     return angles.as_quat().T

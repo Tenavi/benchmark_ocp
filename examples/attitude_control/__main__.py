@@ -186,7 +186,7 @@ for name, sims in list(all_sims.items())[1:]:
 
 # Plot the results
 if config.plot_euler:
-    x_labels = (r'$\psi$ (deg)', r'$\theta$ (deg)', r'$\phi$ (deg)')
+    x_labels = (r'$\phi$ (deg)', r'$\theta$ (deg)', r'$\psi$ (deg)')
 else:
     x_labels = tuple(fr'$q_{i}$' for i in range(1, 5))
 x_labels += tuple(fr'$\omega_{i}$ (deg/$s$)' for i in range(1, 4))

@@ -7,17 +7,18 @@ from examples.fixed_wing.fixed_wing_dynamics import containers
 from examples.fixed_wing.vehicle_models.aerosonde import constants
 
 
-def rotation_matrix(yaw, pitch, roll):
-    n = np.size(yaw)
-    yaw_mat = np.zeros((3, 3, n))
-    pitch_mat = np.zeros((3, 3, n))
-    roll_mat = np.zeros((3, 3, n))
+def rotation_matrix(roll, pitch, yaw):
+    n = np.size(roll)
 
-    yaw_mat[0, 0] = np.cos(yaw)
-    yaw_mat[0, 1] = np.sin(yaw)
-    yaw_mat[1, 0] = -yaw_mat[0, 1]
-    yaw_mat[1, 1] = yaw_mat[0, 0]
-    yaw_mat[2, 2] = 1.
+    roll_mat = np.zeros((3, 3, n))
+    pitch_mat = np.zeros((3, 3, n))
+    yaw_mat = np.zeros((3, 3, n))
+
+    roll_mat[0, 0] = 1.
+    roll_mat[1, 1] = np.cos(roll)
+    roll_mat[1, 2] = np.sin(roll)
+    roll_mat[2, 1] = -roll_mat[1, 2]
+    roll_mat[2, 2] = roll_mat[1, 1]
 
     pitch_mat[0, 0] = np.cos(pitch)
     pitch_mat[0, 2] = -np.sin(pitch)
@@ -25,11 +26,11 @@ def rotation_matrix(yaw, pitch, roll):
     pitch_mat[2, 0] = -pitch_mat[0, 2]
     pitch_mat[2, 2] = pitch_mat[0, 0]
 
-    roll_mat[0, 0] = 1.
-    roll_mat[1, 1] = np.cos(roll)
-    roll_mat[1, 2] = np.sin(roll)
-    roll_mat[2, 1] = -roll_mat[1, 2]
-    roll_mat[2, 2] = roll_mat[1, 1]
+    yaw_mat[0, 0] = np.cos(yaw)
+    yaw_mat[0, 1] = np.sin(yaw)
+    yaw_mat[1, 0] = -yaw_mat[0, 1]
+    yaw_mat[1, 1] = yaw_mat[0, 0]
+    yaw_mat[2, 2] = 1.
 
     rot_mat = np.einsum('ij...,jk...->ik...', pitch_mat, yaw_mat)
     rot_mat = np.einsum('ij...,jk...->ik...', roll_mat, rot_mat)
@@ -40,11 +41,11 @@ def rotation_matrix(yaw, pitch, roll):
 def random_attitude(n_points, seed=None):
     rng = np.random.default_rng(seed)
 
-    yaw = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
-    pitch = rng.uniform(low=-np.pi / 2., high=np.pi / 2., size=(n_points,))
     roll = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
+    pitch = rng.uniform(low=-np.pi / 2., high=np.pi / 2., size=(n_points,))
+    yaw = rng.uniform(low=-np.pi, high=np.pi, size=(n_points,))
 
-    return yaw, pitch, roll
+    return roll, pitch, yaw
 
 
 def random_states(n_points, seed=None):
@@ -60,8 +61,8 @@ def random_controls(n_points, seed=None):
 def _random_state_array(n_points, seed=None):
     rng = np.random.default_rng(seed)
 
-    yaw, pitch, roll = random_attitude(n_points, rng)
-    attitude = euler_to_quaternion([yaw, pitch, roll])
+    roll, pitch, yaw = random_attitude(n_points, rng)
+    attitude = euler_to_quaternion([roll, pitch, yaw])
 
     state_array = np.vstack([rng.normal(size=(7, n_points)), attitude])
 
@@ -272,8 +273,8 @@ def test_zero_airspeed(n_points):
 def test_rotation(n_points):
     container = random_states(n_points)
 
-    yaw, pitch, roll = quaternion_to_euler(container.attitude)
-    rot_mat = rotation_matrix(yaw, pitch, roll)
+    roll, pitch, yaw = quaternion_to_euler(container.attitude)
+    rot_mat = rotation_matrix(roll, pitch, yaw)
 
     # Make random vectors and rotate to body frame
     vec = np.random.default_rng().normal(size=(3, n_points))
@@ -358,8 +359,8 @@ def test_rotation_update(n_points):
     assert container.rotation_matrix is container._rot_mat
 
     # Update attitude
-    yaw, pitch, roll = random_attitude(n_points)
-    quat = euler_to_quaternion([yaw, pitch, roll])
+    roll, pitch, yaw = random_attitude(n_points)
+    quat = euler_to_quaternion([roll, pitch, yaw])
     norm_quat = quat / np.linalg.norm(quat, axis=0, keepdims=True)
     container.attitude = quat
 
@@ -395,8 +396,8 @@ def test_course_update(n_points, update_attr):
 
     # Update attitude or velocity
     if 'update_attr' == 'attitude':
-        yaw, pitch, roll = random_attitude(n_points)
-        quat = euler_to_quaternion([yaw, pitch, roll])
+        roll, pitch, yaw = random_attitude(n_points)
+        quat = euler_to_quaternion([roll, pitch, yaw])
         container.attitude = quat
     else:
         new_velocity = getattr(container, update_attr) * -10.
