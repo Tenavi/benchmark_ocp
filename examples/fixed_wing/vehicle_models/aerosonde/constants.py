@@ -23,7 +23,7 @@ eos = 0.9  # Oswald's Efficiency Factor [dimensionless between 0 and 1]
 AR = b ** 2 / S
 half_rhoS = 0.5 * rho * S
 
-alpha_stall = np.deg2rad(20.)  # stall angle of attack [deg]
+alpha_stall = 0.47  # stall angle of attack [rad]
 aero_blend_rate = 50.  # barrier function coefficient for stall angle of attack
 
 Jxx = 0.8244  # [kg m^2]
@@ -39,22 +39,22 @@ J_inv_body /= J_det
 # Aerodynamic Partial Derivatives
 
 # Lift
-CL0 = 0.23  # zero angle of attack lift coefficient
-CLalpha = 5.61  # given in supplement
-CLq = 7.95  # needs to be normalized by c/2*Va
-CLdeltaE = 0.13  # lift due to elevator deflection
+CL0 = 0.23
+CLalpha = 5.61
+CLq = 7.95
+CLdeltaE = 0.13
 
 # Drag
-CD0 = 0.0437  # parasitic drag
-CDalpha = 0.03  # drag slope
-CDq = 0.  # drag wrt pitch rate
-CDdeltaE = 0.0135  # drag due to elevator deflection
+CD0 = 0.043  # parasitic drag
+CDalpha = 0.132
+CDq = 0.
+CDdeltaE = 0.0135
 
 # Pitching Moment
-Cm0 = 0.0135  # intercept of pitching moment
-Cmalpha = -2.74  # pitching moment slope
-Cmq = -38.21  # pitching moment wrt q
-CmdeltaE = -0.99  # pitching moment from elevator
+Cm0 = 0.0135
+Cmalpha = -2.74
+Cmq = -38.21
+CmdeltaE = -0.99
 
 # Sideforce
 CY0 = 0.

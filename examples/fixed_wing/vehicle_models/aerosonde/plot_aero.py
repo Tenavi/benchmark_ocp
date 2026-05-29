@@ -9,7 +9,7 @@ def plot_slices(plot_fun, fun, x, y, xlabel, ylabel, zlabels, **kwargs):
     kwargs = {key: np.reshape(val, -1) for key, val in kwargs.items()}
     n_x = [val.size for val in kwargs.values()]
     if len(n_x) == 0:
-        return [plot_fun(fun, zlabels, {xlabel: x, ylabel: y}, **kwargs)]
+        return [plot_fun(fun, zlabels, **{xlabel: x, ylabel: y}, **kwargs)]
 
     figs = []
     for idx in product(*[range(n_x_i) for n_x_i in n_x]):
@@ -52,10 +52,13 @@ def plot_1d(fun, zlabels, **kwargs):
         for k in range(y.size):
             axes[i].plot(x, z[i, :, k], label=f'{ylabel}={y[k]:.1f}')
             axes[i].set(xlabel=xlabel, ylabel=zlabel)
-            if i == 0:
-                axes[i].legend(ncols=y.size // 4)
-                axes[i].set_title(', '.join([f'{key}={float(val):.1f}'
-                                             for key, val in x_fixed.items()]))
+
+        axes[i].grid()
+
+        if i == 0:
+            axes[i].legend(ncols=y.size // 4)
+            axes[i].set_title(', '.join([f'{key}={float(val):.1f}'
+                                         for key, val in x_fixed.items()]))
 
     return fig
 
@@ -144,7 +147,10 @@ if __name__ == '__main__':
     plot_slices(plot_1d, fun, beta, rudder, 'beta', 'rudder', zlabels,
                 va=va, p=0., r=0., aileron=0.)
 
-    plot_2d(aero.prop_forces, ['thrust', 'torque'],
-            va=np.linspace(15., 30., 16), throttle=np.linspace(0., 1.))
+    va_range = np.linspace(0., 30.)
+    throttle_range = np.linspace(0., 1., 6)
+
+    plot_slices(plot_1d, aero.prop_forces, va_range, throttle_range,
+                'va', 'throttle', ['thrust', 'torque'])
 
     plt.show()
