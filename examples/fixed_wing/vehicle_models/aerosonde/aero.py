@@ -126,8 +126,10 @@ def _longitudinal_aero(alpha, va, q, elevator, params=constants):
     coefs[2] *= params.c
 
     # Lift and drag, rotated into body frame
-    coefs[:2] = [sin_alpha * coefs[0] - cos_alpha * coefs[1],
-                 - cos_alpha * coefs[0] - sin_alpha * coefs[1]]
+    rotation = np.array([[-sin_alpha, cos_alpha],
+                         [cos_alpha, sin_alpha]])
+
+    coefs[:2] = np.einsum('ij...,j...->i...', rotation, -coefs[:2])
 
     return coefs
 
@@ -340,21 +342,15 @@ def prop_forces(va, throttle, params=constants):
     voltage = np.asarray(throttle) * params.V_max
 
     # Compute propeller speed
-    rho_D_2 = params.rho * params.D_prop ** 2
-    rho_D_3 = rho_D_2 * params.D_prop
-    rho_D_4 = rho_D_3 * params.D_prop
-    rho_D_5 = rho_D_4 * params.D_prop
-
-    a = params.C_Q0 * rho_D_5 / (4. * np.pi ** 2)
-    b = ((params.C_Q1 * rho_D_4 / (2. * np.pi)) * va
+    a = params.C_Q0 * params.rho_D_5 / (4. * np.pi ** 2)
+    b = ((params.C_Q1 * params.rho_D_4 / (2. * np.pi)) * va
          + params.KQ * params.KV / params.R_motor)
-    c = ((params.C_Q2 * rho_D_3) * va_2
+    c = ((params.C_Q2 * params.rho_D_3) * va_2
          - (params.KQ / params.R_motor) * voltage
          + params.KQ * params.i0)
 
     # Propeller speed in [rad/s]
-    omega = np.maximum(b ** 2 - 4. * a * c, 0.)
-    omega = (- b + np.sqrt(omega)) / (2. * a)
+    omega = (- b + np.sqrt(np.maximum(b ** 2 - 4. * a * c, 0.))) / (2. * a)
 
     # Convert to [rot/s]
     omega = omega / (2. * np.pi)
@@ -362,16 +358,15 @@ def prop_forces(va, throttle, params=constants):
     # Instead of computing advance ratio and dimensionless thrust and torque
     # coefficients, multiply airspeed (va) and propeller diameter (D_prop)
     # through thrust and torque equations
-    D_omega = params.D_prop * omega
-    D_2_omega_2 = D_omega ** 2
-    va_D_omega = va * D_omega
+    omega_2 = omega ** 2
+    va_omega = va * omega
 
-    thrust = rho_D_2 * (params.C_T2 * va_2
-                        + params.C_T1 * va_D_omega
-                        + params.C_T0 * D_2_omega_2)
+    thrust = ((params.rho_D_4 * params.C_T0) * omega_2
+              + (params.rho_D_3 * params.C_T1) * va_omega
+              + (params.rho_D_2 * params.C_T2) * va_2)
 
-    torque = rho_D_3 * (params.C_Q2 * va_2
-                        + params.C_Q1 * va_D_omega
-                        + params.C_Q0 * D_2_omega_2)
+    torque = ((params.rho_D_5 * params.C_Q0) * omega_2
+              + (params.rho_D_4 * params.C_Q1) * va_omega
+              + (params.rho_D_3 * params.C_Q2) * va_2)
 
     return thrust, torque

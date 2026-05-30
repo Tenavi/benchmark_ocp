@@ -80,23 +80,21 @@ Cnr = -0.095
 CndeltaA = -0.011
 CndeltaR = -0.069
 
-# Basic propeller model from ref. [1]
-Sprop = 0.2027  # propeller area [m^2]
-kmotor = 32.  # motor constant, DIFFERENT FROM BEARD
-kTp = 0.  # motor torque constant
-kOmega = 0.  # motor speed constant
-Cprop = 0.45  # thrust efficiency coefficient, DIFFERENT FROM BEARD
-
 # Propeller model from ref. [2]. Code adapted from
 #   https://github.com/randybeard/mavsim_public/blob/main/mavsim_python/parameters/aerosonde_parameters.py
-D_prop = 20. * 0.0254  # prop diameter [m]
+D_prop = 2. * 10. * 2.54 / 100.  # prop diameter [m]
 KV_rpm_per_volt = 145.  # Motor speed constant [RPM/V]
 KV = 60. / (2. * np.pi * KV_rpm_per_volt)  # Back-emf constant, [Vsec/rad]
 KQ = KV  # Motor torque constant [N-m/A]
 R_motor = 0.042  # [ohms]
 i0 = 1.5  # no-load (zero-torque) current [A]
-ncells = 12.
-V_max = 3.7 * ncells  # max voltage for specified number of battery cells
+n_cells = 12.
+V_max = 3.7 * n_cells  # max voltage for specified number of battery cells
+
+rho_D_2 = rho * D_prop ** 2
+rho_D_3 = rho_D_2 * D_prop
+rho_D_4 = rho_D_3 * D_prop
+rho_D_5 = rho_D_4 * D_prop
 
 # Propeller coefficients
 C_T2 = -0.1079

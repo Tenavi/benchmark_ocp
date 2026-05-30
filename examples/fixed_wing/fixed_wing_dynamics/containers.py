@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+from examples.common_utilities.dynamics import quaternion_to_euler
+
 
 class Container:
     """Base class for `VehicleState` and `Controls` containers."""
@@ -210,6 +212,21 @@ class VehicleState(Container):
                         "components are indices `attitude[:3]` and the scalar "
                         "quaternion is in `attitude[3]`.")
 
+    def __str__(self):
+        out_str = ("Vehicle state:\n"
+                   "--------------\n")
+
+        for prop in ['h', 'u', 'v', 'w', 'p', 'q', 'r', 'roll', 'pitch', 'yaw']:
+            prop_val = np.squeeze(getattr(self, prop))
+            if prop in ['p', 'q', 'r', 'roll', 'pitch', 'yaw']:
+                out_str += f"  {prop}: {np.rad2deg(prop_val):.2f} (deg)\n"
+            elif prop == 'h':
+                out_str += f"  {prop}: {prop_val:.2f} (m)\n"
+            else:
+                out_str += f"  {prop}: {prop_val:.2f} (m/s)\n"
+
+        return out_str
+
     @property
     def velocity(self):
         """Reference to subset of `to_array()` containing the vehicle's velocity
@@ -221,6 +238,27 @@ class VehicleState(Container):
         """Reference to subset of `to_array()` containing the vehicle's body
         rotation rates, `p`, `q`, and `r`."""
         return self.to_array()[4:7]
+
+    @property
+    def euler_angles(self):
+        """Get a vector of [roll, pitch, yaw] angles (in rad) representing the
+        aircraft attitude."""
+        return quaternion_to_euler(self.to_array()[7:])
+
+    @property
+    def roll(self):
+        """Get the aircraft roll angle (in rad)."""
+        return self.euler_angles[0]
+
+    @property
+    def pitch(self):
+        """Get the aircraft pitch angle (in rad)."""
+        return self.euler_angles[1]
+
+    @property
+    def yaw(self):
+        """Get the aircraft yaw angle (in rad)."""
+        return self.euler_angles[2]
 
     @property
     def airspeed(self):
@@ -369,6 +407,19 @@ class Controls(Container):
     rudder = property(lambda self: _generic_array_getter(self, 3),
                       lambda self, val: _generic_array_setter(self, val, 3))
     rudder.__doc__ = "(n_points,) array. Rudder position [rad]."
+
+    def __str__(self):
+        out_str = ("Vehicle controls:\n"
+                   "-----------------\n")
+
+        for prop in ['throttle', 'aileron', 'elevator', 'rudder']:
+            prop_val = np.squeeze(getattr(self, prop))
+            if prop == 'throttle':
+                out_str += f"  {prop}: {100. * prop_val:.2f} %\n"
+            else:
+                out_str += f"  {prop}: {np.rad2deg(prop_val):.2f} (deg)\n"
+
+        return out_str
 
     def saturate(self, lb, ub, inplace=False):
         """

@@ -111,14 +111,29 @@ def make_deg_wrapper(fun, *deg_args):
     return wrapped_fun
 
 
+def longitudinal_aero_CL_CD(alpha, va, q, elevator):
+    coefs = aero._longitudinal_aero(alpha, va, q, elevator)
+
+    sin_alpha = np.sin(alpha)
+    cos_alpha = np.cos(alpha)
+
+    # Rotate axial and normal forces back to lift and drag
+    rotation = np.array([[-sin_alpha, cos_alpha],
+                         [cos_alpha, sin_alpha]])
+
+    coefs[:2] = np.matmul(rotation, -coefs[:2])
+
+    return coefs
+
+
 if __name__ == '__main__':
     va = 25.
 
     alpha = np.linspace(-10., 20., 30)
     q = np.linspace(-90., 90., 19)
     elevator = np.linspace(-45., 45., 7)
-    zlabels = ['C-axial', 'C-normal', 'C-pitch']
-    fun = make_deg_wrapper(aero._longitudinal_aero, 'alpha', 'q', 'elevator')
+    zlabels = ['CL', 'CD', 'Cm']
+    fun = make_deg_wrapper(longitudinal_aero_CL_CD, 'alpha', 'q', 'elevator')
 
     plot_slices(plot_1d, fun, alpha, q, 'alpha', 'q', zlabels,
                 va=va, elevator=0.)
@@ -131,7 +146,7 @@ if __name__ == '__main__':
     r = np.linspace(-90., 90., 19)
     aileron = np.linspace(-45., 45., 7)
     rudder = np.linspace(-45., 45., 7)
-    zlabels = ['C-side', 'C-roll', 'C-yaw']
+    zlabels = ['CY', 'Cl', 'Cn']
     fun = make_deg_wrapper(aero._lateral_aero,
                            'beta', 'p', 'r', 'aileron', 'rudder')
 
