@@ -13,7 +13,7 @@ for directory in [data_dir, fig_dir, controller_dir]:
 params = {}
 
 # Number of training trajectories
-n_train = 400
+n_train = 500
 
 # Distance of initial condition samples from trim
 x0_distance = None

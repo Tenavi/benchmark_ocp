@@ -19,11 +19,9 @@ c = 0.18994  # wing chord [m]
 S = 0.55  # wing area [m^2]
 eos = 0.9  # Oswald's Efficiency Factor [dimensionless between 0 and 1]
 
-# Some derived quantities
-AR = b ** 2 / S
-half_rhoS = 0.5 * rho * S
+AR = b ** 2 / S  # aspect ratio
 
-alpha_stall = 0.47  # stall angle of attack [rad]
+alpha_stall = 0.47  # stall angle of attack [rad] (0.47 rad ~ 27 deg)
 aero_blend_rate = 50.  # barrier function coefficient for stall angle of attack
 
 Jxx = 0.8244  # [kg m^2]

@@ -34,8 +34,8 @@ developer mode), run
 This package and the examples have been developed and tested with the following software
 dependencies:
     
-    numpy>=1.21
-    pandas>=1.3
+    numpy
+    pandas
     scipy>=1.11
     tqdm
     pytest

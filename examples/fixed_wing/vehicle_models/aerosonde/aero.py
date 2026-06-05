@@ -82,7 +82,7 @@ def aero_forces(states, controls, params=constants):
             controls.aileron[idx], controls.rudder[idx])
 
         # Multiply by dynamic pressure * S
-        pressure = params.half_rhoS * va[idx] ** 2
+        pressure = (params.rho * params.S / 2.) * va[idx] ** 2
         forces[:, idx] *= pressure
         moments[:, idx] *= pressure
 

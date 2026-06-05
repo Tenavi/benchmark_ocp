@@ -23,15 +23,21 @@ from .vehicle_models import aerosonde
 _va_target_default = 25.
 _h_scale_default = 100.
 _Q_default = VehicleState(h=0.1 ** -2,
-                          u=5. ** -2,
+                          u=(_va_target_default / 10.) ** -2,
                           v=1.,
                           w=1.,
                           p=np.deg2rad(30.) ** -2,
                           q=np.deg2rad(30.) ** -2,
                           r=np.deg2rad(30.) ** -2,
-                          attitude=np.array([1., 1., 1., 0.])).to_array()
-_R_default = aerosonde.constants.max_controls - aerosonde.constants.min_controls
-_R_default = (_R_default.to_array() / 2.) ** -2
+                          attitude=np.array([1., 1., 1., 0.]))
+_Q_default = _Q_default.to_array()
+_delta_u_max = (aerosonde.constants.max_controls
+                - aerosonde.constants.min_controls) / 2
+_R_default = Controls(throttle=_delta_u_max.throttle ** -2,
+                      aileron=(2. * _delta_u_max.aileron) ** -2,
+                      elevator=_delta_u_max.elevator ** -2,
+                      rudder=_delta_u_max.rudder ** -2)
+_R_default = _R_default.to_array()
 _x0_max_perturb_default = VehicleState(h=100.,
                                        u=5.,
                                        v=5.,
