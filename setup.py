@@ -19,5 +19,5 @@ if __name__ == '__main__':
         author='Tenavi Nakamura-Zimmerer',
         author_email='tenavi.nz@gmail.com',
         packages=['optimalcontrol'],
-        python_requires='>=3.9',
+        python_requires='>=3.9,<3.14',
         install_requires=requirements)

@@ -20,7 +20,7 @@ def minimize(fun, x0, args=(), jac=None, bounds=None, constraints=(), tol=None,
     """
     Minimization of scalar function of one or more variables.
 
-    Wrapper and modification of `scipy.optimize.optimize` implementing shortcuts
+    Wrapper and modification of `scipy.optimize.minimize` implementing shortcuts
     to the 'SLSQP' method and extracting the KKT multipliers.
 
     Parameters
@@ -435,18 +435,16 @@ def _minimize_slsqp(fun, x0, args=(), jac=None, bounds=None, constraints=(),
 
 
 def _eval_constraint(x, cons):
-    # Compute constraints
+    # Compute constraints. From version 1.15 of `scipy.optimize._slsqp_py`.
     if cons['eq']:
-        c_eq = np.concatenate(
-            [np.atleast_1d(con['fun'](x, *con['args'])) for con in cons['eq']]
-        )
+        c_eq = np.concatenate([np.atleast_1d(con['fun'](x, *con['args']))
+                               for con in cons['eq']])
     else:
         c_eq = np.zeros(0)
 
     if cons['ineq']:
-        c_ieq = np.concatenate(
-            [np.atleast_1d(con['fun'](x, *con['args'])) for con in cons['ineq']]
-        )
+        c_ieq = np.concatenate([np.atleast_1d(con['fun'](x, *con['args']))
+                                for con in cons['ineq']])
     else:
         c_ieq = np.zeros(0)
 
@@ -456,18 +454,15 @@ def _eval_constraint(x, cons):
 
 
 def _eval_con_normals(x, cons, la, n, m, meq, mieq):
-    # Compute the normals of the constraints
+    # Compute the normals of the constraints. From version 1.15 of
+    # `scipy.optimize._slsqp_py`.
     if cons['eq']:
-        a_eq = np.vstack(
-            [con['jac'](x, *con['args']) for con in cons['eq']]
-        )
+        a_eq = np.vstack([con['jac'](x, *con['args']) for con in cons['eq']])
     else:  # no equality constraint
         a_eq = np.zeros((meq, n))
 
     if cons['ineq']:
-        a_ieq = np.vstack(
-            [con['jac'](x, *con['args']) for con in cons['ineq']]
-        )
+        a_ieq = np.vstack([con['jac'](x, *con['args']) for con in cons['ineq']])
     else:  # no inequality constraint
         a_ieq = np.zeros((mieq, n))
 
@@ -482,16 +477,17 @@ def _eval_con_normals(x, cons, la, n, m, meq, mieq):
 
 
 def _clip_x_for_func(func, bounds):
-    # ensures that x values sent to func are clipped to bounds
+    # ensures that x values sent to func are clipped to bounds. From version
+    # 1.15 of `scipy.optimize._optimize`.
 
     # this is used as a mitigation for gh11403, slsqp/tnc sometimes
     # suggest a move that is outside the limits by 1 or 2 ULP. This
     # unclean fix makes sure x is strictly within bounds.
-    def eval(x):
+    def clip(x):
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', "Values in x were outside bounds",
                                     RuntimeWarning)
             x = _check_clip_x(x, bounds)
         return func(x)
 
-    return eval
+    return clip
