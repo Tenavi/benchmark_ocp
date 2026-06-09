@@ -129,9 +129,11 @@ def longitudinal_aero_CL_CD(alpha, va, q, elevator):
 if __name__ == '__main__':
     va = 25.
 
-    alpha = np.linspace(-10., 20., 30)
-    q = np.linspace(-90., 90., 19)
-    elevator = np.linspace(-45., 45., 7)
+    p = q = r = np.linspace(-30., 30., 7)
+    aileron = elevator = rudder = np.linspace(-45., 45., 7)
+    throttle = np.linspace(0., 1., 6)
+
+    alpha = np.linspace(-10., 60., 71)
     zlabels = ['CL', 'CD', 'Cm']
     fun = make_deg_wrapper(longitudinal_aero_CL_CD, 'alpha', 'q', 'elevator')
 
@@ -141,11 +143,7 @@ if __name__ == '__main__':
     plot_slices(plot_1d, fun, alpha, elevator, 'alpha', 'elevator', zlabels,
                 va=va, q=0.)
 
-    beta = np.linspace(-10., 10., 20)
-    p = np.linspace(-90., 90., 19)
-    r = np.linspace(-90., 90., 19)
-    aileron = np.linspace(-45., 45., 7)
-    rudder = np.linspace(-45., 45., 7)
+    beta = np.linspace(-10., 10., 21)
     zlabels = ['CY', 'Cl', 'Cn']
     fun = make_deg_wrapper(aero._lateral_aero,
                            'beta', 'p', 'r', 'aileron', 'rudder')
@@ -162,10 +160,9 @@ if __name__ == '__main__':
     plot_slices(plot_1d, fun, beta, rudder, 'beta', 'rudder', zlabels,
                 va=va, p=0., r=0., aileron=0.)
 
-    va_range = np.linspace(0., 30.)
-    throttle_range = np.linspace(0., 1., 6)
+    va = np.linspace(0., 30., 31)
 
-    plot_slices(plot_1d, aero.prop_forces, va_range, throttle_range,
-                'va', 'throttle', ['thrust', 'torque'])
+    plot_slices(plot_1d, aero.prop_forces, va, throttle, 'va', 'throttle',
+                ['thrust', 'torque'])
 
     plt.show()
